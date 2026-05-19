@@ -1,4 +1,4 @@
-import { BarChart3, Download, FileJson, List, Plus, Upload } from "lucide-react";
+import { BarChart3, Download, FileJson, List, Plus, Trash2, Upload } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChangeEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -12,7 +12,7 @@ import { calculateLibraryStats } from "../utils/stats";
 export default function HomePage() {
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"games" | "stats">("games");
+  const [activeTab, setActiveTab] = useState<"games" | "stats" | "trash">("games");
   const games = useLiveQuery(
     async () => {
       const allGames = await db.games.toArray();
@@ -35,7 +35,15 @@ export default function HomePage() {
   const players = useLiveQuery(async (): Promise<Player[]> => db.players.toArray(), [], []);
   const notes = useLiveQuery(async (): Promise<Note[]> => db.notes.toArray(), [], []);
 
-  const pinnedCount = games.filter((game) => game.pinnedAt).length;
+  const visibleGames = useMemo(() => games.filter((game) => !game.trashedAt), [games]);
+  const trashedGames = useMemo(
+    () =>
+      games
+        .filter((game) => game.trashedAt)
+        .sort((a, b) => (b.trashedAt ?? "").localeCompare(a.trashedAt ?? "")),
+    [games],
+  );
+  const pinnedCount = visibleGames.filter((game) => game.pinnedAt).length;
   const stats = useMemo(() => calculateLibraryStats(games, players, notes), [games, players, notes]);
 
   const togglePin = async (game: Game) => {
@@ -47,6 +55,49 @@ export default function HomePage() {
     await db.games.update(game.id, {
       pinnedAt: game.pinnedAt ? undefined : timestamp(),
       updatedAt: timestamp(),
+    });
+  };
+
+  const moveToTrash = async (game: Game) => {
+    await db.games.update(game.id, {
+      trashedAt: timestamp(),
+      pinnedAt: undefined,
+      updatedAt: timestamp(),
+    });
+  };
+
+  const restoreFromTrash = async (game: Game) => {
+    await db.games.update(game.id, {
+      trashedAt: undefined,
+      updatedAt: timestamp(),
+    });
+  };
+
+  const clearTrash = async () => {
+    if (trashedGames.length === 0) {
+      return;
+    }
+
+    const trashIds = trashedGames.map((game) => game.id);
+    const trashIdSet = new Set(trashIds);
+
+    if (!window.confirm("Очистить корзину? Эти партии удалятся безвозвратно.")) {
+      return;
+    }
+
+    const trashedPlayers = players.filter((player) => trashIdSet.has(player.gameId)).map((player) => player.id);
+    const trashedPhases = (await db.phases.toArray()).filter((phase) => trashIdSet.has(phase.gameId)).map((phase) => phase.id);
+    const trashedNotes = notes.filter((note) => trashIdSet.has(note.gameId)).map((note) => note.id);
+    const trashedVoteRecords = (await db.voteRecords.toArray())
+      .filter((voteRecord) => trashIdSet.has(voteRecord.gameId))
+      .map((voteRecord) => voteRecord.id);
+
+    await db.transaction("rw", [db.games, db.players, db.phases, db.notes, db.voteRecords], async () => {
+      await db.voteRecords.bulkDelete(trashedVoteRecords);
+      await db.notes.bulkDelete(trashedNotes);
+      await db.phases.bulkDelete(trashedPhases);
+      await db.players.bulkDelete(trashedPlayers);
+      await db.games.bulkDelete(trashIds);
     });
   };
 
@@ -104,34 +155,43 @@ export default function HomePage() {
   return (
     <main className="page-shell">
       <div className="content-shell space-y-6">
-        <header className="flex flex-col gap-4 pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <header className="flex flex-col gap-4 pt-2 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-ember-100/80">
               Player's Grimoire
             </p>
             <h1 className="mt-2 text-3xl font-bold text-stone-50 sm:text-4xl">
               Башня: заметки игрока
             </h1>
+            <div>
+              <Link to="/games/new" className="primary-button w-full sm:w-auto">
+                <Plus className="h-4 w-4" />
+                Новая партия
+              </Link>
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-            <button type="button" onClick={exportArchive} className="secondary-button w-full sm:w-auto">
-              <Download className="h-4 w-4" />
-              Экспорт JSON
-            </button>
-            <label className="secondary-button w-full cursor-pointer sm:w-auto">
-              <Upload className="h-4 w-4" />
-              {importing ? "Импорт..." : "Импорт JSON"}
-              <input type="file" accept=".json,application/json" onChange={importArchive} className="hidden" />
-            </label>
-            <Link to="/games/new" className="primary-button w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Новая партия
-            </Link>
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end lg:self-start">
+            <div className="rounded-2xl border border-ember-200/10 bg-black/15 p-2">
+              <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                История игр
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:flex">
+                <button type="button" onClick={exportArchive} className="secondary-button w-full sm:w-auto">
+                  <Download className="h-4 w-4" />
+                  Выгрузить архив
+                </button>
+                <label className="secondary-button w-full cursor-pointer sm:w-auto">
+                  <Upload className="h-4 w-4" />
+                  {importing ? "Загрузка..." : "Загрузить архив"}
+                  <input type="file" accept=".json,application/json" onChange={importArchive} className="hidden" />
+                </label>
+              </div>
+            </div>
           </div>
         </header>
 
         <section className="panel p-2 sm:p-3">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setActiveTab("games")}
@@ -147,6 +207,14 @@ export default function HomePage() {
             >
               <BarChart3 className="h-4 w-4" />
               Статистика
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("trash")}
+              className={activeTab === "trash" ? "primary-button w-full" : "secondary-button w-full"}
+            >
+              <Trash2 className="h-4 w-4" />
+              Корзина
             </button>
           </div>
         </section>
@@ -216,7 +284,39 @@ export default function HomePage() {
               </div>
             </div>
           </section>
-        ) : games.length === 0 ? (
+        ) : activeTab === "trash" ? (
+          trashedGames.length === 0 ? (
+            <section className="panel flex min-h-56 flex-col items-center justify-center p-6 text-center">
+              <p className="text-xl font-semibold text-stone-50">Корзина пуста.</p>
+              <p className="mt-2 text-sm text-stone-400">Сюда попадают партии, которые вы убрали из общей библиотеки.</p>
+            </section>
+          ) : (
+            <section className="space-y-4">
+              <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-stone-50">Корзина партий</h2>
+                  <p className="text-sm text-stone-400">Партии в корзине ещё можно вернуть. Очистка удаляет их безвозвратно.</p>
+                </div>
+                <button type="button" onClick={clearTrash} className="danger-button w-full sm:w-auto">
+                  <Trash2 className="h-4 w-4" />
+                  Очистить корзину
+                </button>
+              </div>
+              <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {trashedGames.map((game) => (
+                  <GameCard
+                    key={game.id}
+                    game={game}
+                    onTogglePin={togglePin}
+                    onMoveToTrash={moveToTrash}
+                    onRestoreFromTrash={restoreFromTrash}
+                    trashMode
+                  />
+                ))}
+              </section>
+            </section>
+          )
+        ) : visibleGames.length === 0 ? (
           <section className="panel flex min-h-72 flex-col items-center justify-center p-6 text-center">
             <p className="text-xl font-semibold text-stone-50">Пока нет сыгранных партий.</p>
             <p className="mt-2 text-sm text-stone-400">
@@ -225,7 +325,7 @@ export default function HomePage() {
             <div className="mt-5 grid w-full max-w-sm gap-2">
               <label className="secondary-button w-full cursor-pointer">
                 <FileJson className="h-4 w-4" />
-                {importing ? "Импорт..." : "Импорт JSON"}
+                {importing ? "Загрузка..." : "Загрузить архив"}
                 <input type="file" accept=".json,application/json" onChange={importArchive} className="hidden" />
               </label>
               <Link to="/games/new" className="primary-button">
@@ -236,8 +336,14 @@ export default function HomePage() {
           </section>
         ) : (
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {games.map((game) => (
-              <GameCard key={game.id} game={game} onTogglePin={togglePin} />
+            {visibleGames.map((game) => (
+              <GameCard
+                key={game.id}
+                game={game}
+                onTogglePin={togglePin}
+                onMoveToTrash={moveToTrash}
+                onRestoreFromTrash={restoreFromTrash}
+              />
             ))}
           </section>
         )}

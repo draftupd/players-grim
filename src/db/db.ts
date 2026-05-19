@@ -32,6 +32,38 @@ export class ClocktowerNotesDatabase extends Dexie {
       notes: "id, gameId, phaseId, updatedAt",
       voteRecords: "id, gameId, phaseId, createdAt, updatedAt",
     });
+
+    this.version(4).stores({
+      games: "id, date, status, createdAt, pinnedAt, updatedAt",
+      players: "id, gameId, seatIndex",
+      phases: "id, gameId, number, type",
+      notes: "id, gameId, phaseId, updatedAt",
+      voteRecords: "id, gameId, phaseId, createdAt, updatedAt",
+    });
+
+    this.version(5).stores({
+      games: "id, date, status, createdAt, pinnedAt, updatedAt",
+      players: "id, gameId, seatIndex",
+      phases: "id, gameId, number, type",
+      notes: "id, gameId, phaseId, updatedAt",
+      voteRecords: "id, gameId, phaseId, createdAt, updatedAt",
+    });
+
+    this.version(6).stores({
+      games: "id, date, status, createdAt, pinnedAt, updatedAt",
+      players: "id, gameId, seatIndex",
+      phases: "id, gameId, number, type",
+      notes: "id, gameId, phaseId, updatedAt",
+      voteRecords: "id, gameId, phaseId, createdAt, updatedAt",
+    });
+
+    this.version(7).stores({
+      games: "id, date, status, createdAt, pinnedAt, trashedAt, updatedAt",
+      players: "id, gameId, seatIndex",
+      phases: "id, gameId, number, type",
+      notes: "id, gameId, phaseId, updatedAt",
+      voteRecords: "id, gameId, phaseId, createdAt, updatedAt",
+    });
   }
 }
 

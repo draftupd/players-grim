@@ -1,19 +1,11 @@
-import { ArrowDown, ArrowUp, FileJson, Plus, Save, Trash2, X } from "lucide-react";
+import { FileJson, Plus, Save, Trash2, X } from "lucide-react";
 import { ChangeEvent, useState } from "react";
-import type { Game, Phase, Player, PlayerTeam, RoleType, ScriptRole } from "../types";
-import { phaseTitle, sortPhases } from "../utils/dates";
-import { createId } from "../utils/ids";
-import {
-  defaultTravellerRoles,
-  mergeScriptRoles,
-  parseScriptJson,
-  prettifyRoleName,
-} from "../utils/scripts";
+import type { Game, Player, RoleType, ScriptRole } from "../types";
+import { mergeScriptRoles, parseScriptJson, prettifyRoleName } from "../utils/scripts";
 
 type SetupEditorModalProps = {
   game: Game | null;
   players: Player[];
-  phases: Phase[];
   onClose: () => void;
   onSave: (
     gameValues: Pick<
@@ -53,27 +45,16 @@ const editableRoleTypes: Array<{ value: RoleType; label: string }> = [
   { value: "unknown", label: "Другое" },
 ];
 
-export default function SetupEditorModal({ game, players, phases, onClose, onSave }: SetupEditorModalProps) {
+export default function SetupEditorModal({ game, players, onClose, onSave }: SetupEditorModalProps) {
   if (!game) {
     return null;
   }
 
-  return (
-    <SetupEditorForm
-      key={game.updatedAt}
-      game={game}
-      players={players}
-      phases={phases}
-      onClose={onClose}
-      onSave={onSave}
-    />
-  );
+  return <SetupEditorForm key={game.updatedAt} game={game} players={players} onClose={onClose} onSave={onSave} />;
 }
 
-function SetupEditorForm({ game, players, phases, onClose, onSave }: SetupEditorFormProps) {
-  const sortedPhases = sortPhases(phases);
+function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProps) {
   const sortedPlayers = [...players].filter((player) => !player.isTraveller).sort((a, b) => a.seatIndex - b.seatIndex);
-  const existingTravellers = [...players].filter((player) => player.isTraveller).sort((a, b) => a.seatIndex - b.seatIndex);
   const [title, setTitle] = useState(game.title);
   const [date, setDate] = useState(game.date);
   const [storyteller, setStoryteller] = useState(game.storyteller ?? "");
@@ -83,29 +64,10 @@ function SetupEditorForm({ game, players, phases, onClose, onSave }: SetupEditor
   const [playerNames, setPlayerNames] = useState(
     sortedPlayers.map((player) => ({ id: player.id, name: player.name })),
   );
-  const [travellers, setTravellers] = useState(
-    existingTravellers.map((traveller) => ({
-      id: traveller.id,
-      name: traveller.name,
-      travellerRole: traveller.travellerRole ?? traveller.mainRole ?? "",
-      travellerTeam: traveller.travellerTeam ?? "unknown",
-      mainRole: traveller.mainRole && traveller.mainRole !== traveller.travellerRole ? traveller.mainRole : "",
-      joinedPhaseId: traveller.joinedPhaseId ?? "",
-      leftPhaseId: traveller.leftPhaseId ?? "",
-    })),
-  );
-  const [deletedTravellerIds, setDeletedTravellerIds] = useState<string[]>([]);
-  const [newTravellerName, setNewTravellerName] = useState("");
-  const [newTravellerRole, setNewTravellerRole] = useState("");
-  const [newTravellerJoinedPhaseId, setNewTravellerJoinedPhaseId] = useState(sortedPhases[0]?.id ?? "");
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleType, setNewRoleType] = useState<RoleType>("traveller");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const travellerRoleOptions = mergeScriptRoles(
-    defaultTravellerRoles,
-    scriptRoles.filter((role) => role.type === "traveller"),
-  );
 
   const handleScriptFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -132,65 +94,6 @@ function SetupEditorForm({ game, players, phases, onClose, onSave }: SetupEditor
     setPlayerNames((current) =>
       current.map((player) => (player.id === playerId ? { ...player, name } : player)),
     );
-  };
-
-  const movePlayerName = (playerId: string, direction: -1 | 1) => {
-    setPlayerNames((current) => {
-      const index = current.findIndex((player) => player.id === playerId);
-      const nextIndex = index + direction;
-
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
-        return current;
-      }
-
-      const next = [...current];
-      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-      return next;
-    });
-  };
-
-  const updateTraveller = (travellerId: string, values: Partial<(typeof travellers)[number]>) => {
-    setTravellers((current) =>
-      current.map((traveller) => (traveller.id === travellerId ? { ...traveller, ...values } : traveller)),
-    );
-  };
-
-  const addTraveller = () => {
-    const trimmedName = newTravellerName.trim();
-
-    if (!trimmedName) {
-      setError("Введите имя Traveller.");
-      return;
-    }
-
-    if (!newTravellerRole) {
-      setError("Выберите роль Traveller.");
-      return;
-    }
-
-    setTravellers((current) => [
-      ...current,
-      {
-        id: createId(),
-        name: trimmedName,
-        travellerRole: newTravellerRole,
-        travellerTeam: "unknown",
-        mainRole: "",
-        joinedPhaseId: newTravellerJoinedPhaseId,
-        leftPhaseId: "",
-      },
-    ]);
-    setNewTravellerName("");
-    setNewTravellerRole("");
-    setError("");
-  };
-
-  const removeTraveller = (travellerId: string) => {
-    if (existingTravellers.some((traveller) => traveller.id === travellerId)) {
-      setDeletedTravellerIds((current) => [...current, travellerId]);
-    }
-
-    setTravellers((current) => current.filter((traveller) => traveller.id !== travellerId));
   };
 
   const addRole = () => {
@@ -238,17 +141,6 @@ function SetupEditorForm({ game, players, phases, onClose, onSave }: SetupEditor
         joinedPhaseId: undefined,
         leftPhaseId: undefined,
       }));
-      const travellerPlayerValues = travellers.map((traveller, index) => ({
-        id: traveller.id,
-        name: traveller.name.trim() || `Traveller ${index + 1}`,
-        mainRole: traveller.mainRole || undefined,
-        seatIndex: playerNames.length + index,
-        isTraveller: true,
-        travellerRole: traveller.travellerRole || traveller.mainRole || undefined,
-        travellerTeam: traveller.travellerTeam,
-        joinedPhaseId: traveller.joinedPhaseId || undefined,
-        leftPhaseId: traveller.leftPhaseId || undefined,
-      }));
 
       await onSave(
         {
@@ -259,8 +151,8 @@ function SetupEditorForm({ game, players, phases, onClose, onSave }: SetupEditor
           scriptAuthor: scriptAuthor.trim() || undefined,
           scriptRoles,
         },
-        [...regularPlayerValues, ...travellerPlayerValues],
-        deletedTravellerIds,
+        regularPlayerValues,
+        [],
       );
       onClose();
     } catch {
@@ -343,7 +235,7 @@ function SetupEditorForm({ game, players, phases, onClose, onSave }: SetupEditor
                 {playerNames.map((player, index) => (
                   <div
                     key={player.id}
-                    className="grid gap-2 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:grid-cols-[92px_1fr_auto] sm:items-center"
+                    className="grid gap-2 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:grid-cols-[92px_1fr] sm:items-center"
                   >
                     <span className="label">Игрок {index + 1}</span>
                     <input
@@ -351,158 +243,8 @@ function SetupEditorForm({ game, players, phases, onClose, onSave }: SetupEditor
                       onChange={(event) => updatePlayerName(player.id, event.target.value)}
                       className="field"
                     />
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => movePlayerName(player.id, -1)}
-                          disabled={index === 0}
-                          className="secondary-button h-8 min-h-0 px-2 disabled:cursor-not-allowed disabled:opacity-35"
-                          title="Сдвинуть место выше"
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => movePlayerName(player.id, 1)}
-                          disabled={index === playerNames.length - 1}
-                          className="secondary-button h-8 min-h-0 px-2 disabled:cursor-not-allowed disabled:opacity-35"
-                          title="Сдвинуть место ниже"
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </button>
-                      </div>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-ember-200/10 bg-black/15 p-4">
-              <h3 className="font-semibold text-stone-50">Travellers за столом</h3>
-              <p className="mt-1 text-sm text-stone-400">
-                Traveller добавляется как отдельный игрок и получает жетон в круге.
-              </p>
-
-              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-                <input
-                  value={newTravellerName}
-                  onChange={(event) => setNewTravellerName(event.target.value)}
-                  className="field"
-                  placeholder="Имя Traveller"
-                />
-                <select
-                  value={newTravellerRole}
-                  onChange={(event) => setNewTravellerRole(event.target.value)}
-                  className="field"
-                >
-                  <option value="">Роль Traveller</option>
-                  {travellerRoleOptions.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={newTravellerJoinedPhaseId}
-                  onChange={(event) => setNewTravellerJoinedPhaseId(event.target.value)}
-                  className="field"
-                >
-                  <option value="">Фаза прихода</option>
-                  {sortedPhases.map((phase) => (
-                    <option key={phase.id} value={phase.id}>
-                      {phase.title || phaseTitle(phase.number, phase.type)}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" onClick={addTraveller} className="primary-button">
-                  <Plus className="h-4 w-4" />
-                  Traveller
-                </button>
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {travellers.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-ember-200/15 p-4 text-center text-sm text-stone-400">
-                    Travellers пока не добавлены.
-                  </p>
-                ) : (
-                  travellers.map((traveller) => (
-                    <div key={traveller.id} className="rounded-xl border border-ember-200/10 bg-ink-900/60 p-3">
-                      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-                        <input
-                          value={traveller.name}
-                          onChange={(event) => updateTraveller(traveller.id, { name: event.target.value })}
-                          className="field"
-                        />
-                        <select
-                          value={traveller.travellerRole}
-                          onChange={(event) => updateTraveller(traveller.id, { travellerRole: event.target.value })}
-                          className="field"
-                        >
-                          <option value="">Роль Traveller</option>
-                          {travellerRoleOptions.map((role) => (
-                            <option key={role.id} value={role.id}>
-                              {role.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={traveller.joinedPhaseId}
-                          onChange={(event) => updateTraveller(traveller.id, { joinedPhaseId: event.target.value })}
-                          className="field"
-                        >
-                          <option value="">Пришел</option>
-                          {sortedPhases.map((phase) => (
-                            <option key={phase.id} value={phase.id}>
-                              {phase.title || phaseTitle(phase.number, phase.type)}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={traveller.leftPhaseId}
-                          onChange={(event) => updateTraveller(traveller.id, { leftPhaseId: event.target.value })}
-                          className="field"
-                        >
-                          <option value="">Еще в игре</option>
-                          {sortedPhases.map((phase) => (
-                            <option key={phase.id} value={phase.id}>
-                              Ушел: {phase.title || phaseTitle(phase.number, phase.type)}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => removeTraveller(traveller.id)} className="danger-button px-3">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        <select
-                          value={traveller.travellerTeam}
-                          onChange={(event) =>
-                            updateTraveller(traveller.id, { travellerTeam: event.target.value as PlayerTeam })
-                          }
-                          className="field"
-                        >
-                          <option value="unknown">Команда неизвестна</option>
-                          <option value="good">Синий / добро</option>
-                          <option value="evil">Красный / зло</option>
-                        </select>
-                        <select
-                          value={traveller.mainRole}
-                          onChange={(event) => updateTraveller(traveller.id, { mainRole: event.target.value })}
-                          className="field"
-                        >
-                          <option value="">Доп. роль из сценария</option>
-                          {scriptRoles
-                            .filter((role) => role.type !== "traveller" && role.type !== "fabled" && role.type !== "loric")
-                            .map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    </div>
-                  ))
-                )}
               </div>
             </div>
           </section>

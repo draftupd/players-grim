@@ -197,6 +197,87 @@ export default function GamePage() {
     }
   };
 
+  const updateTokenPosition = async (playerId: string, position: { x: number; y: number }) => {
+    if (!gameId || !gameResult.game) {
+      return;
+    }
+
+    const now = timestamp();
+
+    await db.games.update(gameId, {
+      customTokenPositions: {
+        ...(gameResult.game.customTokenPositions ?? {}),
+        [playerId]: position,
+      },
+      updatedAt: now,
+    });
+  };
+
+  const updateGrimoireStyle = async (style: NonNullable<Game["grimoireStyle"]>) => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+    await db.games.update(gameId, {
+      grimoireStyle: style,
+      updatedAt: now,
+    });
+  };
+
+  const updateSpecialRoles = async ({
+    activeFabledIds,
+    activeLoricIds,
+  }: {
+    activeFabledIds: string[];
+    activeLoricIds: string[];
+  }) => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+    await db.games.update(gameId, {
+      activeFabledIds,
+      activeLoricIds,
+      updatedAt: now,
+    });
+  };
+
+  const addTraveller = async (payload: {
+    name: string;
+    travellerRole: string;
+    travellerTeam: Player["travellerTeam"];
+    joinedPhaseId?: string;
+  }) => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+    const nextSeatIndex = players.reduce((maxSeat, player) => Math.max(maxSeat, player.seatIndex), -1) + 1;
+
+    await db.transaction("rw", db.players, db.games, async () => {
+      await db.players.add({
+        id: createId(),
+        gameId,
+        name: payload.name,
+        seatIndex: nextSeatIndex,
+        alive: true,
+        mainRole: undefined,
+        additionalRoles: ["", "", ""],
+        isTraveller: true,
+        travellerRole: payload.travellerRole,
+        travellerTeam: payload.travellerTeam,
+        joinedPhaseId: payload.joinedPhaseId,
+        leftPhaseId: undefined,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await updateGameTimestamp(now);
+    });
+  };
+
   const addNextPhase = async () => {
     if (!gameId) {
       return;
@@ -416,6 +497,27 @@ export default function GamePage() {
     }
   };
 
+  const reopenGame = async () => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+
+    try {
+      await db.games.update(gameId, {
+        status: "active",
+        winner: undefined,
+        finalNotes: undefined,
+        finishedAt: undefined,
+        updatedAt: now,
+      });
+      setPageError("");
+    } catch {
+      setPageError("Не удалось вернуть партию в активные.");
+    }
+  };
+
   const beginVoteDraft = (nominatorPlayerId: string, nomineePlayerId: string) => {
     if (!selectedPhase || selectedPhase.type !== "day") {
       return;
@@ -602,6 +704,12 @@ export default function GamePage() {
                 <Settings className="h-4 w-4" />
                 Setup
               </button>
+              {game.status === "finished" ? (
+                <button type="button" onClick={reopenGame} className="secondary-button w-full lg:w-auto">
+                  <ArrowLeft className="h-4 w-4" />
+                  Сделать активной
+                </button>
+              ) : null}
               <button type="button" onClick={openFinishForm} className="secondary-button w-full lg:w-auto">
                 <CheckCircle2 className="h-4 w-4" />
                 {game.status === "finished" ? "Итог партии" : "Завершить партию"}
@@ -626,13 +734,22 @@ export default function GamePage() {
           <PlayerCircle
             players={players}
             notes={notes}
+            phases={phases}
             scriptRoles={game.scriptRoles}
             myPlayerId={effectiveMyPlayerId}
             myRoleId={game.myRoleId}
+            customTokenPositions={game.customTokenPositions}
+            grimoireStyle={game.grimoireStyle}
+            activeFabledIds={game.activeFabledIds}
+            activeLoricIds={game.activeLoricIds}
             voteDraft={voteDraft}
             showVoteMarkers={selectedPhase?.type === "day" || Boolean(voteDraft)}
             voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
             onToggleVoteVoter={voteDraft ? toggleVoteDraftVoter : undefined}
+            onUpdateTokenPosition={updateTokenPosition}
+            onUpdateGrimoireStyle={updateGrimoireStyle}
+            onUpdateSpecialRoles={updateSpecialRoles}
+            onAddTraveller={addTraveller}
             onPlayerClick={(player) => setSelectedPlayerId(player.id)}
           />
 
@@ -730,7 +847,6 @@ export default function GamePage() {
       <SetupEditorModal
         game={setupOpen ? game : null}
         players={players}
-        phases={phases}
         onClose={() => setSetupOpen(false)}
         onSave={saveSetup}
       />

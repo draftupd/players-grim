@@ -232,6 +232,18 @@ export const defaultTravellerRoles: ScriptRole[] = roleTypes.traveller.map((id) 
   type: "traveller",
 }));
 
+export const defaultFabledRoles: ScriptRole[] = roleTypes.fabled.map((id) => ({
+  id,
+  name: prettifyRoleName(id),
+  type: "fabled",
+}));
+
+export const defaultLoricRoles: ScriptRole[] = roleTypes.loric.map((id) => ({
+  id,
+  name: prettifyRoleName(id),
+  type: "loric",
+}));
+
 export const getRoleType = (id: string): RoleType => {
   const normalized = normalizeRoleId(id);
   const match = (Object.entries(roleTypes) as Array<[RoleType, string[]]>).find(([, ids]) =>

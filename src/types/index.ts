@@ -22,6 +22,17 @@ export type ScriptRole = {
   type: RoleType;
 };
 
+export type TokenPosition = {
+  x: number;
+  y: number;
+};
+
+export type GrimoireStyle = {
+  tokenScale: number;
+  extraTokenScale: number;
+  nameScale: number;
+};
+
 export type Game = {
   id: string;
   title: string;
@@ -30,6 +41,8 @@ export type Game = {
   scriptName?: string;
   scriptAuthor?: string;
   scriptRoles?: ScriptRole[];
+  activeFabledIds?: string[];
+  activeLoricIds?: string[];
   myPlayerId?: string;
   myRoleId?: string;
   myTeam?: PersonalTeam;
@@ -40,6 +53,9 @@ export type Game = {
   startedAt?: string;
   finishedAt?: string;
   pinnedAt?: string;
+  trashedAt?: string;
+  customTokenPositions?: Record<string, TokenPosition>;
+  grimoireStyle?: GrimoireStyle;
   createdAt: string;
   updatedAt: string;
 };

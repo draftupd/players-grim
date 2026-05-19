@@ -122,7 +122,10 @@ function PlayerDetailForm({
     );
   };
 
-  const roleOptions = scriptRoles.length > 0 ? scriptRoles : [];
+  const roleOptions = useMemo(
+    () => scriptRoles.filter((role) => role.type !== "traveller" && role.type !== "fabled" && role.type !== "loric"),
+    [scriptRoles],
+  );
   const roleGroups = groupRolesByType(roleOptions);
   const linkedNoteCount = notes.filter((note) => note.linkedPlayerIds.includes(player.id)).length;
 

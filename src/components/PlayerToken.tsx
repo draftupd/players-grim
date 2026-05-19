@@ -10,6 +10,9 @@ type PlayerTokenProps = {
   isMyToken?: boolean;
   density?: "normal" | "compact" | "dense";
   disabled?: boolean;
+  tokenScale?: number;
+  extraTokenScale?: number;
+  nameScale?: number;
   onClick: (player: Player) => void;
 };
 
@@ -53,6 +56,9 @@ export default function PlayerToken({
   isMyToken = false,
   density = "normal",
   disabled = false,
+  tokenScale = 1,
+  extraTokenScale = 1,
+  nameScale = 1,
   onClick,
 }: PlayerTokenProps) {
   const visibleRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
@@ -60,10 +66,10 @@ export default function PlayerToken({
   const extraRoles = player.additionalRoles.filter(Boolean).slice(0, 3);
   const tokenSizeClass =
     density === "dense"
-      ? "h-[46px] w-[46px] px-1 sm:h-[58px] sm:w-[58px] sm:px-1 lg:h-[72px] lg:w-[72px] lg:px-1.5"
+      ? "h-[60px] w-[60px] px-1 sm:h-[66px] sm:w-[66px] sm:px-1 lg:h-[78px] lg:w-[78px] lg:px-1.5"
       : density === "compact"
-        ? "h-[54px] w-[54px] px-1 sm:h-[68px] sm:w-[68px] sm:px-1.5 lg:h-[82px] lg:w-[82px] lg:px-2"
-        : "h-[64px] w-[64px] px-1.5 sm:h-[98px] sm:w-[98px] sm:px-2";
+        ? "h-[72px] w-[72px] px-1 sm:h-[78px] sm:w-[78px] sm:px-1.5 lg:h-[90px] lg:w-[90px] lg:px-2"
+        : "h-[102px] w-[102px] px-1.5 sm:h-[110px] sm:w-[110px] sm:px-2 lg:h-[122px] lg:w-[122px] lg:px-2.5";
   const noteBadgeClass =
     density === "dense"
       ? "min-w-3.5 px-0.5 py-0 text-[8px] sm:min-w-5 sm:px-1 sm:text-[10px] lg:min-w-6 lg:px-1.5 lg:text-xs"
@@ -72,15 +78,15 @@ export default function PlayerToken({
         : "min-w-4.5 px-1 py-0.5 text-[10px] sm:min-w-6 sm:px-1.5 sm:text-xs";
   const nameClass =
     density === "dense"
-      ? "top-0 translate-y-[18%] min-h-[11px] w-max max-w-[120%] px-1.5 py-[1px] text-[7px] sm:min-h-[15px] sm:max-w-[128%] sm:px-1.5 sm:text-[10px] lg:min-h-[18px] lg:max-w-[136%] lg:px-2 lg:text-[12px]"
+      ? "top-0 translate-y-[42%] min-h-[13px] w-max max-w-[124%] px-1.5 py-[1px] text-[8px] sm:min-h-[16px] sm:max-w-[128%] sm:px-1.5 sm:text-[10px] lg:min-h-[18px] lg:max-w-[136%] lg:px-2 lg:text-[12px]"
       : density === "compact"
-        ? "top-0 translate-y-[24%] min-h-[13px] w-max max-w-[124%] px-1.5 py-[1px] text-[8px] sm:min-h-[17px] sm:max-w-[132%] sm:px-1.5 sm:text-[11px] lg:min-h-[20px] lg:max-w-[140%] lg:px-2 lg:text-[13px]"
-        : "top-0 translate-y-[30%] min-h-[15px] w-max max-w-[128%] px-2 py-[1px] text-[9px] sm:min-h-[19px] sm:max-w-[136%] sm:px-2 sm:text-[12px]";
+        ? "top-0 translate-y-[48%] min-h-[14px] w-max max-w-[126%] px-1.5 py-[1px] text-[9px] sm:min-h-[17px] sm:max-w-[132%] sm:px-1.5 sm:text-[11px] lg:min-h-[20px] lg:max-w-[140%] lg:px-2 lg:text-[13px]"
+        : "top-0 translate-y-[54%] min-h-[15px] w-max max-w-[128%] px-2 py-[1px] text-[9px] sm:min-h-[19px] sm:max-w-[136%] sm:px-2 sm:text-[12px]";
   const statusClass =
     density === "dense"
-      ? "top-[12px] text-[5px] sm:top-[19px] sm:text-[6px] lg:top-[24px] lg:text-[7px]"
+      ? "top-[11px] text-[6px] sm:top-[17px] sm:text-[7px] lg:top-[22px] lg:text-[8px]"
       : density === "compact"
-        ? "top-[15px] text-[6px] sm:top-[24px] sm:text-[7px] lg:top-[29px] lg:text-[8px]"
+        ? "top-[14px] text-[7px] sm:top-[22px] sm:text-[8px] lg:top-[28px] lg:text-[9px]"
         : "top-[18px] text-[7px] sm:top-[30px] sm:text-[8px]";
   const extraWrapperClass =
     density === "dense"
@@ -94,6 +100,9 @@ export default function PlayerToken({
     density === "dense"
       ? "h-3.5 w-3.5 sm:h-5 sm:w-5 lg:h-6 lg:w-6"
       : "h-4.5 w-4.5 sm:h-5.5 sm:w-5.5 lg:h-6.5 lg:w-6.5";
+  const scaledStyle = { transform: `scale(${tokenScale})` };
+  const scaledNameStyle = { transform: `translateX(-50%) scale(${nameScale})`, transformOrigin: "center center" as const };
+  const scaledExtraStyle = { transform: `translateX(-50%) scale(${extraTokenScale})`, transformOrigin: "center top" as const };
 
   return (
     <button
@@ -111,6 +120,7 @@ export default function PlayerToken({
           : "border-stone-500/25 opacity-55 grayscale hover:opacity-75",
         isMyToken && "outline outline-[3px] outline-offset-[5px] outline-ember-100 shadow-[0_0_30px_rgba(251,231,176,0.78)]",
       )}
+      style={scaledStyle}
       title={player.name}
     >
       <RoleTokenImage
@@ -120,7 +130,12 @@ export default function PlayerToken({
         imageClassName="h-[112%] w-full translate-y-[8%] object-cover object-top opacity-90 sm:h-[116%] sm:translate-y-[12%] lg:h-[118%] lg:translate-y-[16%]"
       />
       {noteCount > 0 ? (
-        <span className={clsx("absolute -right-1 -top-1 rounded-full border border-ember-100/60 bg-ink-900 font-semibold text-ember-50", noteBadgeClass)}>
+        <span
+          className={clsx(
+            "absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[88%] rounded-full border border-ember-100/60 bg-ink-900 font-semibold text-ember-50",
+            noteBadgeClass,
+          )}
+        >
           {noteCount}
         </span>
       ) : null}
@@ -129,6 +144,7 @@ export default function PlayerToken({
           "pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 overflow-hidden whitespace-nowrap rounded-full border border-white/20 bg-black/45 text-center font-semibold leading-none text-stone-50 shadow-[0_2px_10px_rgba(0,0,0,0.35)] backdrop-blur-[2px]",
           nameClass,
         )}
+        style={scaledNameStyle}
       >
         <span className="block truncate">{player.name}</span>
       </span>
@@ -143,7 +159,7 @@ export default function PlayerToken({
         </span>
       ) : null}
       {extraRoles.length > 0 ? (
-        <span className={clsx("absolute left-1/2 z-20 flex -translate-x-1/2", extraWrapperClass)}>
+        <span className={clsx("absolute left-1/2 z-20 flex -translate-x-1/2", extraWrapperClass)} style={scaledExtraStyle}>
           {extraRoles.map((roleId, index) => {
             const extraRoleType = getRoleTypeFromRoles(roleId, scriptRoles);
 

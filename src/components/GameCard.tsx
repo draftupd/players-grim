@@ -1,4 +1,4 @@
-import { BookOpen, CalendarDays, Clock, Pin, PinOff, Trophy, UserRound, UsersRound } from "lucide-react";
+import { BookOpen, CalendarDays, Clock, Pin, PinOff, RotateCcw, Trash2, Trophy, UserRound, UsersRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Game } from "../types";
 import { formatDate, formatDuration, formatTime, gameDisplayTitle, personalTeamLabel, winnerLabel } from "../utils/dates";
@@ -7,9 +7,12 @@ import { getRoleLabel } from "../utils/scripts";
 type GameCardProps = {
   game: Game;
   onTogglePin: (game: Game) => void;
+  onMoveToTrash: (game: Game) => void;
+  onRestoreFromTrash: (game: Game) => void;
+  trashMode?: boolean;
 };
 
-export default function GameCard({ game, onTogglePin }: GameCardProps) {
+export default function GameCard({ game, onTogglePin, onMoveToTrash, onRestoreFromTrash, trashMode = false }: GameCardProps) {
   const isFinished = game.status === "finished";
   const startedAt = game.startedAt ?? game.createdAt;
   const duration = formatDuration(startedAt, game.finishedAt);
@@ -56,22 +59,51 @@ export default function GameCard({ game, onTogglePin }: GameCardProps) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onTogglePin(game);
-            }}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
-              game.pinnedAt
-                ? "border-ember-100/60 bg-ember-200/18 text-ember-100"
-                : "border-ember-200/15 bg-black/20 text-stone-400 hover:text-ember-100"
-            }`}
-            title={game.pinnedAt ? "Открепить" : "Закрепить"}
-          >
-            {game.pinnedAt ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-          </button>
+          {trashMode ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onRestoreFromTrash(game);
+              }}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200/20 bg-emerald-950/25 text-emerald-100 transition hover:border-emerald-200/35"
+              title="Вернуть из корзины"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onTogglePin(game);
+                }}
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                  game.pinnedAt
+                    ? "border-ember-100/60 bg-ember-200/18 text-ember-100"
+                    : "border-ember-200/15 bg-black/20 text-stone-400 hover:text-ember-100"
+                }`}
+                title={game.pinnedAt ? "Открепить" : "Закрепить"}
+              >
+                {game.pinnedAt ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onMoveToTrash(game);
+                }}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-300/15 bg-red-950/20 text-red-100 transition hover:border-red-300/35"
+                title="Переместить в корзину"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
           <span className={isFinished ? "chip border-veil-500/40 text-teal-100" : "chip"}>
             {isFinished ? "Завершена" : "Активная"}
           </span>
