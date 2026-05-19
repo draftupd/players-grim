@@ -15,6 +15,7 @@ import type {
 import { phaseTitle, sortPhases } from "../utils/dates";
 import { getPlayerSetup } from "../utils/playerSetup";
 import { defaultFabledRoles, defaultLoricRoles, defaultTravellerRoles, mergeScriptRoles } from "../utils/scripts";
+import RoleTokenImage from "./RoleTokenImage";
 import PlayerToken from "./PlayerToken";
 import RolePicker from "./RolePicker";
 
@@ -107,12 +108,7 @@ const getStadiumPointAtDistance = (distance: number, xRadius: number, yRadius: n
   };
 };
 
-const getChordSpacedStadiumPoints = (
-  count: number,
-  xRadius: number,
-  yRadius: number,
-  offsetRatio = 0,
-) => {
+const getEvenlySpacedStadiumPoints = (count: number, xRadius: number, yRadius: number, offsetRatio = 0) => {
   if (count <= 0) {
     return [];
   }
@@ -124,63 +120,10 @@ const getChordSpacedStadiumPoints = (
   }
 
   const offsetLength = totalLength * offsetRatio;
-  const averageStep = totalLength / count;
-  const pointAt = (distance: number) => getStadiumPointAtDistance(distance, xRadius, yRadius);
-
-  const advanceByChord = (startDistance: number, chordLength: number) => {
-    const startPoint = pointAt(startDistance);
-    let low = 0;
-    let high = averageStep * 1.8;
-
-    for (let iteration = 0; iteration < 28; iteration += 1) {
-      const mid = (low + high) / 2;
-      const nextPoint = pointAt(startDistance + mid);
-      const distance = Math.hypot(nextPoint.x - startPoint.x, nextPoint.y - startPoint.y);
-
-      if (distance < chordLength) {
-        low = mid;
-      } else {
-        high = mid;
-      }
-    }
-
-    return startDistance + high;
-  };
-
-  const totalAdvanceForChord = (chordLength: number) => {
-    let cursor = offsetLength;
-
-    for (let index = 1; index < count; index += 1) {
-      cursor = advanceByChord(cursor, chordLength);
-    }
-
-    return cursor - offsetLength;
-  };
-
-  let lowChord = averageStep * 0.5;
-  let highChord = averageStep * 1.1;
-
-  for (let iteration = 0; iteration < 32; iteration += 1) {
-    const midChord = (lowChord + highChord) / 2;
-    const coveredLength = totalAdvanceForChord(midChord);
-
-    if (coveredLength < totalLength) {
-      lowChord = midChord;
-    } else {
-      highChord = midChord;
-    }
-  }
-
-  const chordLength = lowChord;
-  const points = [pointAt(offsetLength)];
-  let cursor = offsetLength;
-
-  for (let index = 1; index < count; index += 1) {
-    cursor = advanceByChord(cursor, chordLength);
-    points.push(pointAt(cursor));
-  }
-
-  return points;
+  const step = totalLength / count;
+  return Array.from({ length: count }, (_, index) =>
+    getStadiumPointAtDistance(offsetLength + step * index, xRadius, yRadius),
+  );
 };
 
 export default function PlayerCircle({
@@ -219,7 +162,7 @@ export default function PlayerCircle({
   const yRadius = Math.min(49.5, Math.max(xRadius * stadiumRatio, xRadius + 6));
   const offsetRatio = playerTotal >= 12 && playerTotal % 2 === 0 ? 0.5 / playerTotal : 0;
   const defaultTokenPositions = useMemo(
-    () => getChordSpacedStadiumPoints(sortedPlayers.length, xRadius, yRadius, offsetRatio),
+    () => getEvenlySpacedStadiumPoints(sortedPlayers.length, xRadius, yRadius, offsetRatio),
     [offsetRatio, sortedPlayers.length, xRadius, yRadius],
   );
   const defaultPositionsById = useMemo(
@@ -235,6 +178,8 @@ export default function PlayerCircle({
     playerId: string;
     pointerId: number;
     moved: boolean;
+    startClientX: number;
+    startClientY: number;
   } | null>(null);
   const suppressClickRef = useRef<string | null>(null);
   const sortedPhases = useMemo(() => sortPhases(phases), [phases]);
@@ -340,12 +285,56 @@ export default function PlayerCircle({
     extraTokenScale: 1,
     nameScale: 1,
   };
-  const halfTokenPercent = density === "dense" ? 8.5 : density === "compact" ? 10 : 12.5;
+  const [draggingPlayerId, setDraggingPlayerId] = useState<string | null>(null);
+  const baseHalfTokenPercent = density === "dense" ? 8.5 : density === "compact" ? 10 : 12.5;
+  const halfTokenPercent = baseHalfTokenPercent * currentStyle.tokenScale;
+  const minimumTokenDistance = Math.max(10, tokenDiameterPercent * currentStyle.tokenScale * 0.72);
 
   const clampPosition = (position: TokenPosition): TokenPosition => ({
     x: Math.min(100 - halfTokenPercent, Math.max(halfTokenPercent, position.x)),
     y: Math.min(100 - halfTokenPercent, Math.max(halfTokenPercent, position.y)),
   });
+
+  const getBasePositionForPlayer = (playerId: string) =>
+    dragPositions[playerId] ?? customTokenPositions?.[playerId] ?? defaultPositionsById[playerId] ?? { x: 50, y: 50 };
+
+  const resolveTokenOverlap = (playerId: string, position: TokenPosition) => {
+    let resolved = clampPosition(position);
+    const otherPositions = sortedPlayers
+      .filter((player) => player.id !== playerId)
+      .map((player) => getBasePositionForPlayer(player.id));
+
+    for (let iteration = 0; iteration < 24; iteration += 1) {
+      let adjusted = false;
+
+      for (const otherPosition of otherPositions) {
+        const dx = resolved.x - otherPosition.x;
+        const dy = resolved.y - otherPosition.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance >= minimumTokenDistance) {
+          continue;
+        }
+
+        const safeDistance = distance || 0.001;
+        const directionX = distance ? dx / safeDistance : resolved.x >= 50 ? 1 : -1;
+        const directionY = distance ? dy / safeDistance : resolved.y >= 50 ? 0.6 : -0.6;
+        const push = minimumTokenDistance - safeDistance + 0.25;
+
+        resolved = clampPosition({
+          x: resolved.x + directionX * push,
+          y: resolved.y + directionY * push,
+        });
+        adjusted = true;
+      }
+
+      if (!adjusted) {
+        break;
+      }
+    }
+
+    return resolved;
+  };
 
   const getPointerPosition = (event: ReactPointerEvent<HTMLDivElement>): TokenPosition | null => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -364,10 +353,13 @@ export default function PlayerCircle({
       return;
     }
 
+    setDraggingPlayerId(playerId);
     dragStateRef.current = {
       playerId,
       pointerId: event.pointerId,
       moved: false,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -385,6 +377,12 @@ export default function PlayerCircle({
       return;
     }
 
+    const dragDistance = Math.hypot(event.clientX - dragState.startClientX, event.clientY - dragState.startClientY);
+
+    if (!dragState.moved && dragDistance < 8) {
+      return;
+    }
+
     dragStateRef.current = { ...dragState, moved: true };
     setDragPositions((current) => ({ ...current, [playerId]: nextPosition }));
   };
@@ -398,6 +396,7 @@ export default function PlayerCircle({
 
     const nextPosition = getPointerPosition(event);
     dragStateRef.current = null;
+    setDraggingPlayerId(null);
     event.currentTarget.releasePointerCapture(event.pointerId);
 
     if (!dragState.moved) {
@@ -406,9 +405,10 @@ export default function PlayerCircle({
     }
 
     if (nextPosition) {
-      setDragPositions((current) => ({ ...current, [playerId]: nextPosition }));
+      const resolvedPosition = resolveTokenOverlap(playerId, nextPosition);
+      setDragPositions((current) => ({ ...current, [playerId]: resolvedPosition }));
       suppressClickRef.current = playerId;
-      await onUpdateTokenPosition?.(playerId, nextPosition);
+      await onUpdateTokenPosition?.(playerId, resolvedPosition);
       window.setTimeout(() => {
         if (suppressClickRef.current === playerId) {
           suppressClickRef.current = null;
@@ -652,6 +652,12 @@ export default function PlayerCircle({
                         : "border-emerald-200/35 bg-emerald-950/50 text-emerald-100",
                     )}
                   >
+                    <RoleTokenImage
+                      roleId={role.id}
+                      roles={specialRoleOptions}
+                      className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10 bg-black/20 sm:h-5 sm:w-5"
+                      imageClassName="h-full w-full object-cover"
+                    />
                     <span className="truncate">{role.name}</span>
                     <button
                       type="button"
@@ -669,11 +675,7 @@ export default function PlayerCircle({
         </div>
 
         {sortedPlayers.map((player) => {
-          const position =
-            dragPositions[player.id] ??
-            customTokenPositions?.[player.id] ??
-            defaultPositionsById[player.id] ??
-            { x: 50, y: 50 };
+          const position = getBasePositionForPlayer(player.id);
           const dx = position.x - 50;
           const dy = position.y - 50;
           const distance = Math.hypot(dx, dy) || 1;
@@ -694,7 +696,11 @@ export default function PlayerCircle({
                 "absolute -translate-x-1/2 -translate-y-1/2",
                 canManualArrange ? "cursor-grab active:cursor-grabbing touch-none" : "",
               )}
-              style={{ left: `${position.x}%`, top: `${position.y}%` }}
+              style={{
+                left: `${position.x}%`,
+                top: `${position.y}%`,
+                zIndex: draggingPlayerId === player.id ? 40 : 10,
+              }}
               onPointerDown={(event) => handlePointerDown(player.id, event)}
               onPointerMove={(event) => handlePointerMove(player.id, event)}
               onPointerUp={(event) => {

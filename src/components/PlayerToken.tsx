@@ -88,21 +88,16 @@ export default function PlayerToken({
       : density === "compact"
         ? "top-[14px] text-[7px] sm:top-[22px] sm:text-[8px] lg:top-[28px] lg:text-[9px]"
         : "top-[18px] text-[7px] sm:top-[30px] sm:text-[8px]";
-  const extraWrapperClass =
-    density === "dense"
-      ? "-bottom-1 gap-0.5 sm:-bottom-2 sm:gap-0.5 lg:-bottom-2.5 lg:gap-1"
-      : "-bottom-2 gap-0.5 sm:-bottom-2.5 sm:gap-0.5 lg:-bottom-3 lg:gap-1";
+  const extraWrapperClass = "bottom-0 -space-x-0.5 sm:-space-x-0.5 lg:-space-x-1";
   const extraCircleClass =
-    density === "dense"
-      ? "h-3.5 min-w-3.5 px-0 text-[5px] sm:h-5 sm:min-w-5 sm:px-0.5 sm:text-[7px] lg:h-6 lg:min-w-6 lg:px-0.5 lg:text-[8px]"
-      : "h-4.5 min-w-4.5 px-0.5 text-[7px] sm:h-5.5 sm:min-w-5.5 sm:px-0.5 sm:text-[8px] lg:h-6.5 lg:min-w-6.5 lg:px-1 lg:text-[9px]";
-  const extraImageClass =
-    density === "dense"
-      ? "h-3.5 w-3.5 sm:h-5 sm:w-5 lg:h-6 lg:w-6"
-      : "h-4.5 w-4.5 sm:h-5.5 sm:w-5.5 lg:h-6.5 lg:w-6.5";
+    "h-[30px] w-[30px] text-[8px] sm:h-[36px] sm:w-[36px] sm:text-[10px] lg:h-[42px] lg:w-[42px] lg:text-[12px]";
+  const extraImageClass = "h-[30px] w-[30px] sm:h-[36px] sm:w-[36px] lg:h-[42px] lg:w-[42px]";
   const scaledStyle = { transform: `scale(${tokenScale})` };
   const scaledNameStyle = { transform: `translateX(-50%) scale(${nameScale})`, transformOrigin: "center center" as const };
-  const scaledExtraStyle = { transform: `translateX(-50%) scale(${extraTokenScale})`, transformOrigin: "center top" as const };
+  const scaledExtraStyle = {
+    transform: `translate(-50%, 50%) scale(${extraTokenScale})`,
+    transformOrigin: "center top" as const,
+  };
 
   return (
     <button

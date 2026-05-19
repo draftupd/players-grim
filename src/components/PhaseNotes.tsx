@@ -119,7 +119,9 @@ export default function PhaseNotes({
 
       <div className="space-y-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
         <label className="block space-y-2">
-          <span className="label">Текст заметки</span>
+          <span className="label">
+            Текст заметки <span className="text-stone-500">(@имя игрока)</span>
+          </span>
           <MentionTextarea
             value={text}
             onChange={setText}

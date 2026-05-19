@@ -327,12 +327,6 @@ function PlayerDetailForm({
             <label className="block space-y-2 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
               <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
               <div className="flex items-center gap-3">
-                <RoleTokenImage
-                  roleId={player.isTraveller ? player.travellerRole ?? player.mainRole : mainRole}
-                  roles={scriptRoles}
-                  className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-ember-100/40 bg-black/25 shadow-token"
-                  imageClassName="h-full w-full object-cover"
-                />
                 {player.isTraveller ? (
                   <input
                     value={getRoleLabel(player.travellerRole ?? player.mainRole, scriptRoles)}
@@ -370,12 +364,6 @@ function PlayerDetailForm({
               {[0, 1, 2].map((index) => (
                 roleOptions.length > 0 ? (
                   <div key={index} className="flex items-center gap-2">
-                    <RoleTokenImage
-                      roleId={additionalRoles[index]}
-                      roles={scriptRoles}
-                      className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-stone-200/15 bg-black/20"
-                      imageClassName="h-full w-full object-cover opacity-85"
-                    />
                     <RolePicker
                       value={additionalRoles[index]}
                       onChange={(value) => updateAdditionalRole(index, value)}
@@ -422,13 +410,15 @@ function PlayerDetailForm({
             <div className="space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3">
               <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
                 <label className="block space-y-2">
-                  <span className="label">Новая заметка</span>
+                  <span className="label">
+                    Новая заметка <span className="text-stone-500">(@имя игрока)</span>
+                  </span>
                   <MentionTextarea
                     value={noteText}
                     onChange={setNoteText}
                     players={players}
                     minHeightClassName="min-h-24"
-                    placeholder={`Например, @${player.name} рассказал...`}
+                    placeholder="Что хотите записать?"
                   />
                 </label>
                 <label className="block space-y-2">
