@@ -64,12 +64,19 @@ export default function PlayerToken({
   const visibleRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
   const roleType = getRoleTypeFromRoles(player.mainRole, scriptRoles);
   const extraRoles = player.additionalRoles.filter(Boolean).slice(0, 3);
-  const tokenSizeClass =
-    density === "dense"
-      ? "h-[60px] w-[60px] px-1 sm:h-[66px] sm:w-[66px] sm:px-1 lg:h-[78px] lg:w-[78px] lg:px-1.5"
-      : density === "compact"
-        ? "h-[72px] w-[72px] px-1 sm:h-[78px] sm:w-[78px] sm:px-1.5 lg:h-[90px] lg:w-[90px] lg:px-2"
-        : "h-[102px] w-[102px] px-1.5 sm:h-[110px] sm:w-[110px] sm:px-2 lg:h-[122px] lg:w-[122px] lg:px-2.5";
+  const hasGoodTint = player.tokenTint === "good";
+  const hasEvilTint = player.tokenTint === "evil";
+  const tokenImageTintStyle =
+    hasGoodTint
+      ? { filter: "grayscale(1) contrast(1.15) brightness(0.78) sepia(1) saturate(7) hue-rotate(165deg)" }
+      : hasEvilTint
+        ? { filter: "grayscale(1) contrast(1.18) brightness(0.72) sepia(1) saturate(9) hue-rotate(-28deg)" }
+        : undefined;
+  const baseTokenSize = density === "dense" ? 66 : density === "compact" ? 78 : 110;
+  const tokenFrameStyle = {
+    width: `${baseTokenSize * tokenScale}px`,
+    height: `${baseTokenSize * tokenScale}px`,
+  };
   const noteBadgeClass =
     density === "dense"
       ? "min-w-3.5 px-0.5 py-0 text-[8px] sm:min-w-5 sm:px-1 sm:text-[10px] lg:min-w-6 lg:px-1.5 lg:text-xs"
@@ -92,12 +99,16 @@ export default function PlayerToken({
   const extraCircleClass =
     "h-[30px] w-[30px] text-[8px] sm:h-[36px] sm:w-[36px] sm:text-[10px] lg:h-[42px] lg:w-[42px] lg:text-[12px]";
   const extraImageClass = "h-[30px] w-[30px] sm:h-[36px] sm:w-[36px] lg:h-[42px] lg:w-[42px]";
-  const scaledStyle = { transform: `scale(${tokenScale})` };
   const scaledNameStyle = { transform: `translateX(-50%) scale(${nameScale})`, transformOrigin: "center center" as const };
   const scaledExtraStyle = {
     transform: `translate(-50%, 50%) scale(${extraTokenScale})`,
     transformOrigin: "center top" as const,
   };
+  const tintShellClass = hasGoodTint ? roleTypeClasses.townsfolk : hasEvilTint ? roleTypeClasses.minion : "";
+  const baseShellClass = tintShellClass || (player.isTraveller
+    ? travellerTeamClasses[player.travellerTeam ?? "unknown"]
+    : roleTypeClasses[roleType]);
+  const deadShellClass = player.alive ? "" : "opacity-85 saturate-[0.45] brightness-[0.72]";
 
   return (
     <button
@@ -106,24 +117,37 @@ export default function PlayerToken({
       onClick={() => onClick(player)}
       className={clsx(
         "group relative flex flex-col items-center justify-center rounded-full border bg-gradient-to-br text-center shadow-token transition",
-        tokenSizeClass,
         disabled && "cursor-default",
-        player.alive
-          ? player.isTraveller
-            ? travellerTeamClasses[player.travellerTeam ?? "unknown"]
-            : roleTypeClasses[roleType]
-          : "border-stone-500/25 opacity-55 grayscale hover:opacity-75",
+        baseShellClass,
+        deadShellClass,
+        hasGoodTint && "border-sky-300 shadow-[0_0_28px_rgba(56,189,248,0.45)]",
+        hasEvilTint && "border-red-300 shadow-[0_0_28px_rgba(239,68,68,0.45)]",
         isMyToken && "outline outline-[3px] outline-offset-[5px] outline-ember-100 shadow-[0_0_30px_rgba(251,231,176,0.78)]",
       )}
-      style={scaledStyle}
+      style={tokenFrameStyle}
       title={player.name}
     >
       <RoleTokenImage
         roleId={visibleRoleId}
         roles={scriptRoles}
         className="absolute inset-0 z-0 overflow-hidden rounded-full"
-        imageClassName="h-[112%] w-full translate-y-[8%] object-cover object-top opacity-90 sm:h-[116%] sm:translate-y-[12%] lg:h-[118%] lg:translate-y-[16%]"
+        imageClassName={clsx(
+          "h-[112%] w-full translate-y-[8%] object-cover object-top sm:h-[116%] sm:translate-y-[12%] lg:h-[118%] lg:translate-y-[16%]",
+          hasGoodTint || hasEvilTint ? "opacity-78" : "opacity-90",
+        )}
+        imageStyle={tokenImageTintStyle}
       />
+      {hasGoodTint || hasEvilTint ? (
+        <span
+          className={clsx(
+            "pointer-events-none absolute inset-0 z-[1] rounded-full",
+            hasGoodTint &&
+              (player.alive ? "bg-sky-400/28 mix-blend-screen" : "bg-sky-900/20 mix-blend-multiply"),
+            hasEvilTint &&
+              (player.alive ? "bg-red-600/26 mix-blend-screen" : "bg-red-950/22 mix-blend-multiply"),
+          )}
+        />
+      ) : null}
       {noteCount > 0 ? (
         <span
           className={clsx(

@@ -1,6 +1,6 @@
 import { Edit3, Save, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { Note, PersonalTeam, Phase, Player, PlayerTeam, ScriptRole } from "../types";
+import type { Note, PersonalTeam, Phase, Player, PlayerTeam, ScriptRole, TokenTint } from "../types";
 import { sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
 import { getRoleLabel, groupRolesByType } from "../utils/scripts";
@@ -20,7 +20,7 @@ type PlayerDetailModalProps = {
   onClose: () => void;
   onSave: (
     playerId: string,
-    values: Pick<Player, "name" | "alive" | "mainRole" | "additionalRoles" | "travellerTeam">,
+    values: Pick<Player, "name" | "alive" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
     isMyToken: boolean,
     myTeam: PersonalTeam | undefined,
   ) => Promise<void>;
@@ -89,6 +89,7 @@ function PlayerDetailForm({
 }: PlayerDetailFormProps) {
   const [name, setName] = useState(player.name);
   const [alive, setAlive] = useState(player.alive);
+  const [tokenTint, setTokenTint] = useState<TokenTint>(player.tokenTint ?? "default");
   const [mainRole, setMainRole] = useState(player.mainRole ?? "");
   const [travellerTeam, setTravellerTeam] = useState<PlayerTeam>(player.travellerTeam ?? "unknown");
   const [markedAsMine, setMarkedAsMine] = useState(isMyToken);
@@ -222,6 +223,7 @@ function PlayerDetailForm({
       await onSave(player.id, {
         name: trimmedName,
         alive,
+        tokenTint,
         mainRole: mainRole.trim() || undefined,
         additionalRoles: additionalRoles.map((role) => role.trim()).slice(0, 3),
         travellerTeam,
@@ -236,24 +238,20 @@ function PlayerDetailForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl sm:p-6">
-        <div className="mb-5 flex items-start justify-between gap-3">
+      <div className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl">
+        <div className="flex items-start justify-between gap-3 border-b border-ember-200/10 bg-ink-850/95 px-4 py-4 backdrop-blur sm:px-6 sm:py-5">
           <div>
             <p className="text-sm text-stone-400">Карточка игрока</p>
             <h2 className="text-2xl font-bold text-stone-50">{player.name}</h2>
           </div>
-          <button type="button" onClick={onClose} className="secondary-button px-3">
+          <button type="button" onClick={onClose} className="secondary-button shrink-0 px-3">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
-          <div className="space-y-4">
-            <button type="button" onClick={handleSave} disabled={saving} className="primary-button w-full">
-              <Save className="h-4 w-4" />
-              {saving ? "Сохранение" : "Сохранить игрока"}
-            </button>
-
+        <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+          <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
+            <div className="space-y-4">
             <label className="block space-y-2">
               <span className="label">Имя</span>
               <input value={name} onChange={(event) => setName(event.target.value)} className="field" />
@@ -357,6 +355,19 @@ function PlayerDetailForm({
                   </div>
                 )}
               </div>
+            </label>
+
+            <label className="block space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
+              <span className="label">Окрас жетона</span>
+              <select
+                value={tokenTint}
+                onChange={(event) => setTokenTint(event.target.value as TokenTint)}
+                className="field"
+              >
+                <option value="default">По роли</option>
+                <option value="good">Синий</option>
+                <option value="evil">Красный</option>
+              </select>
             </label>
 
             <div className="space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
@@ -532,6 +543,13 @@ function PlayerDetailForm({
               )}
             </div>
           </div>
+        </div>
+        </div>
+        <div className="border-t border-ember-200/10 bg-ink-850/95 px-4 py-4 backdrop-blur sm:px-6">
+          <button type="button" onClick={handleSave} disabled={saving} className="primary-button w-full">
+            <Save className="h-4 w-4" />
+            {saving ? "Сохранение" : "Сохранить игрока"}
+          </button>
         </div>
       </div>
     </div>

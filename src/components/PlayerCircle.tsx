@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Plus, X } from "lucide-react";
+import { ChevronDown, Lock, LockOpen, Plus, Settings2, X } from "lucide-react";
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type {
   GrimoireStyle,
@@ -214,6 +214,7 @@ export default function PlayerCircle({
   const [travellerJoinedPhaseId, setTravellerJoinedPhaseId] = useState("");
   const [specialFormOpen, setSpecialFormOpen] = useState(false);
   const [selectedSpecialRoleId, setSelectedSpecialRoleId] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const travellerPickerGroups = useMemo(
     () => [
       {
@@ -262,16 +263,16 @@ export default function PlayerCircle({
   };
   const voteMarkerClass =
     density === "dense"
-      ? "h-3 w-3 sm:h-4 sm:w-4 lg:h-4.5 lg:w-4.5"
+      ? "h-6 w-6 sm:h-8 sm:w-8 lg:h-9 lg:w-9"
       : density === "compact"
-        ? "h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 lg:h-5 lg:w-5"
-        : "h-4 w-4 sm:h-5 sm:w-5";
+        ? "h-7 w-7 sm:h-9 sm:w-9 lg:h-10 lg:w-10"
+        : "h-8 w-8 sm:h-10 sm:w-10";
   const innerVoteDotClass =
     density === "dense"
-      ? "h-1.5 w-1.5 sm:h-2 sm:w-2"
+      ? "h-3 w-3 sm:h-4 sm:w-4"
       : density === "compact"
-        ? "h-2 w-2 sm:h-2.5 sm:w-2.5"
-        : "h-2 w-2 sm:h-3 sm:w-3";
+        ? "h-4 w-4 sm:h-5 sm:w-5"
+        : "h-4 w-4 sm:h-6 sm:w-6";
   const votingCheckboxClass =
     density === "dense"
       ? "h-4 w-4 sm:h-5 sm:w-5"
@@ -279,12 +280,13 @@ export default function PlayerCircle({
         ? "h-4.5 w-4.5 sm:h-5 sm:w-5"
         : "h-5 w-5 sm:h-6 sm:w-6";
   const isVotingMode = Boolean(voteDraft && onToggleVoteVoter);
-  const canManualArrange = !isVotingMode && !showVoteMarkers;
-  const currentStyle = grimoireStyle ?? {
-    tokenScale: 1,
-    extraTokenScale: 1,
-    nameScale: 1,
+  const currentStyle = {
+    tokenScale: grimoireStyle?.tokenScale ?? 1,
+    extraTokenScale: grimoireStyle?.extraTokenScale ?? 1,
+    nameScale: grimoireStyle?.nameScale ?? 1,
+    lockTokens: grimoireStyle?.lockTokens ?? false,
   };
+  const canManualArrange = !isVotingMode && !currentStyle.lockTokens;
   const [draggingPlayerId, setDraggingPlayerId] = useState<string | null>(null);
   const baseHalfTokenPercent = density === "dense" ? 8.5 : density === "compact" ? 10 : 12.5;
   const halfTokenPercent = baseHalfTokenPercent * currentStyle.tokenScale;
@@ -574,43 +576,85 @@ export default function PlayerCircle({
         </div>
       ) : null}
 
-      <div className="mb-4 grid gap-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:grid-cols-3">
-        <label className="block space-y-2">
-          <span className="label">Размер жетонов</span>
-          <input
-            type="range"
-            min="0.75"
-            max="1.35"
-            step="0.05"
-            value={currentStyle.tokenScale}
-            onChange={(event) => updateStyle({ tokenScale: Number(event.target.value) })}
-            className="w-full accent-ember-200"
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="label">Доп. жетоны</span>
-          <input
-            type="range"
-            min="0.75"
-            max="1.5"
-            step="0.05"
-            value={currentStyle.extraTokenScale}
-            onChange={(event) => updateStyle({ extraTokenScale: Number(event.target.value) })}
-            className="w-full accent-ember-200"
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="label">Текст имени</span>
-          <input
-            type="range"
-            min="0.8"
-            max="1.5"
-            step="0.05"
-            value={currentStyle.nameScale}
-            onChange={(event) => updateStyle({ nameScale: Number(event.target.value) })}
-            className="w-full accent-ember-200"
-          />
-        </label>
+      <div className="mb-4 rounded-2xl border border-ember-200/10 bg-black/15">
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((current) => !current)}
+          className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-stone-100 sm:px-4"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex items-center gap-2 font-medium">
+              <Settings2 className="h-4 w-4" />
+              Настройки жетонов
+            </span>
+            <span
+              className={clsx(
+                "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-[0_0_18px_rgba(0,0,0,0.22)]",
+                currentStyle.lockTokens
+                  ? "border-red-300/70 bg-red-500/18 text-red-100"
+                  : "border-sky-300/70 bg-sky-500/18 text-sky-100",
+              )}
+              aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
+              title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
+            >
+              {currentStyle.lockTokens ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+            </span>
+          </span>
+          <ChevronDown className={clsx("h-4 w-4 transition-transform", settingsOpen && "rotate-180")} />
+        </button>
+
+        {settingsOpen ? (
+          <div className="grid gap-3 border-t border-ember-200/10 p-3 sm:grid-cols-3 sm:p-4">
+            <label className="block space-y-2">
+              <span className="label">Размер жетонов</span>
+              <input
+                type="range"
+                min="0.75"
+                max="1.35"
+                step="0.05"
+                value={currentStyle.tokenScale}
+                onChange={(event) => updateStyle({ tokenScale: Number(event.target.value) })}
+                className="w-full accent-ember-200"
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className="label">Доп. жетоны</span>
+              <input
+                type="range"
+                min="0.75"
+                max="1.5"
+                step="0.05"
+                value={currentStyle.extraTokenScale}
+                onChange={(event) => updateStyle({ extraTokenScale: Number(event.target.value) })}
+                className="w-full accent-ember-200"
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className="label">Текст имени</span>
+              <input
+                type="range"
+                min="0.8"
+                max="1.5"
+                step="0.05"
+                value={currentStyle.nameScale}
+                onChange={(event) => updateStyle({ nameScale: Number(event.target.value) })}
+                className="w-full accent-ember-200"
+              />
+            </label>
+            <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3 sm:col-span-3">
+              <span className="inline-flex items-center gap-2 font-medium text-stone-100">
+                <Lock className="h-4 w-4" />
+                Lock tokens
+              </span>
+              <input
+                type="checkbox"
+                checked={currentStyle.lockTokens}
+                onChange={(event) => updateStyle({ lockTokens: event.target.checked })}
+                className="h-5 w-5 accent-ember-200"
+              />
+            </label>
+          </div>
+        ) : null}
       </div>
 
       <div

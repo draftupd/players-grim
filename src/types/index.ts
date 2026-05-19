@@ -5,6 +5,7 @@ export type Winner = "good" | "evil" | "other" | "unknown";
 export type PersonalTeam = "good" | "evil" | "traveller" | "unknown";
 
 export type PlayerTeam = "good" | "evil" | "unknown";
+export type TokenTint = "default" | "good" | "evil";
 
 export type RoleType =
   | "townsfolk"
@@ -31,6 +32,7 @@ export type GrimoireStyle = {
   tokenScale: number;
   extraTokenScale: number;
   nameScale: number;
+  lockTokens?: boolean;
 };
 
 export type Game = {
@@ -66,6 +68,7 @@ export type Player = {
   name: string;
   seatIndex: number;
   alive: boolean;
+  tokenTint?: TokenTint;
   mainRole?: string;
   additionalRoles: string[];
   isTraveller?: boolean;

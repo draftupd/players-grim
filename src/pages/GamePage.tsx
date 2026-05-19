@@ -293,6 +293,7 @@ export default function GamePage() {
         name: payload.name,
         seatIndex: nextSeatIndex,
         alive: true,
+        tokenTint: "default",
         mainRole: undefined,
         additionalRoles: ["", "", ""],
         isTraveller: true,
@@ -443,7 +444,7 @@ export default function GamePage() {
 
   const savePlayer = async (
     playerId: string,
-    values: Pick<Player, "name" | "alive" | "mainRole" | "additionalRoles" | "travellerTeam">,
+    values: Pick<Player, "name" | "alive" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
     isMyToken: boolean,
     myTeam: Game["myTeam"],
   ) => {
@@ -517,6 +518,7 @@ export default function GamePage() {
             await db.players.update(player.id, {
               name: player.name,
               seatIndex: player.seatIndex,
+              tokenTint: existingPlayer.tokenTint ?? "default",
               mainRole: player.mainRole,
               isTraveller: player.isTraveller,
               travellerRole: player.travellerRole,
@@ -534,6 +536,7 @@ export default function GamePage() {
             name: player.name,
             seatIndex: player.seatIndex,
             alive: true,
+            tokenTint: "default",
             mainRole: player.mainRole,
             additionalRoles: ["", "", ""],
             isTraveller: player.isTraveller,

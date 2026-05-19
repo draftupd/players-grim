@@ -1,4 +1,5 @@
 import { ReactNode, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import type { ScriptRole } from "../types";
 import { getRoleLabel } from "../utils/scripts";
 import { getTokenImageUrls } from "../utils/tokenImages";
@@ -8,6 +9,7 @@ type RoleTokenImageProps = {
   roles?: ScriptRole[];
   className?: string;
   imageClassName?: string;
+  imageStyle?: CSSProperties;
   fallback?: ReactNode;
 };
 
@@ -16,6 +18,7 @@ export default function RoleTokenImage({
   roles = [],
   className,
   imageClassName,
+  imageStyle,
   fallback = null,
 }: RoleTokenImageProps) {
   const [failedUrls, setFailedUrls] = useState<string[]>([]);
@@ -32,6 +35,7 @@ export default function RoleTokenImage({
         src={src}
         alt={getRoleLabel(roleId, roles)}
         className={imageClassName}
+        style={imageStyle}
         draggable={false}
         onError={() => setFailedUrls((current) => (current.includes(src) ? current : [...current, src]))}
       />
