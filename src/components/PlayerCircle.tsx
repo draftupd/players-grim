@@ -589,15 +589,15 @@ export default function PlayerCircle({
             </span>
             <span
               className={clsx(
-                "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-[0_0_18px_rgba(0,0,0,0.22)]",
+                "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 shadow-[0_0_22px_rgba(0,0,0,0.28)]",
                 currentStyle.lockTokens
-                  ? "border-red-300/70 bg-red-500/18 text-red-100"
-                  : "border-sky-300/70 bg-sky-500/18 text-sky-100",
+                  ? "border-red-200 bg-red-500/35 text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.45)]"
+                  : "border-emerald-200 bg-emerald-500/35 text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.45)]",
               )}
               aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
               title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
             >
-              {currentStyle.lockTokens ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+              {currentStyle.lockTokens ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
             </span>
           </span>
           <ChevronDown className={clsx("h-4 w-4 transition-transform", settingsOpen && "rotate-180")} />
