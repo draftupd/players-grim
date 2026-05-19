@@ -6,8 +6,9 @@ import GameCard from "../components/GameCard";
 import { db } from "../db/db";
 import type { Game, Note, Phase, Player } from "../types";
 import { formatMinutesAsDuration, timestamp } from "../utils/dates";
-import { isArchiveBundle, makeArchiveBundle, remapArchiveBundle } from "../utils/archive";
+import { makeArchiveBundle, remapArchiveBundle } from "../utils/archive";
 import { createId } from "../utils/ids";
+import { readImportedArchive } from "../utils/importErrors";
 import { calculateLibraryStats } from "../utils/stats";
 
 export default function HomePage() {
@@ -178,12 +179,7 @@ export default function HomePage() {
     setImportError("");
 
     try {
-      const parsed = JSON.parse(await file.text());
-
-      if (!isArchiveBundle(parsed)) {
-        throw new Error("Файл не похож на архив Player's Grimoire.");
-      }
-
+      const parsed = await readImportedArchive(file);
       const remapped = remapArchiveBundle(parsed);
 
       await db.transaction("rw", [db.games, db.players, db.phases, db.notes, db.voteRecords], async () => {
@@ -194,7 +190,11 @@ export default function HomePage() {
         await db.voteRecords.bulkAdd(remapped.voteRecords);
       });
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Не удалось импортировать архив.");
+      setImportError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось импортировать архив. Проверьте файл и попробуйте снова.",
+      );
     } finally {
       setImporting(false);
       event.target.value = "";

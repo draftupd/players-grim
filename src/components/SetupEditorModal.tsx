@@ -1,7 +1,8 @@
 import { FileJson, Plus, Save, Trash2, X } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import type { Game, Player, RoleType, ScriptRole } from "../types";
-import { mergeScriptRoles, parseScriptJson, prettifyRoleName } from "../utils/scripts";
+import { readImportedScript } from "../utils/importErrors";
+import { mergeScriptRoles, prettifyRoleName } from "../utils/scripts";
 
 type SetupEditorModalProps = {
   game: Game | null;
@@ -77,14 +78,18 @@ function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProp
     }
 
     try {
-      const parsed = parseScriptJson(JSON.parse(await file.text()));
+      const parsed = await readImportedScript(file);
 
       setScriptName(parsed.name ?? file.name.replace(/\.json$/i, ""));
       setScriptAuthor(parsed.author ?? "");
       setScriptRoles((current) => mergeScriptRoles(current, parsed.roles));
       setError("");
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Не удалось прочитать JSON сценария.");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось прочитать сценарий. Проверьте файл и попробуйте снова.",
+      );
     } finally {
       event.target.value = "";
     }

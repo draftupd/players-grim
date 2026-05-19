@@ -5,7 +5,7 @@ import { db } from "../db/db";
 import type { Game, Phase, Player, ScriptRole } from "../types";
 import { formatDate, phaseTitle, timestamp, todayInputValue } from "../utils/dates";
 import { createId } from "../utils/ids";
-import { parseScriptJson } from "../utils/scripts";
+import { readImportedScript } from "../utils/importErrors";
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
@@ -45,7 +45,7 @@ export default function NewGamePage() {
     }
 
     try {
-      const parsed = parseScriptJson(JSON.parse(await file.text()));
+      const parsed = await readImportedScript(file);
       const nextScriptName = parsed.name ?? file.name.replace(/\.json$/i, "");
 
       setScriptName(nextScriptName);
@@ -57,7 +57,11 @@ export default function NewGamePage() {
       setScriptName("");
       setScriptAuthor("");
       setScriptRoles([]);
-      setError(error instanceof Error ? error.message : "Не удалось прочитать JSON сценария.");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось прочитать сценарий. Проверьте файл и попробуйте снова.",
+      );
     } finally {
       event.target.value = "";
     }
