@@ -1,14 +1,15 @@
-import type { Game, Note, Phase, Player } from "../types";
+import type { Game, Note, Phase, Player, VoteRecord } from "../types";
 import { createId } from "./ids";
 import { timestamp } from "./dates";
 
 export type ArchiveBundle = {
   exportedAt: string;
-  version: 1;
+  version: 2;
   games: Game[];
   players: Player[];
   phases: Phase[];
   notes: Note[];
+  voteRecords: VoteRecord[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -20,11 +21,12 @@ export const isArchiveBundle = (value: unknown): value is ArchiveBundle => {
   }
 
   return (
-    value.version === 1 &&
+    (value.version === 1 || value.version === 2) &&
     Array.isArray(value.games) &&
     Array.isArray(value.players) &&
     Array.isArray(value.phases) &&
-    Array.isArray(value.notes)
+    Array.isArray(value.notes) &&
+    (value.version === 1 || Array.isArray(value.voteRecords))
   );
 };
 
@@ -33,13 +35,15 @@ export const makeArchiveBundle = (
   players: Player[],
   phases: Phase[],
   notes: Note[],
+  voteRecords: VoteRecord[],
 ): ArchiveBundle => ({
-  version: 1,
+  version: 2,
   exportedAt: timestamp(),
   games,
   players,
   phases,
   notes,
+  voteRecords,
 });
 
 export const remapArchiveBundle = (bundle: ArchiveBundle) => {
@@ -73,5 +77,16 @@ export const remapArchiveBundle = (bundle: ArchiveBundle) => {
     linkedPlayerIds: note.linkedPlayerIds.map((playerId) => playerIdMap.get(playerId) ?? playerId),
   }));
 
-  return { games, players, phases, notes };
+  const voteRecords: VoteRecord[] = (bundle.voteRecords ?? []).map((voteRecord) => ({
+    ...voteRecord,
+    id: createId(),
+    gameId: gameIdMap.get(voteRecord.gameId) ?? voteRecord.gameId,
+    phaseId: phaseIdMap.get(voteRecord.phaseId) ?? voteRecord.phaseId,
+    nominatorPlayerId: playerIdMap.get(voteRecord.nominatorPlayerId) ?? voteRecord.nominatorPlayerId,
+    nomineePlayerId: playerIdMap.get(voteRecord.nomineePlayerId) ?? voteRecord.nomineePlayerId,
+    voterPlayerIds: voteRecord.voterPlayerIds.map((playerId) => playerIdMap.get(playerId) ?? playerId),
+    deadVoterPlayerIds: voteRecord.deadVoterPlayerIds.map((playerId) => playerIdMap.get(playerId) ?? playerId),
+  }));
+
+  return { games, players, phases, notes, voteRecords };
 };

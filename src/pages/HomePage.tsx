@@ -56,6 +56,7 @@ export default function HomePage() {
       await db.players.toArray(),
       await db.phases.toArray(),
       await db.notes.toArray(),
+      await db.voteRecords.toArray(),
     );
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -85,11 +86,12 @@ export default function HomePage() {
 
       const remapped = remapArchiveBundle(parsed);
 
-      await db.transaction("rw", db.games, db.players, db.phases, db.notes, async () => {
+      await db.transaction("rw", [db.games, db.players, db.phases, db.notes, db.voteRecords], async () => {
         await db.games.bulkAdd(remapped.games);
         await db.players.bulkAdd(remapped.players);
         await db.phases.bulkAdd(remapped.phases);
         await db.notes.bulkAdd(remapped.notes);
+        await db.voteRecords.bulkAdd(remapped.voteRecords);
       });
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Не удалось импортировать архив.");

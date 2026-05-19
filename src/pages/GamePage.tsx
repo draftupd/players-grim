@@ -1,14 +1,24 @@
-import { ArrowLeft, CheckCircle2, Settings, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Save, Settings, X } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PhaseNotes from "../components/PhaseNotes";
 import PhaseTabs from "../components/PhaseTabs";
 import PlayerCircle from "../components/PlayerCircle";
 import PlayerDetailModal from "../components/PlayerDetailModal";
 import SetupEditorModal from "../components/SetupEditorModal";
+import VotingSetupModal from "../components/VotingSetupModal";
 import { db } from "../db/db";
-import type { Game, Note, Phase, Player, Winner } from "../types";
+import type {
+  Game,
+  Note,
+  Phase,
+  Player,
+  PlayerVoteAvailability,
+  VoteDraft,
+  VoteRecord,
+  Winner,
+} from "../types";
 import {
   formatDate,
   personalResultLabel,
@@ -35,6 +45,36 @@ const findMyPlayerIdByRole = (players: Player[], myRoleId?: string) => {
   return matches.length === 1 ? matches[0].id : undefined;
 };
 
+const buildVotingNoteText = ({
+  voteNumber,
+  nominatorName,
+  nomineeName,
+  voterNames,
+  deadVoterNames,
+  alivePlayerCount,
+}: {
+  voteNumber: number;
+  nominatorName: string;
+  nomineeName: string;
+  voterNames: string[];
+  deadVoterNames: string[];
+  alivePlayerCount: number;
+}) => {
+  const threshold = Math.ceil(alivePlayerCount / 2);
+  const voteCount = voterNames.length;
+  const outcome = voteCount >= threshold ? "достаточно голосов для казни" : "недостаточно голосов";
+
+  return [
+    `Голосование #${voteNumber}`,
+    `Номинировал: ${nominatorName}`,
+    `Номинирован: ${nomineeName}`,
+    `Голосовали (${voteCount}): ${voterNames.length > 0 ? voterNames.join(", ") : "никто"}`,
+    `Мертвые голоса: ${deadVoterNames.length > 0 ? deadVoterNames.join(", ") : "нет"}`,
+    `Порог: ${threshold} из ${alivePlayerCount} живых`,
+    `Итог: ${outcome}`,
+  ].join("\n");
+};
+
 export default function GamePage() {
   const { gameId } = useParams<{ gameId: string }>();
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>();
@@ -44,6 +84,9 @@ export default function GamePage() {
   const [finishWinner, setFinishWinner] = useState<Winner>("unknown");
   const [finishNotes, setFinishNotes] = useState("");
   const [localMyPlayerId, setLocalMyPlayerId] = useState<string | null | undefined>();
+  const [votingSetupOpen, setVotingSetupOpen] = useState(false);
+  const [voteDraft, setVoteDraft] = useState<VoteDraft | null>(null);
+  const [voteSaving, setVoteSaving] = useState(false);
   const [pageError, setPageError] = useState("");
 
   const gameResult = useLiveQuery(
@@ -80,11 +123,26 @@ export default function GamePage() {
     [],
   );
 
+  const voteRecords = useLiveQuery(
+    async (): Promise<VoteRecord[]> =>
+      gameId
+        ? (await db.voteRecords.where("gameId").equals(gameId).toArray()).sort((a, b) =>
+            a.createdAt.localeCompare(b.createdAt),
+          )
+        : [],
+    [gameId],
+    [],
+  );
+
   const effectiveSelectedPhaseId = phases.some((phase) => phase.id === selectedPhaseId)
     ? selectedPhaseId
     : phases[0]?.id;
   const selectedPhase = phases.find((phase) => phase.id === effectiveSelectedPhaseId);
   const selectedPlayer = players.find((player) => player.id === selectedPlayerId) ?? null;
+  const playersById = useMemo(
+    () => new Map(players.map((player) => [player.id, player])),
+    [players],
+  );
   const storedOrDerivedMyPlayerId =
     gameResult.game?.myPlayerId ?? findMyPlayerIdByRole(players, gameResult.game?.myRoleId);
   const effectiveMyPlayerId =
@@ -94,6 +152,44 @@ export default function GamePage() {
     () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId),
     [notes, effectiveSelectedPhaseId],
   );
+  const selectedPhaseVoteRecords = useMemo(
+    () => voteRecords.filter((voteRecord) => voteRecord.phaseId === effectiveSelectedPhaseId),
+    [voteRecords, effectiveSelectedPhaseId],
+  );
+  const deadVoteSpentPlayerIds = useMemo(
+    () => new Set(voteRecords.flatMap((voteRecord) => voteRecord.deadVoterPlayerIds)),
+    [voteRecords],
+  );
+  const voteAvailabilityByPlayerId = useMemo(
+    (): ReadonlyMap<string, PlayerVoteAvailability> =>
+      new Map<string, PlayerVoteAvailability>(
+        players.map((player) => [
+          player.id,
+          player.alive
+            ? "alive"
+            : deadVoteSpentPlayerIds.has(player.id)
+              ? "dead_spent"
+              : "dead_available",
+        ]),
+      ),
+    [deadVoteSpentPlayerIds, players],
+  );
+
+  useEffect(() => {
+    if (!voteDraft) {
+      return;
+    }
+
+    if (!effectiveSelectedPhaseId || voteDraft.phaseId !== effectiveSelectedPhaseId || selectedPhase?.type !== "day") {
+      setVoteDraft(null);
+    }
+  }, [effectiveSelectedPhaseId, selectedPhase?.type, voteDraft]);
+
+  useEffect(() => {
+    if (selectedPhase?.type !== "day") {
+      setVotingSetupOpen(false);
+    }
+  }, [selectedPhase?.type]);
 
   const updateGameTimestamp = async (now = timestamp()) => {
     if (gameId) {
@@ -320,6 +416,117 @@ export default function GamePage() {
     }
   };
 
+  const beginVoteDraft = (nominatorPlayerId: string, nomineePlayerId: string) => {
+    if (!selectedPhase || selectedPhase.type !== "day") {
+      return;
+    }
+
+    setVoteDraft({
+      phaseId: selectedPhase.id,
+      nominatorPlayerId,
+      nomineePlayerId,
+      selectedVoterIds: [],
+    });
+    setVotingSetupOpen(false);
+    setPageError("");
+  };
+
+  const toggleVoteDraftVoter = (playerId: string) => {
+    const availability = voteAvailabilityByPlayerId.get(playerId);
+
+    if (availability === "dead_spent") {
+      return;
+    }
+
+    setVoteDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        selectedVoterIds: current.selectedVoterIds.includes(playerId)
+          ? current.selectedVoterIds.filter((id) => id !== playerId)
+          : [...current.selectedVoterIds, playerId],
+      };
+    });
+  };
+
+  const cancelVoteDraft = () => {
+    setVoteDraft(null);
+    setVotingSetupOpen(false);
+  };
+
+  const saveVoteDraft = async () => {
+    if (!gameId || !voteDraft) {
+      return;
+    }
+
+    const nominator = playersById.get(voteDraft.nominatorPlayerId);
+    const nominee = playersById.get(voteDraft.nomineePlayerId);
+
+    if (!nominator || !nominee) {
+      setPageError("Не удалось найти игроков для голосования.");
+      return;
+    }
+
+    const alivePlayerCount = players.filter((player) => player.alive).length;
+    const deadVoterPlayerIds = voteDraft.selectedVoterIds.filter((playerId) => !playersById.get(playerId)?.alive);
+    const voterNames = voteDraft.selectedVoterIds
+      .map((playerId) => playersById.get(playerId)?.name)
+      .filter((name): name is string => Boolean(name));
+    const deadVoterNames = deadVoterPlayerIds
+      .map((playerId) => playersById.get(playerId)?.name)
+      .filter((name): name is string => Boolean(name));
+    const now = timestamp();
+    const noteText = buildVotingNoteText({
+      voteNumber: selectedPhaseVoteRecords.length + 1,
+      nominatorName: nominator.name,
+      nomineeName: nominee.name,
+      voterNames,
+      deadVoterNames,
+      alivePlayerCount,
+    });
+    const note: Note = {
+      id: createId(),
+      gameId,
+      phaseId: voteDraft.phaseId,
+      text: noteText,
+      linkedPlayerIds: Array.from(
+        new Set([voteDraft.nominatorPlayerId, voteDraft.nomineePlayerId, ...voteDraft.selectedVoterIds]),
+      ),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const voteRecord: VoteRecord = {
+      id: createId(),
+      gameId,
+      phaseId: voteDraft.phaseId,
+      nominatorPlayerId: voteDraft.nominatorPlayerId,
+      nomineePlayerId: voteDraft.nomineePlayerId,
+      voterPlayerIds: voteDraft.selectedVoterIds,
+      deadVoterPlayerIds,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setVoteSaving(true);
+    setPageError("");
+
+    try {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, async () => {
+        await db.voteRecords.add(voteRecord);
+        await db.notes.add(note);
+        await updateGameTimestamp(now);
+      });
+      setVoteDraft(null);
+    } catch {
+      setPageError("Не удалось сохранить голосование.");
+    } finally {
+      setVoteSaving(false);
+    }
+  };
+
   if (gameResult.loading) {
     return (
       <main className="page-shell">
@@ -422,6 +629,10 @@ export default function GamePage() {
             scriptRoles={game.scriptRoles}
             myPlayerId={effectiveMyPlayerId}
             myRoleId={game.myRoleId}
+            voteDraft={voteDraft}
+            showVoteMarkers={selectedPhase?.type === "day" || Boolean(voteDraft)}
+            voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
+            onToggleVoteVoter={voteDraft ? toggleVoteDraftVoter : undefined}
             onPlayerClick={(player) => setSelectedPlayerId(player.id)}
           />
 
@@ -432,6 +643,62 @@ export default function GamePage() {
               onSelect={setSelectedPhaseId}
               onAddNextPhase={addNextPhase}
             />
+            {selectedPhase?.type === "day" ? (
+              <section className="panel min-w-0 p-3 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-stone-50">Голосование</h2>
+                    <p className="text-sm text-stone-400">
+                      Голосований в этой фазе: {selectedPhaseVoteRecords.length}
+                    </p>
+                  </div>
+
+                  {voteDraft ? (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={saveVoteDraft}
+                        disabled={voteSaving}
+                        className="primary-button w-full sm:w-auto"
+                      >
+                        <Save className="h-4 w-4" />
+                        {voteSaving ? "Сохранение" : "Сохранить голосование"}
+                      </button>
+                      <button type="button" onClick={cancelVoteDraft} className="secondary-button w-full sm:w-auto">
+                        <X className="h-4 w-4" />
+                        Отмена
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setVotingSetupOpen(true)} className="secondary-button w-full sm:w-auto">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Режим голосования
+                    </button>
+                  )}
+                </div>
+
+                {voteDraft ? (
+                  <div className="mt-4 space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="chip">
+                        Номинировал: {playersById.get(voteDraft.nominatorPlayerId)?.name ?? "?"}
+                      </span>
+                      <span className="chip">
+                        Номинирован: {playersById.get(voteDraft.nomineePlayerId)?.name ?? "?"}
+                      </span>
+                      <span className="chip">Отмечено голосов: {voteDraft.selectedVoterIds.length}</span>
+                    </div>
+                    <p className="text-sm leading-6 text-stone-300">
+                      На круге появились чекбоксы. Отметь всех, кто голосовал по этой номинации, затем сохрани результат.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 text-sm leading-6 text-stone-300 sm:p-4">
+                    Запусти режим голосования, выбери номинатора и номинированного, затем отметь голоса прямо на круге.
+                  </div>
+                )}
+              </section>
+            ) : null}
             <PhaseNotes
               phase={selectedPhase}
               notes={selectedPhaseNotes}
@@ -466,6 +733,14 @@ export default function GamePage() {
         phases={phases}
         onClose={() => setSetupOpen(false)}
         onSave={saveSetup}
+      />
+
+      <VotingSetupModal
+        open={votingSetupOpen}
+        phase={selectedPhase?.type === "day" ? selectedPhase : undefined}
+        players={players}
+        onClose={() => setVotingSetupOpen(false)}
+        onConfirm={beginVoteDraft}
       />
 
       {finishOpen ? (

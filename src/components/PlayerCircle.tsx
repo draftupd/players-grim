@@ -1,4 +1,5 @@
-import type { Note, Player, ScriptRole } from "../types";
+import clsx from "clsx";
+import type { Note, Player, PlayerVoteAvailability, ScriptRole, VoteDraft } from "../types";
 import { getPlayerSetup } from "../utils/playerSetup";
 import PlayerToken from "./PlayerToken";
 
@@ -8,6 +9,10 @@ type PlayerCircleProps = {
   scriptRoles?: ScriptRole[];
   myPlayerId?: string;
   myRoleId?: string;
+  voteDraft?: VoteDraft | null;
+  showVoteMarkers?: boolean;
+  voteAvailabilityByPlayerId?: ReadonlyMap<string, PlayerVoteAvailability>;
+  onToggleVoteVoter?: (playerId: string) => void;
   onPlayerClick: (player: Player) => void;
 };
 
@@ -74,6 +79,10 @@ export default function PlayerCircle({
   scriptRoles = [],
   myPlayerId,
   myRoleId,
+  voteDraft = null,
+  showVoteMarkers = false,
+  voteAvailabilityByPlayerId,
+  onToggleVoteVoter,
   onPlayerClick,
 }: PlayerCircleProps) {
   const sortedPlayers = [...players].sort((a, b) => a.seatIndex - b.seatIndex);
@@ -102,6 +111,25 @@ export default function PlayerCircle({
     xRadius,
     yRadius,
   };
+  const voteMarkerClass =
+    density === "dense"
+      ? "h-3 w-3 sm:h-4 sm:w-4 lg:h-4.5 lg:w-4.5"
+      : density === "compact"
+        ? "h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 lg:h-5 lg:w-5"
+        : "h-4 w-4 sm:h-5 sm:w-5";
+  const innerVoteDotClass =
+    density === "dense"
+      ? "h-1.5 w-1.5 sm:h-2 sm:w-2"
+      : density === "compact"
+        ? "h-2 w-2 sm:h-2.5 sm:w-2.5"
+        : "h-2 w-2 sm:h-3 sm:w-3";
+  const votingCheckboxClass =
+    density === "dense"
+      ? "h-4 w-4 sm:h-5 sm:w-5"
+      : density === "compact"
+        ? "h-4.5 w-4.5 sm:h-5 sm:w-5"
+        : "h-5 w-5 sm:h-6 sm:w-6";
+  const isVotingMode = Boolean(voteDraft && onToggleVoteVoter);
 
   return (
     <section className="panel overflow-hidden p-3 sm:p-5">
@@ -153,9 +181,18 @@ export default function PlayerCircle({
 
         {sortedPlayers.map((player, index) => {
           const position = tokenPositions[index] ?? { x: 50, y: 50 };
+          const dx = position.x - 50;
+          const dy = position.y - 50;
+          const distance = Math.hypot(dx, dy) || 1;
+          const inwardVoteMarkerOffset = density === "dense" ? 18 : density === "compact" ? 22 : 26;
+          const voteMarkerOffsetX = (-dx / distance) * inwardVoteMarkerOffset;
+          const voteMarkerOffsetY = (-dy / distance) * inwardVoteMarkerOffset;
           const noteCount = notes.filter((note) => note.linkedPlayerIds.includes(player.id)).length;
           const playerRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
           const isMyToken = Boolean((myPlayerId && player.id === myPlayerId) || (!myPlayerId && myRoleId && playerRoleId === myRoleId));
+          const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";
+          const canVoteInCurrentSession = voteAvailability !== "dead_spent";
+          const isSelectedVoter = voteDraft?.selectedVoterIds.includes(player.id) ?? false;
 
           return (
             <div
@@ -163,12 +200,65 @@ export default function PlayerCircle({
               className="absolute -translate-x-1/2 -translate-y-1/2"
               style={{ left: `${position.x}%`, top: `${position.y}%` }}
             >
+              {showVoteMarkers ? (
+                <div
+                  className="pointer-events-none absolute left-1/2 top-1/2 z-10"
+                  style={{
+                    transform: `translate(calc(-50% + ${voteMarkerOffsetX}px), calc(-50% + ${voteMarkerOffsetY}px))`,
+                  }}
+                  title={
+                    voteAvailability === "alive"
+                      ? "Живой игрок: голосует без ограничений"
+                      : voteAvailability === "dead_available"
+                        ? "Мертвый игрок: мертвый голос еще доступен"
+                        : "Мертвый игрок: мертвый голос уже потрачен"
+                  }
+                >
+                  <span
+                    className={clsx(
+                      "flex items-center justify-center rounded-full border shadow-md shadow-black/35",
+                      voteMarkerClass,
+                      voteAvailability === "alive"
+                        ? "border-emerald-200/80 bg-emerald-400/90"
+                        : "border-stone-300/35 bg-stone-500/80",
+                    )}
+                  >
+                    {voteAvailability === "dead_available" ? (
+                      <span className={clsx("rounded-full bg-red-400", innerVoteDotClass)} />
+                    ) : null}
+                  </span>
+                </div>
+              ) : null}
+
+              {isVotingMode ? (
+                <label
+                  className={clsx(
+                    "absolute left-1/2 top-0 z-30 flex -translate-x-1/2 -translate-y-[125%] items-center justify-center rounded-full border border-ember-100/20 bg-black/70 p-1 shadow-lg shadow-black/35 backdrop-blur-sm",
+                    !canVoteInCurrentSession && "opacity-45",
+                  )}
+                  title={
+                    canVoteInCurrentSession
+                      ? "Отметить, что игрок голосовал"
+                      : "У мертвого игрока больше нет голоса"
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelectedVoter}
+                    disabled={!canVoteInCurrentSession}
+                    onChange={() => onToggleVoteVoter?.(player.id)}
+                    className={clsx("accent-emerald-300", votingCheckboxClass)}
+                  />
+                </label>
+              ) : null}
+
               <PlayerToken
                 player={player}
                 noteCount={noteCount}
                 scriptRoles={scriptRoles}
                 isMyToken={isMyToken}
                 density={density}
+                disabled={isVotingMode}
                 onClick={onPlayerClick}
               />
             </div>

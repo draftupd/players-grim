@@ -9,6 +9,7 @@ type PlayerTokenProps = {
   scriptRoles?: ScriptRole[];
   isMyToken?: boolean;
   density?: "normal" | "compact" | "dense";
+  disabled?: boolean;
   onClick: (player: Player) => void;
 };
 
@@ -51,6 +52,7 @@ export default function PlayerToken({
   scriptRoles = [],
   isMyToken = false,
   density = "normal",
+  disabled = false,
   onClick,
 }: PlayerTokenProps) {
   const visibleRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
@@ -96,10 +98,12 @@ export default function PlayerToken({
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => onClick(player)}
       className={clsx(
         "group relative flex flex-col items-center justify-center rounded-full border bg-gradient-to-br text-center shadow-token transition",
         tokenSizeClass,
+        disabled && "cursor-default",
         player.alive
           ? player.isTraveller
             ? travellerTeamClasses[player.travellerTeam ?? "unknown"]

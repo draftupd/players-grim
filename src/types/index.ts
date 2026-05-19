@@ -81,3 +81,24 @@ export type Note = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type VoteRecord = {
+  id: string;
+  gameId: string;
+  phaseId: string;
+  nominatorPlayerId: string;
+  nomineePlayerId: string;
+  voterPlayerIds: string[];
+  deadVoterPlayerIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PlayerVoteAvailability = "alive" | "dead_available" | "dead_spent";
+
+export type VoteDraft = {
+  phaseId: string;
+  nominatorPlayerId: string;
+  nomineePlayerId: string;
+  selectedVoterIds: string[];
+};
