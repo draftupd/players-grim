@@ -1,0 +1,519 @@
+import { ArrowLeft, CheckCircle2, Settings, X } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import PhaseNotes from "../components/PhaseNotes";
+import PhaseTabs from "../components/PhaseTabs";
+import PlayerCircle from "../components/PlayerCircle";
+import PlayerDetailModal from "../components/PlayerDetailModal";
+import SetupEditorModal from "../components/SetupEditorModal";
+import { db } from "../db/db";
+import type { Game, Note, Phase, Player, Winner } from "../types";
+import {
+  formatDate,
+  personalResultLabel,
+  personalTeamLabel,
+  gameDisplayTitle,
+  phaseTitle,
+  sortPhases,
+  timestamp,
+  winnerLabel,
+} from "../utils/dates";
+import { createId } from "../utils/ids";
+import { getRoleLabel } from "../utils/scripts";
+
+const findMyPlayerIdByRole = (players: Player[], myRoleId?: string) => {
+  if (!myRoleId) {
+    return undefined;
+  }
+
+  const matches = players.filter((player) => {
+    const visibleRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
+    return visibleRoleId === myRoleId;
+  });
+
+  return matches.length === 1 ? matches[0].id : undefined;
+};
+
+export default function GamePage() {
+  const { gameId } = useParams<{ gameId: string }>();
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string>();
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [finishWinner, setFinishWinner] = useState<Winner>("unknown");
+  const [finishNotes, setFinishNotes] = useState("");
+  const [localMyPlayerId, setLocalMyPlayerId] = useState<string | null | undefined>();
+  const [pageError, setPageError] = useState("");
+
+  const gameResult = useLiveQuery(
+    async () => ({
+      loading: false,
+      game: gameId ? await db.games.get(gameId) : undefined,
+    }),
+    [gameId],
+    { loading: true, game: undefined },
+  );
+
+  const players = useLiveQuery(
+    async (): Promise<Player[]> =>
+      gameId ? db.players.where("gameId").equals(gameId).sortBy("seatIndex") : [],
+    [gameId],
+    [],
+  );
+
+  const phases = useLiveQuery(
+    async (): Promise<Phase[]> =>
+      gameId ? sortPhases(await db.phases.where("gameId").equals(gameId).toArray()) : [],
+    [gameId],
+    [],
+  );
+
+  const notes = useLiveQuery(
+    async (): Promise<Note[]> =>
+      gameId
+        ? (await db.notes.where("gameId").equals(gameId).toArray()).sort((a, b) =>
+            a.createdAt.localeCompare(b.createdAt),
+          )
+        : [],
+    [gameId],
+    [],
+  );
+
+  const effectiveSelectedPhaseId = phases.some((phase) => phase.id === selectedPhaseId)
+    ? selectedPhaseId
+    : phases[0]?.id;
+  const selectedPhase = phases.find((phase) => phase.id === effectiveSelectedPhaseId);
+  const selectedPlayer = players.find((player) => player.id === selectedPlayerId) ?? null;
+  const storedOrDerivedMyPlayerId =
+    gameResult.game?.myPlayerId ?? findMyPlayerIdByRole(players, gameResult.game?.myRoleId);
+  const effectiveMyPlayerId =
+    localMyPlayerId === undefined ? storedOrDerivedMyPlayerId : localMyPlayerId || undefined;
+
+  const selectedPhaseNotes = useMemo(
+    () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId),
+    [notes, effectiveSelectedPhaseId],
+  );
+
+  const updateGameTimestamp = async (now = timestamp()) => {
+    if (gameId) {
+      await db.games.update(gameId, { updatedAt: now });
+    }
+  };
+
+  const addNextPhase = async () => {
+    if (!gameId) {
+      return;
+    }
+
+    const sorted = sortPhases(phases);
+    const lastPhase = sorted.at(-1);
+    const nextNumber = !lastPhase ? 1 : lastPhase.type === "night" ? lastPhase.number : lastPhase.number + 1;
+    const nextType = !lastPhase ? "night" : lastPhase.type === "night" ? "day" : "night";
+    const now = timestamp();
+
+    const phase: Phase = {
+      id: createId(),
+      gameId,
+      number: nextNumber,
+      type: nextType,
+      title: phaseTitle(nextNumber, nextType),
+      createdAt: now,
+    };
+
+    try {
+      await db.transaction("rw", db.phases, db.games, async () => {
+        await db.phases.add(phase);
+        await updateGameTimestamp(now);
+      });
+      setSelectedPhaseId(phase.id);
+    } catch {
+      setPageError("Не удалось добавить фазу.");
+    }
+  };
+
+  const addNoteToPhase = async (phaseId: string, text: string, linkedPlayerIds: string[]) => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+    const note: Note = {
+      id: createId(),
+      gameId,
+      phaseId,
+      text,
+      linkedPlayerIds,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.transaction("rw", db.notes, db.games, async () => {
+      await db.notes.add(note);
+      await updateGameTimestamp(now);
+    });
+  };
+
+  const addNote = async (text: string, linkedPlayerIds: string[]) => {
+    if (!selectedPhase) {
+      return;
+    }
+
+    await addNoteToPhase(selectedPhase.id, text, linkedPlayerIds);
+  };
+
+  const deleteNote = async (noteId: string) => {
+    const now = timestamp();
+
+    await db.transaction("rw", db.notes, db.games, async () => {
+      await db.notes.delete(noteId);
+      await updateGameTimestamp(now);
+    });
+  };
+
+  const updateNote = async (noteId: string, text: string, linkedPlayerIds: string[]) => {
+    const now = timestamp();
+
+    await db.transaction("rw", db.notes, db.games, async () => {
+      await db.notes.update(noteId, {
+        text,
+        linkedPlayerIds,
+        updatedAt: now,
+      });
+      await updateGameTimestamp(now);
+    });
+  };
+
+  const savePlayer = async (
+    playerId: string,
+    values: Pick<Player, "name" | "alive" | "mainRole" | "additionalRoles" | "travellerTeam">,
+    isMyToken: boolean,
+    myTeam: Game["myTeam"],
+  ) => {
+    const now = timestamp();
+    const currentPlayer = players.find((player) => player.id === playerId);
+    const nextMyPlayerId = isMyToken ? playerId : effectiveMyPlayerId === playerId ? undefined : effectiveMyPlayerId;
+    const nextMyRoleId = isMyToken
+      ? currentPlayer?.isTraveller
+        ? currentPlayer.travellerRole ?? values.mainRole
+        : values.mainRole
+      : effectiveMyPlayerId === playerId
+        ? undefined
+        : gameResult.game?.myRoleId;
+
+    setLocalMyPlayerId(nextMyPlayerId ?? null);
+
+    await db.transaction("rw", db.players, db.games, async () => {
+      await db.players.update(playerId, {
+        ...values,
+        updatedAt: now,
+      });
+      await db.games.update(gameId!, {
+        myPlayerId: nextMyPlayerId,
+        myRoleId: nextMyRoleId,
+        myTeam: isMyToken ? myTeam : effectiveMyPlayerId === playerId ? undefined : gameResult.game?.myTeam,
+        updatedAt: now,
+      });
+    });
+  };
+
+  const saveSetup = async (
+    gameValues: Pick<
+      Game,
+      "title" | "date" | "storyteller" | "scriptName" | "scriptAuthor" | "scriptRoles"
+    >,
+    playerValues: Array<
+      Pick<
+        Player,
+        | "id"
+        | "name"
+        | "mainRole"
+        | "isTraveller"
+        | "travellerRole"
+        | "travellerTeam"
+        | "joinedPhaseId"
+        | "leftPhaseId"
+        | "seatIndex"
+      >
+    >,
+    deletedPlayerIds: string[],
+  ) => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+
+    await db.transaction("rw", db.games, db.players, async () => {
+      await db.games.update(gameId, {
+        ...gameValues,
+        updatedAt: now,
+      });
+
+      await db.players.bulkDelete(deletedPlayerIds);
+
+      await Promise.all(
+        playerValues.map(async (player) => {
+          const existingPlayer = players.find((currentPlayer) => currentPlayer.id === player.id);
+
+          if (existingPlayer) {
+            await db.players.update(player.id, {
+              name: player.name,
+              seatIndex: player.seatIndex,
+              mainRole: player.mainRole,
+              isTraveller: player.isTraveller,
+              travellerRole: player.travellerRole,
+              travellerTeam: player.travellerTeam,
+              joinedPhaseId: player.joinedPhaseId,
+              leftPhaseId: player.leftPhaseId,
+              updatedAt: now,
+            });
+            return;
+          }
+
+          await db.players.add({
+            id: player.id,
+            gameId,
+            name: player.name,
+            seatIndex: player.seatIndex,
+            alive: true,
+            mainRole: player.mainRole,
+            additionalRoles: ["", "", ""],
+            isTraveller: player.isTraveller,
+            travellerRole: player.travellerRole,
+            travellerTeam: player.travellerTeam,
+            joinedPhaseId: player.joinedPhaseId,
+            leftPhaseId: player.leftPhaseId,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }),
+      );
+    });
+  };
+
+  const openFinishForm = () => {
+    setFinishWinner(gameResult.game?.winner ?? "unknown");
+    setFinishNotes(gameResult.game?.finalNotes ?? "");
+    setFinishOpen(true);
+  };
+
+  const finishGame = async () => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+
+    try {
+      await db.games.update(gameId, {
+        status: "finished",
+        winner: finishWinner,
+        finalNotes: finishNotes.trim() || undefined,
+        finishedAt: now,
+        updatedAt: now,
+      });
+      setFinishOpen(false);
+      setPageError("");
+    } catch {
+      setPageError("Не удалось завершить партию.");
+    }
+  };
+
+  if (gameResult.loading) {
+    return (
+      <main className="page-shell">
+        <div className="content-shell">
+          <section className="panel p-6 text-center text-stone-300">Загрузка партии...</section>
+        </div>
+      </main>
+    );
+  }
+
+  if (!gameResult.game) {
+    return (
+      <main className="page-shell">
+        <div className="content-shell max-w-2xl space-y-4">
+          <section className="panel p-6 text-center">
+            <p className="text-xl font-semibold text-stone-50">Партия не найдена.</p>
+            <Link to="/" className="primary-button mt-5">
+              На главную
+            </Link>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  const { game } = gameResult;
+  const personalResult = personalResultLabel(game.winner, game.myTeam);
+  const personalResultClass =
+    game.myTeam === "traveller"
+      ? "border-amber-200/45 bg-amber-400/15 text-amber-100"
+      : game.winner && game.myTeam && game.winner === game.myTeam
+        ? "border-emerald-200/45 bg-emerald-400/15 text-emerald-100"
+        : game.status === "finished" && game.winner !== "unknown"
+          ? "border-red-200/45 bg-red-400/15 text-red-100"
+          : "border-stone-200/20 bg-stone-100/5 text-stone-200";
+
+  return (
+    <main className="page-shell">
+      <div className="content-shell min-w-0 space-y-4 sm:space-y-5">
+        <header className="panel p-3 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex min-w-0 gap-3">
+              <Link to="/" className="secondary-button mt-0.5 min-h-10 shrink-0 px-3 sm:min-h-11">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+              <div className="min-w-0">
+                <p className="text-sm text-ember-100/80">{formatDate(game.date)}</p>
+                <h1 className="pr-1 text-xl font-bold leading-tight text-stone-50 sm:text-3xl">
+                  {gameDisplayTitle(game)}
+                </h1>
+                <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
+                  {game.storyteller ? <span className="chip">Ведущий: {game.storyteller}</span> : null}
+                  {game.scriptName ? <span className="chip">Сценарий: {game.scriptName}</span> : null}
+                  <span className="chip">{game.playerCount} игроков</span>
+                  <span className="chip">
+                    {game.status === "finished" ? `Завершена: ${winnerLabel(game.winner)}` : "Активная"}
+                  </span>
+                  {game.myRoleId ? (
+                    <span className="chip">Мой жетон: {getRoleLabel(game.myRoleId, game.scriptRoles)}</span>
+                  ) : null}
+                  {game.myTeam ? <span className="chip">Моя команда: {personalTeamLabel(game.myTeam)}</span> : null}
+                  {game.status === "finished" ? (
+                    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${personalResultClass}`}>
+                      {personalResult}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:shrink-0">
+              <button type="button" onClick={() => setSetupOpen(true)} className="secondary-button w-full lg:w-auto">
+                <Settings className="h-4 w-4" />
+                Setup
+              </button>
+              <button type="button" onClick={openFinishForm} className="secondary-button w-full lg:w-auto">
+                <CheckCircle2 className="h-4 w-4" />
+                {game.status === "finished" ? "Итог партии" : "Завершить партию"}
+              </button>
+            </div>
+          </div>
+
+          {game.finalNotes ? (
+            <p className="mt-4 rounded-2xl border border-ember-200/10 bg-black/18 p-4 text-sm leading-6 text-stone-300">
+              {game.finalNotes}
+            </p>
+          ) : null}
+        </header>
+
+        {pageError ? (
+          <div className="rounded-2xl border border-red-300/20 bg-red-950/30 p-4 text-sm text-red-100">
+            {pageError}
+          </div>
+        ) : null}
+
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[0.95fr_minmax(0,1.05fr)] xl:gap-5">
+          <PlayerCircle
+            players={players}
+            notes={notes}
+            scriptRoles={game.scriptRoles}
+            myPlayerId={effectiveMyPlayerId}
+            myRoleId={game.myRoleId}
+            onPlayerClick={(player) => setSelectedPlayerId(player.id)}
+          />
+
+          <div className="min-w-0 space-y-4 sm:space-y-5">
+            <PhaseTabs
+              phases={phases}
+              selectedPhaseId={effectiveSelectedPhaseId}
+              onSelect={setSelectedPhaseId}
+              onAddNextPhase={addNextPhase}
+            />
+            <PhaseNotes
+              phase={selectedPhase}
+              notes={selectedPhaseNotes}
+              players={players}
+              onAddNote={addNote}
+              onDeleteNote={deleteNote}
+              onUpdateNote={updateNote}
+            />
+          </div>
+        </div>
+      </div>
+
+      <PlayerDetailModal
+        player={selectedPlayer}
+        isMyToken={Boolean(selectedPlayer && effectiveMyPlayerId === selectedPlayer.id)}
+        myTokenLocked={Boolean(selectedPlayer && effectiveMyPlayerId && effectiveMyPlayerId !== selectedPlayer.id)}
+        myTeam={selectedPlayer && effectiveMyPlayerId === selectedPlayer.id ? game.myTeam : undefined}
+        notes={notes}
+        players={players}
+        phases={phases}
+        scriptRoles={game.scriptRoles}
+        onClose={() => setSelectedPlayerId(null)}
+        onSave={savePlayer}
+        onAddNote={addNoteToPhase}
+        onDeleteNote={deleteNote}
+        onUpdateNote={updateNote}
+      />
+
+      <SetupEditorModal
+        game={setupOpen ? game : null}
+        players={players}
+        phases={phases}
+        onClose={() => setSetupOpen(false)}
+        onSave={saveSetup}
+      />
+
+      {finishOpen ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+          <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-xl sm:rounded-3xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-stone-400">Завершение партии</p>
+                <h2 className="text-2xl font-bold text-stone-50">Итог</h2>
+              </div>
+              <button type="button" onClick={() => setFinishOpen(false)} className="secondary-button px-3">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block space-y-2">
+                <span className="label">Победитель</span>
+                <select
+                  value={finishWinner}
+                  onChange={(event) => setFinishWinner(event.target.value as Winner)}
+                  className="field"
+                >
+                  <option value="good">Добро</option>
+                  <option value="evil">Зло</option>
+                  <option value="other">Другое</option>
+                  <option value="unknown">Неизвестно</option>
+                </select>
+              </label>
+
+              <label className="block space-y-2">
+                <span className="label">Итоговые заметки</span>
+                <textarea
+                  value={finishNotes}
+                  onChange={(event) => setFinishNotes(event.target.value)}
+                  className="field min-h-32 resize-y"
+                  placeholder="Что важно запомнить по партии?"
+                />
+              </label>
+
+              <button type="button" onClick={finishGame} className="primary-button w-full">
+                <CheckCircle2 className="h-4 w-4" />
+                Сохранить итог
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </main>
+  );
+}

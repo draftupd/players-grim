@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #f7ead2;
+  background: #100b13;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    linear-gradient(145deg, rgba(49, 93, 99, 0.22), transparent 34%),
+    linear-gradient(210deg, rgba(110, 42, 53, 0.28), transparent 42%),
+    linear-gradient(180deg, #100b13 0%, #1b111b 47%, #0f1015 100%);
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .page-shell {
+    @apply min-h-[100dvh] px-3 text-stone-100 sm:px-6 lg:px-8;
+    padding-top: calc(0.9rem + env(safe-area-inset-top));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  .content-shell {
+    @apply mx-auto w-full max-w-6xl;
+  }
+
+  .panel {
+    @apply overflow-hidden rounded-2xl border border-ember-200/15 bg-ink-850/80 shadow-2xl shadow-black/30 backdrop-blur;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-ember-200/15 bg-black/25 px-4 py-3 text-base text-stone-100 outline-none transition placeholder:text-stone-500 focus:border-ember-200/60 focus:ring-2 focus:ring-ember-200/20;
+  }
+
+  .label {
+    @apply text-sm font-medium text-stone-300;
+  }
+
+  .primary-button {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ember-200 px-4 py-2.5 text-sm font-semibold text-ink-900 shadow-lg shadow-black/25 transition hover:bg-ember-100 focus:outline-none focus:ring-2 focus:ring-ember-100/50;
+  }
+
+  .secondary-button {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-ember-200/20 bg-stone-100/5 px-4 py-2.5 text-sm font-semibold text-stone-100 transition hover:border-ember-200/45 hover:bg-stone-100/10 focus:outline-none focus:ring-2 focus:ring-ember-100/30;
+  }
+
+  .danger-button {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-300/25 bg-red-950/30 px-3 py-2 text-sm font-semibold text-red-100 transition hover:border-red-200/50 hover:bg-red-900/40;
+  }
+
+  .chip {
+    @apply inline-flex max-w-full items-center rounded-full border border-ember-200/15 bg-black/20 px-3 py-1 text-xs font-medium text-stone-300;
+  }
+}
