@@ -343,12 +343,17 @@ function PlayerDetailForm({
                     ))}
                   </select>
                 ) : (
-                  <input
-                    value={mainRole}
-                    onChange={(event) => setMainRole(event.target.value)}
-                    className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
-                    placeholder="Например, Clockmaker"
-                  />
+                  <div className="w-full space-y-2">
+                    <input
+                      value={mainRole}
+                      onChange={(event) => setMainRole(event.target.value)}
+                      className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
+                      placeholder="Например, Clockmaker"
+                    />
+                    <p className="text-xs leading-4 text-stone-400">
+                      Загрузите JSON сценария в Setup, чтобы роли выбирались из выпадающего списка автоматически.
+                    </p>
+                  </div>
                 )}
               </div>
             </label>
@@ -398,6 +403,11 @@ function PlayerDetailForm({
                   </div>
                 )
               ))}
+              {roleOptions.length === 0 ? (
+                <p className="text-xs leading-4 text-stone-500">
+                  После загрузки сценария дополнительные роли тоже начнут выпадать списком.
+                </p>
+              ) : null}
             </div>
 
             {error ? <p className="text-sm text-red-200">{error}</p> : null}

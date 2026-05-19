@@ -58,45 +58,47 @@ export default function PlayerToken({
   const extraRoles = player.additionalRoles.filter(Boolean).slice(0, 3);
   const tokenSizeClass =
     density === "dense"
-      ? "h-[40px] w-[40px] px-1 before:inset-[4px] after:inset-[9px] sm:h-24 sm:w-24 sm:px-2 sm:before:inset-[8px] sm:after:inset-[16px]"
+      ? "h-[46px] w-[46px] px-1 sm:h-[58px] sm:w-[58px] sm:px-1 lg:h-[72px] lg:w-[72px] lg:px-1.5"
       : density === "compact"
-        ? "h-[48px] w-[48px] px-1 before:inset-[5px] after:inset-[10px] sm:h-24 sm:w-24 sm:px-2 sm:before:inset-[8px] sm:after:inset-[16px]"
-        : "h-[56px] w-[56px] px-1.5 before:inset-[6px] after:inset-[12px] sm:h-24 sm:w-24 sm:px-2 sm:before:inset-[8px] sm:after:inset-[16px]";
+        ? "h-[54px] w-[54px] px-1 sm:h-[68px] sm:w-[68px] sm:px-1.5 lg:h-[82px] lg:w-[82px] lg:px-2"
+        : "h-[64px] w-[64px] px-1.5 sm:h-[98px] sm:w-[98px] sm:px-2";
   const noteBadgeClass =
     density === "dense"
-      ? "min-w-4 px-1 py-0.5 text-[9px] sm:min-w-6 sm:px-1.5 sm:text-xs"
+      ? "min-w-3.5 px-0.5 py-0 text-[8px] sm:min-w-5 sm:px-1 sm:text-[10px] lg:min-w-6 lg:px-1.5 lg:text-xs"
       : density === "compact"
-        ? "min-w-4.5 px-1 py-0.5 text-[10px] sm:min-w-6 sm:px-1.5 sm:text-xs"
+        ? "min-w-4.5 px-1 py-0.5 text-[10px] sm:min-w-5 sm:px-1 sm:text-[11px] lg:min-w-6 lg:px-1.5 lg:text-xs"
         : "min-w-4.5 px-1 py-0.5 text-[10px] sm:min-w-6 sm:px-1.5 sm:text-xs";
   const nameClass =
     density === "dense"
-      ? "bottom-0.5 w-[90%] text-[8px] sm:bottom-2 sm:w-[84%] sm:text-base"
+      ? "top-0 translate-y-[18%] min-h-[11px] w-max max-w-[120%] px-1.5 py-[1px] text-[7px] sm:min-h-[15px] sm:max-w-[128%] sm:px-1.5 sm:text-[10px] lg:min-h-[18px] lg:max-w-[136%] lg:px-2 lg:text-[12px]"
       : density === "compact"
-        ? "bottom-1 w-[88%] text-[9px] sm:bottom-2 sm:w-[84%] sm:text-base"
-        : "bottom-1 w-[88%] text-[10px] sm:bottom-2 sm:w-[84%] sm:text-base";
+        ? "top-0 translate-y-[24%] min-h-[13px] w-max max-w-[124%] px-1.5 py-[1px] text-[8px] sm:min-h-[17px] sm:max-w-[132%] sm:px-1.5 sm:text-[11px] lg:min-h-[20px] lg:max-w-[140%] lg:px-2 lg:text-[13px]"
+        : "top-0 translate-y-[30%] min-h-[15px] w-max max-w-[128%] px-2 py-[1px] text-[9px] sm:min-h-[19px] sm:max-w-[136%] sm:px-2 sm:text-[12px]";
   const statusClass =
     density === "dense"
-      ? "bottom-2.5 text-[6px] sm:bottom-6 sm:text-[9px]"
-      : "bottom-3.5 text-[7px] sm:bottom-6 sm:text-[9px]";
+      ? "top-[12px] text-[5px] sm:top-[19px] sm:text-[6px] lg:top-[24px] lg:text-[7px]"
+      : density === "compact"
+        ? "top-[15px] text-[6px] sm:top-[24px] sm:text-[7px] lg:top-[29px] lg:text-[8px]"
+        : "top-[18px] text-[7px] sm:top-[30px] sm:text-[8px]";
   const extraWrapperClass =
     density === "dense"
-      ? "-bottom-1.5 gap-0.5 sm:-bottom-3 sm:gap-1"
-      : "-bottom-2 gap-0.5 sm:-bottom-3 sm:gap-1";
+      ? "-bottom-1 gap-0.5 sm:-bottom-2 sm:gap-0.5 lg:-bottom-2.5 lg:gap-1"
+      : "-bottom-2 gap-0.5 sm:-bottom-2.5 sm:gap-0.5 lg:-bottom-3 lg:gap-1";
   const extraCircleClass =
     density === "dense"
-      ? "h-4 min-w-4 px-0 text-[6px] sm:h-7 sm:min-w-7 sm:px-1 sm:text-[9px]"
-      : "h-4.5 min-w-4.5 px-0.5 text-[7px] sm:h-7 sm:min-w-7 sm:px-1 sm:text-[9px]";
+      ? "h-3.5 min-w-3.5 px-0 text-[5px] sm:h-5 sm:min-w-5 sm:px-0.5 sm:text-[7px] lg:h-6 lg:min-w-6 lg:px-0.5 lg:text-[8px]"
+      : "h-4.5 min-w-4.5 px-0.5 text-[7px] sm:h-5.5 sm:min-w-5.5 sm:px-0.5 sm:text-[8px] lg:h-6.5 lg:min-w-6.5 lg:px-1 lg:text-[9px]";
   const extraImageClass =
     density === "dense"
-      ? "h-4 w-4 sm:-mx-1 sm:-my-1 sm:h-7 sm:w-7"
-      : "h-4.5 w-4.5 sm:-mx-1 sm:-my-1 sm:h-7 sm:w-7";
+      ? "h-3.5 w-3.5 sm:h-5 sm:w-5 lg:h-6 lg:w-6"
+      : "h-4.5 w-4.5 sm:h-5.5 sm:w-5.5 lg:h-6.5 lg:w-6.5";
 
   return (
     <button
       type="button"
       onClick={() => onClick(player)}
       className={clsx(
-        "group relative flex flex-col items-center justify-center rounded-full border bg-gradient-to-br text-center shadow-token transition before:absolute before:rounded-full before:border before:border-white/10 before:content-[''] after:absolute after:rounded-full after:bg-black/12 after:content-['']",
+        "group relative flex flex-col items-center justify-center rounded-full border bg-gradient-to-br text-center shadow-token transition",
         tokenSizeClass,
         player.alive
           ? player.isTraveller
@@ -111,15 +113,20 @@ export default function PlayerToken({
         roleId={visibleRoleId}
         roles={scriptRoles}
         className="absolute inset-0 z-0 overflow-hidden rounded-full"
-        imageClassName="h-full w-full object-cover opacity-90"
+        imageClassName="h-[112%] w-full translate-y-[8%] object-cover object-top opacity-90 sm:h-[116%] sm:translate-y-[12%] lg:h-[118%] lg:translate-y-[16%]"
       />
       {noteCount > 0 ? (
         <span className={clsx("absolute -right-1 -top-1 rounded-full border border-ember-100/60 bg-ink-900 font-semibold text-ember-50", noteBadgeClass)}>
           {noteCount}
         </span>
       ) : null}
-      <span className={clsx("absolute left-1/2 z-10 -translate-x-1/2 truncate text-center font-semibold leading-tight text-stone-50 drop-shadow-[0_1px_6px_rgba(0,0,0,0.95)]", nameClass)}>
-        {player.name}
+      <span
+        className={clsx(
+          "pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 overflow-hidden whitespace-nowrap rounded-full border border-white/20 bg-black/45 text-center font-semibold leading-none text-stone-50 shadow-[0_2px_10px_rgba(0,0,0,0.35)] backdrop-blur-[2px]",
+          nameClass,
+        )}
+      >
+        <span className="block truncate">{player.name}</span>
       </span>
       {player.isTraveller ? (
         <span className={clsx("absolute left-1/2 z-10 -translate-x-1/2 font-semibold uppercase tracking-wide text-amber-100 drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]", statusClass)}>
