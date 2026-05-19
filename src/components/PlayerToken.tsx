@@ -16,23 +16,6 @@ type PlayerTokenProps = {
   onClick: (player: Player) => void;
 };
 
-const roleTypeClasses = {
-  townsfolk: "from-sky-950 via-sky-900 to-cyan-950 border-sky-200/65",
-  outsider: "from-blue-950 via-indigo-950 to-slate-950 border-blue-200/60",
-  minion: "from-red-950 via-rose-950 to-stone-950 border-red-200/60",
-  demon: "from-red-950 via-black to-red-950 border-red-300/75",
-  traveller: "from-amber-950 via-stone-900 to-yellow-950 border-amber-200/60",
-  fabled: "from-violet-950 via-fuchsia-950 to-stone-950 border-violet-200/60",
-  loric: "from-emerald-950 via-teal-950 to-stone-950 border-emerald-200/60",
-  unknown: "from-ink-800 via-ink-700 to-ink-900 border-ember-200/55",
-};
-
-const travellerTeamClasses = {
-  good: "from-amber-950 via-stone-900 to-yellow-950 border-sky-300 ring-4 ring-sky-300 shadow-[0_0_22px_rgba(125,211,252,0.62)]",
-  evil: "from-amber-950 via-stone-900 to-yellow-950 border-red-300 ring-4 ring-red-300 shadow-[0_0_22px_rgba(252,165,165,0.62)]",
-  unknown: "from-amber-950 via-stone-900 to-yellow-950 border-amber-200/60",
-};
-
 const extraRoleClasses = {
   townsfolk: "border-sky-200/75 bg-sky-950 text-sky-50",
   outsider: "border-blue-200/70 bg-indigo-950 text-blue-50",
@@ -62,7 +45,6 @@ export default function PlayerToken({
   onClick,
 }: PlayerTokenProps) {
   const visibleRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
-  const roleType = getRoleTypeFromRoles(player.mainRole, scriptRoles);
   const extraRoles = player.additionalRoles.filter(Boolean).slice(0, 3);
   const hasGoodTint = player.tokenTint === "good";
   const hasEvilTint = player.tokenTint === "evil";
@@ -104,10 +86,6 @@ export default function PlayerToken({
     transform: `translate(-50%, 50%) scale(${extraTokenScale})`,
     transformOrigin: "center top" as const,
   };
-  const tintShellClass = hasGoodTint ? roleTypeClasses.townsfolk : hasEvilTint ? roleTypeClasses.minion : "";
-  const baseShellClass = tintShellClass || (player.isTraveller
-    ? travellerTeamClasses[player.travellerTeam ?? "unknown"]
-    : roleTypeClasses[roleType]);
   const deadShellClass = player.alive ? "" : "opacity-85 saturate-[0.45] brightness-[0.72]";
 
   return (
@@ -116,12 +94,11 @@ export default function PlayerToken({
       disabled={disabled}
       onClick={() => onClick(player)}
       className={clsx(
-        "group relative flex flex-col items-center justify-center rounded-full border bg-gradient-to-br text-center shadow-token transition",
+        "group relative flex flex-col items-center justify-center rounded-full border border-white/75 bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.98),rgba(244,240,231,0.96)_58%,rgba(224,214,191,0.92)_100%)] text-center shadow-token transition",
         disabled && "cursor-default",
-        baseShellClass,
         deadShellClass,
-        hasGoodTint && "border-sky-300 shadow-[0_0_28px_rgba(56,189,248,0.45)]",
-        hasEvilTint && "border-red-300 shadow-[0_0_28px_rgba(239,68,68,0.45)]",
+        hasGoodTint && "shadow-[0_0_28px_rgba(56,189,248,0.38)]",
+        hasEvilTint && "shadow-[0_0_28px_rgba(239,68,68,0.4)]",
         isMyToken && "outline outline-[3px] outline-offset-[5px] outline-ember-100 shadow-[0_0_30px_rgba(251,231,176,0.78)]",
       )}
       style={tokenFrameStyle}
@@ -130,24 +107,13 @@ export default function PlayerToken({
       <RoleTokenImage
         roleId={visibleRoleId}
         roles={scriptRoles}
-        className="absolute inset-0 z-0 overflow-hidden rounded-full"
+        className="absolute inset-[2%] z-0 flex items-center justify-center overflow-hidden rounded-full"
         imageClassName={clsx(
-          "h-[112%] w-full translate-y-[8%] object-cover object-top sm:h-[116%] sm:translate-y-[12%] lg:h-[118%] lg:translate-y-[16%]",
-          hasGoodTint || hasEvilTint ? "opacity-78" : "opacity-90",
+          "h-full w-full translate-y-[10%] object-contain object-center",
+          hasGoodTint || hasEvilTint ? "opacity-88" : "opacity-96",
         )}
         imageStyle={tokenImageTintStyle}
       />
-      {hasGoodTint || hasEvilTint ? (
-        <span
-          className={clsx(
-            "pointer-events-none absolute inset-0 z-[1] rounded-full",
-            hasGoodTint &&
-              (player.alive ? "bg-sky-400/28 mix-blend-screen" : "bg-sky-900/20 mix-blend-multiply"),
-            hasEvilTint &&
-              (player.alive ? "bg-red-600/26 mix-blend-screen" : "bg-red-950/22 mix-blend-multiply"),
-          )}
-        />
-      ) : null}
       {noteCount > 0 ? (
         <span
           className={clsx(
@@ -160,7 +126,7 @@ export default function PlayerToken({
       ) : null}
       <span
         className={clsx(
-          "pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 overflow-hidden whitespace-nowrap rounded-full border border-white/20 bg-black/45 text-center font-semibold leading-none text-stone-50 shadow-[0_2px_10px_rgba(0,0,0,0.35)] backdrop-blur-[2px]",
+          "pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 overflow-hidden whitespace-nowrap rounded-full border border-black/45 bg-white/90 text-center font-semibold leading-none text-black shadow-[0_2px_10px_rgba(0,0,0,0.22)] backdrop-blur-[2px]",
           nameClass,
         )}
         style={scaledNameStyle}
@@ -168,7 +134,7 @@ export default function PlayerToken({
         <span className="block truncate">{player.name}</span>
       </span>
       {player.isTraveller ? (
-        <span className={clsx("absolute left-1/2 z-10 -translate-x-1/2 font-semibold uppercase tracking-wide text-amber-100 drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]", statusClass)}>
+        <span className={clsx("absolute left-1/2 z-10 -translate-x-1/2 font-semibold uppercase tracking-wide text-stone-700 drop-shadow-[0_1px_3px_rgba(255,255,255,0.2)]", statusClass)}>
           {player.leftPhaseId ? "ушел" : "traveller"}
         </span>
       ) : null}
@@ -195,8 +161,8 @@ export default function PlayerToken({
                 <RoleTokenImage
                   roleId={roleId}
                   roles={scriptRoles}
-                  className={extraImageClass}
-                  imageClassName="h-full w-full rounded-full object-cover"
+                  className={`${extraImageClass} flex items-center justify-center`}
+                  imageClassName="h-full w-full rounded-full object-contain object-center"
                   fallback={shortRoleLabel(roleId, scriptRoles)}
                 />
               </span>

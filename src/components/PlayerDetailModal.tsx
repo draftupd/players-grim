@@ -357,19 +357,6 @@ function PlayerDetailForm({
               </div>
             </label>
 
-            <label className="block space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
-              <span className="label">Окрас жетона</span>
-              <select
-                value={tokenTint}
-                onChange={(event) => setTokenTint(event.target.value as TokenTint)}
-                className="field"
-              >
-                <option value="default">По роли</option>
-                <option value="good">Синий</option>
-                <option value="evil">Красный</option>
-              </select>
-            </label>
-
             <div className="space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
               <p className="text-xs font-medium text-stone-500">Дополнительные роли</p>
               {[0, 1, 2].map((index) => (
@@ -408,6 +395,19 @@ function PlayerDetailForm({
                 </p>
               ) : null}
             </div>
+
+            <label className="block space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
+              <span className="label">Окрас жетона</span>
+              <select
+                value={tokenTint}
+                onChange={(event) => setTokenTint(event.target.value as TokenTint)}
+                className="field"
+              >
+                <option value="default">По роли</option>
+                <option value="good">Синий</option>
+                <option value="evil">Красный</option>
+              </select>
+            </label>
 
             {error ? <p className="text-sm text-red-200">{error}</p> : null}
           </div>
