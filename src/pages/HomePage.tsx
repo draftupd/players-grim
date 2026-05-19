@@ -4,9 +4,10 @@ import { ChangeEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import GameCard from "../components/GameCard";
 import { db } from "../db/db";
-import type { Game, Note, Player } from "../types";
+import type { Game, Note, Phase, Player } from "../types";
 import { formatMinutesAsDuration, timestamp } from "../utils/dates";
 import { isArchiveBundle, makeArchiveBundle, remapArchiveBundle } from "../utils/archive";
+import { createId } from "../utils/ids";
 import { calculateLibraryStats } from "../utils/stats";
 
 export default function HomePage() {
@@ -34,6 +35,7 @@ export default function HomePage() {
   );
   const players = useLiveQuery(async (): Promise<Player[]> => db.players.toArray(), [], []);
   const notes = useLiveQuery(async (): Promise<Note[]> => db.notes.toArray(), [], []);
+  const phases = useLiveQuery(async (): Promise<Phase[]> => db.phases.toArray(), [], []);
 
   const visibleGames = useMemo(() => games.filter((game) => !game.trashedAt), [games]);
   const trashedGames = useMemo(
@@ -98,6 +100,53 @@ export default function HomePage() {
       await db.phases.bulkDelete(trashedPhases);
       await db.players.bulkDelete(trashedPlayers);
       await db.games.bulkDelete(trashIds);
+    });
+  };
+
+  const duplicateSetup = async (game: Game) => {
+    const gamePlayers = players
+      .filter((player) => player.gameId === game.id)
+      .sort((a, b) => a.seatIndex - b.seatIndex);
+    const now = timestamp();
+    const newGameId = createId();
+    const playerIdMap = new Map(gamePlayers.map((player) => [player.id, createId()]));
+
+    const duplicatedGame: Game = {
+      ...game,
+      id: newGameId,
+      title: `${game.scriptName?.trim() || game.title} — копия setup`,
+      status: "active",
+      winner: undefined,
+      finalNotes: undefined,
+      startedAt: now,
+      finishedAt: undefined,
+      pinnedAt: undefined,
+      trashedAt: undefined,
+      myPlayerId: game.myPlayerId ? playerIdMap.get(game.myPlayerId) : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const duplicatedPlayers: Player[] = gamePlayers.map((player) => ({
+      ...player,
+      id: playerIdMap.get(player.id) ?? createId(),
+      gameId: newGameId,
+      alive: true,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    const duplicatedPhases: Phase[] = [
+      { id: createId(), gameId: newGameId, number: 1, type: "night", title: "1 ночь", createdAt: now },
+      { id: createId(), gameId: newGameId, number: 1, type: "day", title: "1 день", createdAt: now },
+      { id: createId(), gameId: newGameId, number: 2, type: "night", title: "2 ночь", createdAt: now },
+      { id: createId(), gameId: newGameId, number: 2, type: "day", title: "2 день", createdAt: now },
+    ];
+
+    await db.transaction("rw", db.games, db.players, db.phases, async () => {
+      await db.games.add(duplicatedGame);
+      await db.players.bulkAdd(duplicatedPlayers);
+      await db.phases.bulkAdd(duplicatedPhases);
     });
   };
 
@@ -310,6 +359,7 @@ export default function HomePage() {
                     onTogglePin={togglePin}
                     onMoveToTrash={moveToTrash}
                     onRestoreFromTrash={restoreFromTrash}
+                    onDuplicateSetup={duplicateSetup}
                     trashMode
                   />
                 ))}
@@ -343,6 +393,7 @@ export default function HomePage() {
                 onTogglePin={togglePin}
                 onMoveToTrash={moveToTrash}
                 onRestoreFromTrash={restoreFromTrash}
+                onDuplicateSetup={duplicateSetup}
               />
             ))}
           </section>

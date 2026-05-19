@@ -1,4 +1,4 @@
-import { BookOpen, CalendarDays, Clock, Pin, PinOff, RotateCcw, Trash2, Trophy, UserRound, UsersRound } from "lucide-react";
+import { BookOpen, CalendarDays, Clock, Copy, Pin, PinOff, RotateCcw, Trash2, Trophy, UserRound, UsersRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Game } from "../types";
 import { formatDate, formatDuration, formatTime, gameDisplayTitle, personalTeamLabel, winnerLabel } from "../utils/dates";
@@ -9,10 +9,18 @@ type GameCardProps = {
   onTogglePin: (game: Game) => void;
   onMoveToTrash: (game: Game) => void;
   onRestoreFromTrash: (game: Game) => void;
+  onDuplicateSetup?: (game: Game) => void;
   trashMode?: boolean;
 };
 
-export default function GameCard({ game, onTogglePin, onMoveToTrash, onRestoreFromTrash, trashMode = false }: GameCardProps) {
+export default function GameCard({
+  game,
+  onTogglePin,
+  onMoveToTrash,
+  onRestoreFromTrash,
+  onDuplicateSetup,
+  trashMode = false,
+}: GameCardProps) {
   const isFinished = game.status === "finished";
   const startedAt = game.startedAt ?? game.createdAt;
   const duration = formatDuration(startedAt, game.finishedAt);
@@ -74,6 +82,20 @@ export default function GameCard({ game, onTogglePin, onMoveToTrash, onRestoreFr
             </button>
           ) : (
             <>
+              {onDuplicateSetup ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onDuplicateSetup(game);
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200/15 bg-emerald-950/15 text-emerald-100 transition hover:border-emerald-200/35"
+                  title="Дублировать setup"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={(event) => {

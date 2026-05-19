@@ -16,6 +16,7 @@ import { phaseTitle, sortPhases } from "../utils/dates";
 import { getPlayerSetup } from "../utils/playerSetup";
 import { defaultFabledRoles, defaultLoricRoles, defaultTravellerRoles, mergeScriptRoles } from "../utils/scripts";
 import PlayerToken from "./PlayerToken";
+import RolePicker from "./RolePicker";
 
 type PlayerCircleProps = {
   players: Player[];
@@ -238,7 +239,10 @@ export default function PlayerCircle({
   const suppressClickRef = useRef<string | null>(null);
   const sortedPhases = useMemo(() => sortPhases(phases), [phases]);
   const travellerRoleOptions = useMemo(
-    () => mergeScriptRoles(defaultTravellerRoles, scriptRoles.filter((role) => role.type === "traveller")),
+    () =>
+      mergeScriptRoles(defaultTravellerRoles, scriptRoles.filter((role) => role.type === "traveller")).sort((a, b) =>
+        a.name.localeCompare(b.name, "en"),
+      ),
     [scriptRoles],
   );
   const specialRoleOptions = useMemo(
@@ -246,7 +250,7 @@ export default function PlayerCircle({
       mergeScriptRoles(
         mergeScriptRoles(defaultFabledRoles, defaultLoricRoles),
         scriptRoles.filter((role) => role.type === "fabled" || role.type === "loric"),
-      ),
+      ).sort((a, b) => a.name.localeCompare(b.name, "en")),
     [scriptRoles],
   );
   const activeSpecialRoles = useMemo(
@@ -265,6 +269,35 @@ export default function PlayerCircle({
   const [travellerJoinedPhaseId, setTravellerJoinedPhaseId] = useState("");
   const [specialFormOpen, setSpecialFormOpen] = useState(false);
   const [selectedSpecialRoleId, setSelectedSpecialRoleId] = useState("");
+  const travellerPickerGroups = useMemo(
+    () => [
+      {
+        key: "traveller",
+        label: "Traveller",
+        options: travellerRoleOptions.map((role) => ({ id: role.id, label: role.name })),
+      },
+    ],
+    [travellerRoleOptions],
+  );
+  const specialPickerGroups = useMemo(
+    () => [
+      {
+        key: "fabled",
+        label: "Fabled",
+        options: specialRoleOptions
+          .filter((role) => role.type === "fabled")
+          .map((role) => ({ id: role.id, label: role.name })),
+      },
+      {
+        key: "loric",
+        label: "Loric",
+        options: specialRoleOptions
+          .filter((role) => role.type === "loric")
+          .map((role) => ({ id: role.id, label: role.name })),
+      },
+    ].filter((group) => group.options.length > 0),
+    [specialRoleOptions],
+  );
 
   const layout = {
     maxWidth: playerTotal >= 14
@@ -478,20 +511,20 @@ export default function PlayerCircle({
 
       {specialFormOpen ? (
         <div className="mb-4 grid gap-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:grid-cols-[1fr_auto_auto]">
-          <select value={selectedSpecialRoleId} onChange={(event) => setSelectedSpecialRoleId(event.target.value)} className="field">
-            <option value="">Выберите Fabled или Loric</option>
-            {specialRoleOptions
-              .filter(
+          <RolePicker
+            value={selectedSpecialRoleId}
+            onChange={setSelectedSpecialRoleId}
+            groups={specialPickerGroups.map((group) => ({
+              ...group,
+              options: group.options.filter(
                 (role) =>
-                  (role.type === "fabled" && !activeFabledIds.includes(role.id)) ||
-                  (role.type === "loric" && !activeLoricIds.includes(role.id)),
-              )
-              .map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-          </select>
+                  !activeFabledIds.includes(role.id) &&
+                  !activeLoricIds.includes(role.id),
+              ),
+            }))}
+            roles={specialRoleOptions}
+            placeholder="Выберите Fabled или Loric"
+          />
           <button type="button" onClick={() => setSpecialFormOpen(false)} className="secondary-button">
             Отмена
           </button>
@@ -509,14 +542,13 @@ export default function PlayerCircle({
             className="field"
             placeholder="Имя Traveller"
           />
-          <select value={travellerRole} onChange={(event) => setTravellerRole(event.target.value)} className="field">
-            <option value="">Роль Traveller</option>
-            {travellerRoleOptions.map((role) => (
-              <option key={role.id} value={role.id}>
-                {role.name}
-              </option>
-            ))}
-          </select>
+          <RolePicker
+            value={travellerRole}
+            onChange={setTravellerRole}
+            groups={travellerPickerGroups}
+            roles={travellerRoleOptions}
+            placeholder="Роль Traveller"
+          />
           <select value={travellerTeam} onChange={(event) => setTravellerTeam(event.target.value as PlayerTeam)} className="field">
             <option value="unknown">Команда неизвестна</option>
             <option value="good">Синий / добро</option>

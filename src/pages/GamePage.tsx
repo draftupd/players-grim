@@ -1,11 +1,13 @@
 import { ArrowLeft, CheckCircle2, Save, Settings, X } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import NightOrderPanel from "../components/NightOrderPanel";
 import PhaseNotes from "../components/PhaseNotes";
 import PhaseTabs from "../components/PhaseTabs";
 import PlayerCircle from "../components/PlayerCircle";
 import PlayerDetailModal from "../components/PlayerDetailModal";
+import RoleReferencePanel from "../components/RoleReferencePanel";
 import SetupEditorModal from "../components/SetupEditorModal";
 import VotingSetupModal from "../components/VotingSetupModal";
 import { db } from "../db/db";
@@ -31,6 +33,7 @@ import {
 } from "../utils/dates";
 import { createId } from "../utils/ids";
 import { getRoleLabel } from "../utils/scripts";
+import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
 
 const findMyPlayerIdByRole = (players: Player[], myRoleId?: string) => {
   if (!myRoleId) {
@@ -77,6 +80,7 @@ const buildVotingNoteText = ({
 
 export default function GamePage() {
   const { gameId } = useParams<{ gameId: string }>();
+  const navigate = useNavigate();
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
@@ -88,6 +92,8 @@ export default function GamePage() {
   const [voteDraft, setVoteDraft] = useState<VoteDraft | null>(null);
   const [voteSaving, setVoteSaving] = useState(false);
   const [pageError, setPageError] = useState("");
+  const [contentTab, setContentTab] = useState<"notes" | "nightOrder" | "roles">("notes");
+  const { data: referenceData } = useReferenceData();
 
   const gameResult = useLiveQuery(
     async () => ({
@@ -152,6 +158,23 @@ export default function GamePage() {
     () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId),
     [notes, effectiveSelectedPhaseId],
   );
+  const roleReferenceRoles = useMemo(() => {
+    const extraRoleIds = [
+      ...players.flatMap((player) => [
+        player.mainRole,
+        player.travellerRole,
+        ...player.additionalRoles,
+      ]),
+      ...(gameResult.game?.activeFabledIds ?? []),
+      ...(gameResult.game?.activeLoricIds ?? []),
+    ].filter((roleId): roleId is string => Boolean(roleId));
+
+    return mergeReferenceRoles(
+      gameResult.game?.scriptRoles ?? [],
+      referenceData?.roleMap ?? new Map(),
+      extraRoleIds,
+    );
+  }, [gameResult.game?.activeFabledIds, gameResult.game?.activeLoricIds, gameResult.game?.scriptRoles, players, referenceData?.roleMap]);
   const selectedPhaseVoteRecords = useMemo(
     () => voteRecords.filter((voteRecord) => voteRecord.phaseId === effectiveSelectedPhaseId),
     [voteRecords, effectiveSelectedPhaseId],
@@ -190,6 +213,12 @@ export default function GamePage() {
       setVotingSetupOpen(false);
     }
   }, [selectedPhase?.type]);
+
+  useEffect(() => {
+    if (selectedPhase?.type !== "night" && contentTab === "nightOrder") {
+      setContentTab("notes");
+    }
+  }, [contentTab, selectedPhase?.type]);
 
   const updateGameTimestamp = async (now = timestamp()) => {
     if (gameId) {
@@ -276,6 +305,57 @@ export default function GamePage() {
       });
       await updateGameTimestamp(now);
     });
+  };
+
+  const duplicateSetup = async () => {
+    if (!gameId || !gameResult.game) {
+      return;
+    }
+
+    const sourceGame = gameResult.game;
+    const now = timestamp();
+    const newGameId = createId();
+    const playerIdMap = new Map(players.map((player) => [player.id, createId()]));
+
+    const duplicatedGame: Game = {
+      ...sourceGame,
+      id: newGameId,
+      title: `${sourceGame.scriptName?.trim() || sourceGame.title} — копия setup`,
+      status: "active",
+      winner: undefined,
+      finalNotes: undefined,
+      startedAt: now,
+      finishedAt: undefined,
+      pinnedAt: undefined,
+      trashedAt: undefined,
+      myPlayerId: sourceGame.myPlayerId ? playerIdMap.get(sourceGame.myPlayerId) : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const duplicatedPlayers: Player[] = players.map((player) => ({
+      ...player,
+      id: playerIdMap.get(player.id) ?? createId(),
+      gameId: newGameId,
+      alive: true,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    const duplicatedPhases: Phase[] = [
+      { id: createId(), gameId: newGameId, number: 1, type: "night", title: phaseTitle(1, "night"), createdAt: now },
+      { id: createId(), gameId: newGameId, number: 1, type: "day", title: phaseTitle(1, "day"), createdAt: now },
+      { id: createId(), gameId: newGameId, number: 2, type: "night", title: phaseTitle(2, "night"), createdAt: now },
+      { id: createId(), gameId: newGameId, number: 2, type: "day", title: phaseTitle(2, "day"), createdAt: now },
+    ];
+
+    await db.transaction("rw", db.games, db.players, db.phases, async () => {
+      await db.games.add(duplicatedGame);
+      await db.players.bulkAdd(duplicatedPlayers);
+      await db.phases.bulkAdd(duplicatedPhases);
+    });
+
+    navigate(`/games/${newGameId}`);
   };
 
   const addNextPhase = async () => {
@@ -704,6 +784,10 @@ export default function GamePage() {
                 <Settings className="h-4 w-4" />
                 Setup
               </button>
+              <button type="button" onClick={duplicateSetup} className="secondary-button w-full lg:w-auto">
+                <Save className="h-4 w-4" />
+                Дублировать setup
+              </button>
               {game.status === "finished" ? (
                 <button type="button" onClick={reopenGame} className="secondary-button w-full lg:w-auto">
                   <ArrowLeft className="h-4 w-4" />
@@ -760,7 +844,34 @@ export default function GamePage() {
               onSelect={setSelectedPhaseId}
               onAddNextPhase={addNextPhase}
             />
-            {selectedPhase?.type === "day" ? (
+            <section className="panel p-2 sm:p-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setContentTab("notes")}
+                  className={contentTab === "notes" ? "primary-button w-full" : "secondary-button w-full"}
+                >
+                  Заметки
+                </button>
+                {selectedPhase?.type === "night" ? (
+                  <button
+                    type="button"
+                    onClick={() => setContentTab("nightOrder")}
+                    className={contentTab === "nightOrder" ? "primary-button w-full" : "secondary-button w-full"}
+                  >
+                    Ночная очередь
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setContentTab("roles")}
+                  className={contentTab === "roles" ? "primary-button w-full" : "secondary-button w-full"}
+                >
+                  Роли
+                </button>
+              </div>
+            </section>
+            {contentTab === "notes" && selectedPhase?.type === "day" ? (
               <section className="panel min-w-0 p-3 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -816,14 +927,30 @@ export default function GamePage() {
                 )}
               </section>
             ) : null}
-            <PhaseNotes
-              phase={selectedPhase}
-              notes={selectedPhaseNotes}
-              players={players}
-              onAddNote={addNote}
-              onDeleteNote={deleteNote}
-              onUpdateNote={updateNote}
-            />
+            {contentTab === "notes" ? (
+              <PhaseNotes
+                phase={selectedPhase}
+                notes={selectedPhaseNotes}
+                players={players}
+                onAddNote={addNote}
+                onDeleteNote={deleteNote}
+                onUpdateNote={updateNote}
+              />
+            ) : null}
+            {contentTab === "nightOrder" ? (
+              <NightOrderPanel
+                phase={selectedPhase}
+                roles={roleReferenceRoles}
+                nightOrder={referenceData?.nightOrder ?? null}
+                referenceMap={referenceData?.roleMap ?? new Map()}
+              />
+            ) : null}
+            {contentTab === "roles" ? (
+              <RoleReferencePanel
+                roles={roleReferenceRoles}
+                referenceMap={referenceData?.roleMap ?? new Map()}
+              />
+            ) : null}
           </div>
         </div>
       </div>

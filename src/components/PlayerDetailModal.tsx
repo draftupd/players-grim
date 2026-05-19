@@ -5,6 +5,7 @@ import { sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
 import { getRoleLabel, groupRolesByType } from "../utils/scripts";
 import MentionTextarea from "./MentionTextarea";
+import RolePicker from "./RolePicker";
 import RoleTokenImage from "./RoleTokenImage";
 
 type PlayerDetailModalProps = {
@@ -127,6 +128,11 @@ function PlayerDetailForm({
     [scriptRoles],
   );
   const roleGroups = groupRolesByType(roleOptions);
+  const pickerGroups = roleGroups.map((group) => ({
+    key: group.type,
+    label: group.label,
+    options: group.roles.map((role) => ({ id: role.id, label: role.name })),
+  }));
   const linkedNoteCount = notes.filter((note) => note.linkedPlayerIds.includes(player.id)).length;
 
   const toggleNoteLink = (playerId: string) => {
@@ -243,6 +249,11 @@ function PlayerDetailForm({
 
         <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
           <div className="space-y-4">
+            <button type="button" onClick={handleSave} disabled={saving} className="primary-button w-full">
+              <Save className="h-4 w-4" />
+              {saving ? "Сохранение" : "Сохранить игрока"}
+            </button>
+
             <label className="block space-y-2">
               <span className="label">Имя</span>
               <input value={name} onChange={(event) => setName(event.target.value)} className="field" />
@@ -329,22 +340,15 @@ function PlayerDetailForm({
                     disabled
                   />
                 ) : roleOptions.length > 0 ? (
-                  <select
+                  <RolePicker
                     value={mainRole}
-                    onChange={(event) => setMainRole(event.target.value)}
-                    className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
-                  >
-                    <option value="">Не выбрана</option>
-                    {roleGroups.map((group) => (
-                      <optgroup key={group.type} label={group.label}>
-                        {group.roles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                    onChange={setMainRole}
+                    groups={pickerGroups}
+                    roles={roleOptions}
+                    placeholder="Не выбрана"
+                    className="w-full"
+                    buttonClassName="border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
+                  />
                 ) : (
                   <div className="w-full space-y-2">
                     <input
@@ -372,22 +376,15 @@ function PlayerDetailForm({
                       className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-stone-200/15 bg-black/20"
                       imageClassName="h-full w-full object-cover opacity-85"
                     />
-                    <select
+                    <RolePicker
                       value={additionalRoles[index]}
-                      onChange={(event) => updateAdditionalRole(index, event.target.value)}
-                      className="field min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
-                    >
-                      <option value="">Роль {index + 1}</option>
-                      {roleGroups.map((group) => (
-                        <optgroup key={group.type} label={group.label}>
-                          {group.roles.map((role) => (
-                            <option key={role.id} value={role.id}>
-                              {role.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                      onChange={(value) => updateAdditionalRole(index, value)}
+                      groups={pickerGroups}
+                      roles={roleOptions}
+                      placeholder={`Роль ${index + 1}`}
+                      className="w-full"
+                      buttonClassName="min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
+                    />
                   </div>
                 ) : (
                   <div key={index} className="flex items-center gap-2">
@@ -414,11 +411,6 @@ function PlayerDetailForm({
             </div>
 
             {error ? <p className="text-sm text-red-200">{error}</p> : null}
-
-            <button type="button" onClick={handleSave} disabled={saving} className="primary-button w-full">
-              <Save className="h-4 w-4" />
-              {saving ? "Сохранение" : "Сохранить игрока"}
-            </button>
           </div>
 
           <div className="space-y-3">
