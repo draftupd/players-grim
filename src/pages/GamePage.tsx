@@ -190,9 +190,9 @@ export default function GamePage() {
           player.id,
           player.alive
             ? "alive"
-            : deadVoteSpentPlayerIds.has(player.id)
-              ? "dead_spent"
-              : "dead_available",
+            : (player.deadVoteAvailable ?? !deadVoteSpentPlayerIds.has(player.id))
+              ? "dead_available"
+              : "dead_spent",
         ]),
       ),
     [deadVoteSpentPlayerIds, players],
@@ -293,6 +293,7 @@ export default function GamePage() {
         name: payload.name,
         seatIndex: nextSeatIndex,
         alive: true,
+        deadVoteAvailable: true,
         tokenTint: "default",
         mainRole: undefined,
         additionalRoles: ["", "", ""],
@@ -339,6 +340,7 @@ export default function GamePage() {
       id: playerIdMap.get(player.id) ?? createId(),
       gameId: newGameId,
       alive: true,
+      deadVoteAvailable: true,
       createdAt: now,
       updatedAt: now,
     }));
@@ -444,7 +446,7 @@ export default function GamePage() {
 
   const savePlayer = async (
     playerId: string,
-    values: Pick<Player, "name" | "alive" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
+    values: Pick<Player, "name" | "alive" | "deadVoteAvailable" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
     isMyToken: boolean,
     myTeam: Game["myTeam"],
   ) => {
@@ -536,6 +538,7 @@ export default function GamePage() {
             name: player.name,
             seatIndex: player.seatIndex,
             alive: true,
+            deadVoteAvailable: true,
             tokenTint: "default",
             mainRole: player.mainRole,
             additionalRoles: ["", "", ""],
@@ -699,9 +702,17 @@ export default function GamePage() {
     setPageError("");
 
     try {
-      await db.transaction("rw", db.voteRecords, db.notes, db.games, async () => {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
         await db.voteRecords.add(voteRecord);
         await db.notes.add(note);
+        await Promise.all(
+          deadVoterPlayerIds.map((playerId) =>
+            db.players.update(playerId, {
+              deadVoteAvailable: false,
+              updatedAt: now,
+            }),
+          ),
+        );
         await updateGameTimestamp(now);
       });
       setVoteDraft(null);

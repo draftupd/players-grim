@@ -110,6 +110,7 @@ export default function NewGamePage() {
       name: playerNames[index]?.trim() || `Игрок ${index + 1}`,
       seatIndex: index,
       alive: true,
+      deadVoteAvailable: true,
       tokenTint: "default",
       additionalRoles: ["", "", ""],
       createdAt: now,

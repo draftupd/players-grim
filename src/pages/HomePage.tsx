@@ -133,6 +133,7 @@ export default function HomePage() {
       id: playerIdMap.get(player.id) ?? createId(),
       gameId: newGameId,
       alive: true,
+      deadVoteAvailable: true,
       createdAt: now,
       updatedAt: now,
     }));

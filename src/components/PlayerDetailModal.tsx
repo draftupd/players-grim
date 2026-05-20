@@ -20,7 +20,7 @@ type PlayerDetailModalProps = {
   onClose: () => void;
   onSave: (
     playerId: string,
-    values: Pick<Player, "name" | "alive" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
+    values: Pick<Player, "name" | "alive" | "deadVoteAvailable" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
     isMyToken: boolean,
     myTeam: PersonalTeam | undefined,
   ) => Promise<void>;
@@ -89,6 +89,7 @@ function PlayerDetailForm({
 }: PlayerDetailFormProps) {
   const [name, setName] = useState(player.name);
   const [alive, setAlive] = useState(player.alive);
+  const [deadVoteAvailable, setDeadVoteAvailable] = useState(player.deadVoteAvailable ?? true);
   const [tokenTint, setTokenTint] = useState<TokenTint>(player.tokenTint ?? "default");
   const [mainRole, setMainRole] = useState(player.mainRole ?? "");
   const [travellerTeam, setTravellerTeam] = useState<PlayerTeam>(player.travellerTeam ?? "unknown");
@@ -223,6 +224,7 @@ function PlayerDetailForm({
       await onSave(player.id, {
         name: trimmedName,
         alive,
+        deadVoteAvailable,
         tokenTint,
         mainRole: mainRole.trim() || undefined,
         additionalRoles: additionalRoles.map((role) => role.trim()).slice(0, 3),
@@ -252,38 +254,61 @@ function PlayerDetailForm({
         <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
             <div className="space-y-4">
-            <label className="block space-y-2">
-              <span className="label">Имя</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} className="field" />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-2">
+                <span className="label">Имя</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} className="field" />
+              </label>
 
-            <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
-              <span className="font-medium text-stone-100">Игрок жив</span>
-              <input
-                type="checkbox"
-                checked={alive}
-                onChange={(event) => setAlive(event.target.checked)}
-                className="h-5 w-5 accent-ember-200"
-              />
-            </label>
-
-            <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/20 bg-ember-200/10 px-4 py-3 has-[:disabled]:border-stone-200/10 has-[:disabled]:bg-black/15">
-              <span>
-                <span className="block font-semibold text-ember-50">Это мой жетон</span>
-                {myTokenLocked ? (
-                  <span className="mt-1 block text-xs leading-4 text-stone-500">
-                    Сначала снимите галочку с текущего личного жетона.
+              <div className="space-y-2">
+                <span className="label opacity-0">Это мой жетон</span>
+                <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/20 bg-ember-200/10 px-4 py-3 has-[:disabled]:border-stone-200/10 has-[:disabled]:bg-black/15">
+                  <span>
+                    <span className="block font-semibold text-ember-50">Это мой жетон</span>
+                    {myTokenLocked ? (
+                      <span className="mt-1 block text-xs leading-4 text-stone-500">
+                        Сначала снимите галочку с текущего личного жетона.
+                      </span>
+                    ) : null}
                   </span>
-                ) : null}
-              </span>
-              <input
-                type="checkbox"
-                checked={markedAsMine}
-                disabled={myTokenLocked}
-                onChange={(event) => setMarkedAsMine(event.target.checked)}
-                className="h-5 w-5 shrink-0 accent-ember-200 disabled:cursor-not-allowed disabled:opacity-40"
-              />
-            </label>
+                  <input
+                    type="checkbox"
+                    checked={markedAsMine}
+                    disabled={myTokenLocked}
+                    onChange={(event) => setMarkedAsMine(event.target.checked)}
+                    className="h-5 w-5 shrink-0 accent-ember-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
+                <span className="font-medium text-stone-100">Игрок жив</span>
+                <input
+                  type="checkbox"
+                  checked={alive}
+                  onChange={(event) => setAlive(event.target.checked)}
+                  className="h-5 w-5 accent-ember-200"
+                />
+              </label>
+
+              <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3 has-[:disabled]:border-stone-200/10 has-[:disabled]:bg-black/10">
+                <span>
+                  <span className="block font-medium text-stone-100">Есть мертвый голос</span>
+                  <span className="mt-1 block text-xs leading-4 text-stone-500">
+                    Доступно только для мертвого игрока.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={deadVoteAvailable}
+                  disabled={alive}
+                  onChange={(event) => setDeadVoteAvailable(event.target.checked)}
+                  className="h-5 w-5 shrink-0 accent-ember-200 disabled:cursor-not-allowed disabled:opacity-40"
+                />
+              </label>
+            </div>
 
             {markedAsMine ? (
               <label className="block space-y-2 rounded-xl border border-ember-200/15 bg-black/20 px-4 py-3">
@@ -307,8 +332,7 @@ function PlayerDetailForm({
                 <p className="mt-1">
                   Роль Traveller: {getRoleLabel(player.travellerRole ?? player.mainRole, scriptRoles)}
                 </p>
-                <label className="mt-3 block space-y-2">
-                  <span className="label">Команда Traveller</span>
+                <div className="mt-3">
                   <select
                     value={travellerTeam}
                     onChange={(event) => setTravellerTeam(event.target.value as PlayerTeam)}
@@ -318,86 +342,88 @@ function PlayerDetailForm({
                     <option value="good">Синий / добро</option>
                     <option value="evil">Красный / зло</option>
                   </select>
-                </label>
+                </div>
               </div>
             ) : null}
 
-            <label className="block space-y-2 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
-              <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
-              <div className="flex items-center gap-3">
-                {player.isTraveller ? (
-                  <input
-                    value={getRoleLabel(player.travellerRole ?? player.mainRole, scriptRoles)}
-                    className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
-                    disabled
-                  />
-                ) : roleOptions.length > 0 ? (
-                  <RolePicker
-                    value={mainRole}
-                    onChange={setMainRole}
-                    groups={pickerGroups}
-                    roles={roleOptions}
-                    placeholder="Не выбрана"
-                    className="w-full"
-                    buttonClassName="border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
-                  />
-                ) : (
-                  <div className="w-full space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-2 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
+                <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
+                <div className="flex items-center gap-3">
+                  {player.isTraveller ? (
                     <input
-                      value={mainRole}
-                      onChange={(event) => setMainRole(event.target.value)}
+                      value={getRoleLabel(player.travellerRole ?? player.mainRole, scriptRoles)}
                       className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
-                      placeholder="Например, Clockmaker"
+                      disabled
                     />
-                    <p className="text-xs leading-4 text-stone-400">
-                      Загрузите JSON сценария в Setup, чтобы роли выбирались из выпадающего списка автоматически.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </label>
-
-            <div className="space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
-              <p className="text-xs font-medium text-stone-500">Дополнительные роли</p>
-              {[0, 1, 2].map((index) => (
-                roleOptions.length > 0 ? (
-                  <div key={index} className="flex items-center gap-2">
+                  ) : roleOptions.length > 0 ? (
                     <RolePicker
-                      value={additionalRoles[index]}
-                      onChange={(value) => updateAdditionalRole(index, value)}
+                      value={mainRole}
+                      onChange={setMainRole}
                       groups={pickerGroups}
                       roles={roleOptions}
-                      placeholder={`Роль ${index + 1}`}
+                      placeholder="Не выбрана"
                       className="w-full"
-                      buttonClassName="min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
+                      buttonClassName="border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
                     />
-                  </div>
-                ) : (
-                  <div key={index} className="flex items-center gap-2">
-                    <RoleTokenImage
-                      roleId={additionalRoles[index]}
-                      roles={scriptRoles}
-                      className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-stone-200/15 bg-black/20"
-                      imageClassName="h-full w-full object-cover opacity-85"
-                    />
-                    <input
-                      value={additionalRoles[index]}
-                      onChange={(event) => updateAdditionalRole(index, event.target.value)}
-                      className="field min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
-                      placeholder={`Роль ${index + 1}`}
-                    />
-                  </div>
-                )
-              ))}
-              {roleOptions.length === 0 ? (
-                <p className="text-xs leading-4 text-stone-500">
-                  После загрузки сценария дополнительные роли тоже начнут выпадать списком.
-                </p>
-              ) : null}
+                  ) : (
+                    <div className="w-full space-y-2">
+                      <input
+                        value={mainRole}
+                        onChange={(event) => setMainRole(event.target.value)}
+                        className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
+                        placeholder="Например, Clockmaker"
+                      />
+                      <p className="text-xs leading-4 text-stone-400">
+                        Загрузите JSON сценария в Setup, чтобы роли выбирались из выпадающего списка автоматически.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              <div className="space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
+                <p className="text-xs font-medium text-stone-500">Дополнительные роли</p>
+                {[0, 1, 2].map((index) => (
+                  roleOptions.length > 0 ? (
+                    <div key={index} className="flex items-center gap-2">
+                      <RolePicker
+                        value={additionalRoles[index]}
+                        onChange={(value) => updateAdditionalRole(index, value)}
+                        groups={pickerGroups}
+                        roles={roleOptions}
+                        placeholder={`Роль ${index + 1}`}
+                        className="w-full"
+                        buttonClassName="min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
+                      />
+                    </div>
+                  ) : (
+                    <div key={index} className="flex items-center gap-2">
+                      <RoleTokenImage
+                        roleId={additionalRoles[index]}
+                        roles={scriptRoles}
+                        className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-stone-200/15 bg-black/20"
+                        imageClassName="h-full w-full object-cover opacity-85"
+                      />
+                      <input
+                        value={additionalRoles[index]}
+                        onChange={(event) => updateAdditionalRole(index, event.target.value)}
+                        className="field min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
+                        placeholder={`Роль ${index + 1}`}
+                      />
+                    </div>
+                  )
+                ))}
+                {roleOptions.length === 0 ? (
+                  <p className="text-xs leading-4 text-stone-500">
+                    После загрузки сценария дополнительные роли тоже начнут выпадать списком.
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <label className="block space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
-              <span className="label">Окрас жетона</span>
+              <span className="label">Окрас жетона (если игрока перекрасили)</span>
               <select
                 value={tokenTint}
                 onChange={(event) => setTokenTint(event.target.value as TokenTint)}

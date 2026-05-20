@@ -68,6 +68,7 @@ export type Player = {
   name: string;
   seatIndex: number;
   alive: boolean;
+  deadVoteAvailable?: boolean;
   tokenTint?: TokenTint;
   mainRole?: string;
   additionalRoles: string[];
