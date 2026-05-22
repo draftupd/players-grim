@@ -149,9 +149,10 @@ export default function GamePage() {
   const notes = useLiveQuery(
     async (): Promise<Note[]> =>
       gameId
-        ? (await db.notes.where("gameId").equals(gameId).toArray()).sort((a, b) =>
-            a.createdAt.localeCompare(b.createdAt),
-          )
+        ? db.notes
+            .where("[gameId+createdAt]")
+            .between([gameId, ""], [gameId, "\uffff"])
+            .toArray()
         : [],
     [gameId],
     [],
@@ -160,9 +161,10 @@ export default function GamePage() {
   const voteRecords = useLiveQuery(
     async (): Promise<VoteRecord[]> =>
       gameId
-        ? (await db.voteRecords.where("gameId").equals(gameId).toArray()).sort((a, b) =>
-            a.createdAt.localeCompare(b.createdAt),
-          )
+        ? db.voteRecords
+            .where("[gameId+createdAt]")
+            .between([gameId, ""], [gameId, "\uffff"])
+            .toArray()
         : [],
     [gameId],
     [],

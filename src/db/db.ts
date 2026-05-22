@@ -64,6 +64,14 @@ export class ClocktowerNotesDatabase extends Dexie {
       notes: "id, gameId, phaseId, updatedAt",
       voteRecords: "id, gameId, phaseId, createdAt, updatedAt",
     });
+
+    this.version(8).stores({
+      games: "id, date, status, createdAt, pinnedAt, trashedAt, updatedAt",
+      players: "id, gameId, seatIndex",
+      phases: "id, gameId, number, type",
+      notes: "id, [gameId+createdAt], gameId, phaseId, kind, updatedAt",
+      voteRecords: "id, [gameId+createdAt], gameId, phaseId, createdAt, updatedAt",
+    });
   }
 }
 

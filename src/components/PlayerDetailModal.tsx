@@ -110,13 +110,17 @@ function PlayerDetailForm({
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
   const { data: referenceData } = useReferenceData();
+  const linkedPlayerNotes = useMemo(
+    () => notes.filter((note) => note.linkedPlayerIds.includes(player.id)),
+    [notes, player.id],
+  );
 
   const notesByPhase = useMemo(() => {
-    return sortPhases(phases).map((phase) => ({
+    return sortedPhases.map((phase) => ({
       phase,
-      notes: notes.filter((note) => note.linkedPlayerIds.includes(player.id) && note.phaseId === phase.id),
+      notes: linkedPlayerNotes.filter((note) => note.phaseId === phase.id),
     }));
-  }, [notes, phases, player]);
+  }, [linkedPlayerNotes, sortedPhases]);
 
   const updateAdditionalRole = (index: number, value: string) => {
     setAdditionalRoles((current) =>
@@ -175,7 +179,7 @@ function PlayerDetailForm({
 
     return inferredPersonalTeam;
   }, [inferredPersonalTeam, tokenTint]);
-  const linkedNoteCount = notes.filter((note) => note.linkedPlayerIds.includes(player.id)).length;
+  const linkedNoteCount = linkedPlayerNotes.length;
 
   const appendMention = (
     currentText: string,

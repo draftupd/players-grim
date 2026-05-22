@@ -219,6 +219,21 @@ export default function PlayerCircle({
       ),
     [activeFabledIds, activeLoricIds, specialRoleOptions],
   );
+  const noteCountByPlayerId = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    notes.forEach((note) => {
+      if (note.kind === "vote_history" || note.kind === "execution") {
+        return;
+      }
+
+      note.linkedPlayerIds.forEach((playerId) => {
+        counts.set(playerId, (counts.get(playerId) ?? 0) + 1);
+      });
+    });
+
+    return counts;
+  }, [notes]);
   const [travellerFormOpen, setTravellerFormOpen] = useState(false);
   const [travellerName, setTravellerName] = useState("");
   const [travellerRole, setTravellerRole] = useState("");
@@ -808,7 +823,7 @@ export default function PlayerCircle({
           const inwardVoteMarkerOffset = density === "dense" ? 18 : density === "compact" ? 22 : 26;
           const voteMarkerOffsetX = (-dx / distance) * inwardVoteMarkerOffset;
           const voteMarkerOffsetY = (-dy / distance) * inwardVoteMarkerOffset;
-          const noteCount = notes.filter((note) => note.kind !== "vote_history" && note.linkedPlayerIds.includes(player.id)).length;
+          const noteCount = noteCountByPlayerId.get(player.id) ?? 0;
           const playerRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
           const isMyToken = Boolean((myPlayerId && player.id === myPlayerId) || (!myPlayerId && myRoleId && playerRoleId === myRoleId));
           const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";
