@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Player } from "../types";
 
 type MentionTextareaProps = {
@@ -46,6 +46,17 @@ export default function MentionTextarea({
   const [cursor, setCursor] = useState(0);
   const mention = findMentionAtCursor(value, cursor);
 
+  useEffect(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [value]);
+
   const suggestions = useMemo(() => {
     if (!mention) {
       return [];
@@ -84,6 +95,7 @@ export default function MentionTextarea({
     <div className="relative">
       <textarea
         ref={textareaRef}
+        rows={1}
         value={value}
         onChange={(event) => {
           onChange(event.target.value);
@@ -92,7 +104,7 @@ export default function MentionTextarea({
         onClick={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
         onKeyUp={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
         onSelect={(event) => setCursor(event.currentTarget.selectionStart ?? 0)}
-        className={clsx("field resize-y", minHeightClassName, className)}
+        className={clsx("field resize-none overflow-hidden", minHeightClassName, className)}
         placeholder={placeholder}
       />
 

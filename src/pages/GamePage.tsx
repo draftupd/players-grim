@@ -29,6 +29,8 @@ import {
   phaseTitle,
   sortPhases,
   timestamp,
+  timeInputValue,
+  combineDateAndTime,
   winnerLabel,
 } from "../utils/dates";
 import { createId } from "../utils/ids";
@@ -83,16 +85,19 @@ export default function GamePage() {
   const navigate = useNavigate();
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [gameInfoOpen, setGameInfoOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [finishWinner, setFinishWinner] = useState<Winner>("unknown");
   const [finishNotes, setFinishNotes] = useState("");
+  const [finishTime, setFinishTime] = useState("");
   const [localMyPlayerId, setLocalMyPlayerId] = useState<string | null | undefined>();
   const [votingSetupOpen, setVotingSetupOpen] = useState(false);
   const [voteDraft, setVoteDraft] = useState<VoteDraft | null>(null);
   const [voteSaving, setVoteSaving] = useState(false);
   const [pageError, setPageError] = useState("");
-  const [contentTab, setContentTab] = useState<"notes" | "nightOrder" | "roles">("notes");
+  const [contentTab, setContentTab] = useState<"notes" | "reference" | "voting">("notes");
+  const [referenceTab, setReferenceTab] = useState<"roles" | "nightOrder">("roles");
   const { data: referenceData } = useReferenceData();
 
   const gameResult = useLiveQuery(
@@ -155,7 +160,11 @@ export default function GamePage() {
     localMyPlayerId === undefined ? storedOrDerivedMyPlayerId : localMyPlayerId || undefined;
 
   const selectedPhaseNotes = useMemo(
-    () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId),
+    () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind !== "vote_history"),
+    [notes, effectiveSelectedPhaseId],
+  );
+  const selectedPhaseVoteNotes = useMemo(
+    () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "vote_history"),
     [notes, effectiveSelectedPhaseId],
   );
   const roleReferenceRoles = useMemo(() => {
@@ -215,10 +224,10 @@ export default function GamePage() {
   }, [selectedPhase?.type]);
 
   useEffect(() => {
-    if (selectedPhase?.type !== "night" && contentTab === "nightOrder") {
-      setContentTab("notes");
+    if (selectedPhase?.type !== "night" && referenceTab === "nightOrder") {
+      setReferenceTab("roles");
     }
-  }, [contentTab, selectedPhase?.type]);
+  }, [referenceTab, selectedPhase?.type]);
 
   const updateGameTimestamp = async (now = timestamp()) => {
     if (gameId) {
@@ -402,6 +411,7 @@ export default function GamePage() {
       id: createId(),
       gameId,
       phaseId,
+      kind: "general",
       text,
       linkedPlayerIds,
       createdAt: now,
@@ -558,6 +568,7 @@ export default function GamePage() {
   const openFinishForm = () => {
     setFinishWinner(gameResult.game?.winner ?? "unknown");
     setFinishNotes(gameResult.game?.finalNotes ?? "");
+    setFinishTime(timeInputValue(gameResult.game?.finishedAt));
     setFinishOpen(true);
   };
 
@@ -567,13 +578,14 @@ export default function GamePage() {
     }
 
     const now = timestamp();
+    const finishedAt = finishTime ? combineDateAndTime(gameResult.game?.date ?? now.slice(0, 10), finishTime) : now;
 
     try {
       await db.games.update(gameId, {
         status: "finished",
         winner: finishWinner,
         finalNotes: finishNotes.trim() || undefined,
-        finishedAt: now,
+        finishedAt,
         updatedAt: now,
       });
       setFinishOpen(false);
@@ -679,6 +691,7 @@ export default function GamePage() {
       id: createId(),
       gameId,
       phaseId: voteDraft.phaseId,
+      kind: "vote_history",
       text: noteText,
       linkedPlayerIds: Array.from(
         new Set([voteDraft.nominatorPlayerId, voteDraft.nomineePlayerId, ...voteDraft.selectedVoterIds]),
@@ -758,67 +771,80 @@ export default function GamePage() {
         : game.status === "finished" && game.winner !== "unknown"
           ? "border-red-200/45 bg-red-400/15 text-red-100"
           : "border-stone-200/20 bg-stone-100/5 text-stone-200";
+  const isDayPhase = selectedPhase?.type === "day";
 
   return (
-    <main className="page-shell">
+    <main className={`page-shell ${isDayPhase ? "day-phase-theme" : ""}`}>
       <div className="content-shell min-w-0 space-y-4 sm:space-y-5">
-        <header className="panel p-3 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex min-w-0 gap-3">
-              <Link to="/" className="secondary-button mt-0.5 min-h-10 shrink-0 px-3 sm:min-h-11">
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
-              <div className="min-w-0">
-                <p className="text-sm text-ember-100/80">{formatDate(game.date)}</p>
-                <h1 className="pr-1 text-xl font-bold leading-tight text-stone-50 sm:text-3xl">
-                  {gameDisplayTitle(game)}
-                </h1>
-                <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
-                  {game.storyteller ? <span className="chip">Ведущий: {game.storyteller}</span> : null}
-                  {game.scriptName ? <span className="chip">Сценарий: {game.scriptName}</span> : null}
-                  <span className="chip">{game.playerCount} игроков</span>
-                  <span className="chip">
-                    {game.status === "finished" ? `Завершена: ${winnerLabel(game.winner)}` : "Активная"}
-                  </span>
-                  {game.myRoleId ? (
-                    <span className="chip">Мой жетон: {getRoleLabel(game.myRoleId, game.scriptRoles)}</span>
-                  ) : null}
-                  {game.myTeam ? <span className="chip">Моя команда: {personalTeamLabel(game.myTeam)}</span> : null}
-                  {game.status === "finished" ? (
-                    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${personalResultClass}`}>
-                      {personalResult}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
+        <header className="panel p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link to="/" className="secondary-button min-h-10 shrink-0 px-3">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs text-ember-100/75 sm:text-sm">{formatDate(game.date)}</p>
+              <h1 className="truncate pr-1 text-base font-bold leading-tight text-stone-50 sm:text-xl">
+                {gameDisplayTitle(game)}
+              </h1>
             </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:shrink-0">
-              <button type="button" onClick={() => setSetupOpen(true)} className="secondary-button w-full lg:w-auto">
-                <Settings className="h-4 w-4" />
-                Setup
-              </button>
-              <button type="button" onClick={duplicateSetup} className="secondary-button w-full lg:w-auto">
-                <Save className="h-4 w-4" />
-                Дублировать setup
-              </button>
-              {game.status === "finished" ? (
-                <button type="button" onClick={reopenGame} className="secondary-button w-full lg:w-auto">
-                  <ArrowLeft className="h-4 w-4" />
-                  Сделать активной
-                </button>
-              ) : null}
-              <button type="button" onClick={openFinishForm} className="secondary-button w-full lg:w-auto">
-                <CheckCircle2 className="h-4 w-4" />
-                {game.status === "finished" ? "Итог партии" : "Завершить партию"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setGameInfoOpen((current) => !current)}
+              className={`secondary-button min-h-10 shrink-0 px-3 ${gameInfoOpen ? "border-ember-200/45 bg-ember-200/10 text-ember-100" : ""}`}
+              aria-label={gameInfoOpen ? "Скрыть информацию о партии" : "Показать информацию о партии"}
+              title={gameInfoOpen ? "Скрыть информацию о партии" : "Показать информацию о партии"}
+            >
+              <Settings className="h-5 w-5" />
+            </button>
           </div>
 
-          {game.finalNotes ? (
-            <p className="mt-4 rounded-2xl border border-ember-200/10 bg-black/18 p-4 text-sm leading-6 text-stone-300">
-              {game.finalNotes}
-            </p>
+          {gameInfoOpen ? (
+            <div className="mt-4 space-y-4 border-t border-ember-200/10 pt-4">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                {game.storyteller ? <span className="chip">Ведущий: {game.storyteller}</span> : null}
+                {game.scriptName ? <span className="chip">Сценарий: {game.scriptName}</span> : null}
+                <span className="chip">{game.playerCount} игроков</span>
+                <span className="chip">
+                  {game.status === "finished" ? `Завершена: ${winnerLabel(game.winner)}` : "Активная"}
+                </span>
+                {game.myRoleId ? (
+                  <span className="chip">Мой жетон: {getRoleLabel(game.myRoleId, game.scriptRoles)}</span>
+                ) : null}
+                {game.myTeam ? <span className="chip">Моя команда: {personalTeamLabel(game.myTeam)}</span> : null}
+                {game.status === "finished" ? (
+                  <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${personalResultClass}`}>
+                    {personalResult}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <button type="button" onClick={() => setSetupOpen(true)} className="secondary-button w-full">
+                  <Settings className="h-4 w-4" />
+                  Setup
+                </button>
+                <button type="button" onClick={duplicateSetup} className="secondary-button w-full">
+                  <Save className="h-4 w-4" />
+                  Дублировать setup
+                </button>
+                {game.status === "finished" ? (
+                  <button type="button" onClick={reopenGame} className="secondary-button w-full">
+                    <ArrowLeft className="h-4 w-4" />
+                    Сделать активной
+                  </button>
+                ) : null}
+                <button type="button" onClick={openFinishForm} className="secondary-button w-full">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {game.status === "finished" ? "Итог партии" : "Завершить партию"}
+                </button>
+              </div>
+
+              {game.finalNotes ? (
+                <p className="rounded-2xl border border-ember-200/10 bg-black/18 p-4 text-sm leading-6 text-stone-300">
+                  {game.finalNotes}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </header>
 
@@ -860,7 +886,7 @@ export default function GamePage() {
               onAddNextPhase={addNextPhase}
             />
             <section className="panel p-2 sm:p-3">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className={`grid gap-2 ${selectedPhase?.type === "day" ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-2"}`}>
                 <button
                   type="button"
                   onClick={() => setContentTab("notes")}
@@ -868,60 +894,46 @@ export default function GamePage() {
                 >
                   Заметки
                 </button>
-                {selectedPhase?.type === "night" ? (
-                  <button
-                    type="button"
-                    onClick={() => setContentTab("nightOrder")}
-                    className={contentTab === "nightOrder" ? "primary-button w-full" : "secondary-button w-full"}
-                  >
-                    Ночная очередь
+                {selectedPhase?.type === "day" ? (
+                <button
+                  type="button"
+                  onClick={() => setContentTab("voting")}
+                  className={contentTab === "voting" ? "primary-button w-full" : "secondary-button w-full"}
+                >
+                    Голосования
                   </button>
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setContentTab("roles")}
-                  className={contentTab === "roles" ? "primary-button w-full" : "secondary-button w-full"}
+                  onClick={() => setContentTab("reference")}
+                  className={contentTab === "reference" ? "primary-button w-full" : "secondary-button w-full"}
                 >
                   Роли
                 </button>
               </div>
             </section>
-            {contentTab === "notes" && selectedPhase?.type === "day" ? (
+            {contentTab === "voting" && selectedPhase?.type === "day" ? (
               <section className="panel min-w-0 p-3 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-stone-50">Голосование</h2>
-                    <p className="text-sm text-stone-400">
-                      Голосований в этой фазе: {selectedPhaseVoteRecords.length}
-                    </p>
-                  </div>
-
-                  {voteDraft ? (
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={saveVoteDraft}
-                        disabled={voteSaving}
-                        className="primary-button w-full sm:w-auto"
-                      >
-                        <Save className="h-4 w-4" />
-                        {voteSaving ? "Сохранение" : "Сохранить голосование"}
-                      </button>
-                      <button type="button" onClick={cancelVoteDraft} className="secondary-button w-full sm:w-auto">
-                        <X className="h-4 w-4" />
-                        Отмена
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => setVotingSetupOpen(true)} className="secondary-button w-full sm:w-auto">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Режим голосования
-                    </button>
-                  )}
-                </div>
-
                 {voteDraft ? (
                   <div className="mt-4 space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h2 className="text-lg font-semibold text-stone-50">Голосование</h2>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={saveVoteDraft}
+                          disabled={voteSaving}
+                          className="primary-button w-full sm:w-auto"
+                        >
+                          <Save className="h-4 w-4" />
+                          {voteSaving ? "Сохранение" : "Сохранить голосование"}
+                        </button>
+                        <button type="button" onClick={cancelVoteDraft} className="secondary-button w-full sm:w-auto">
+                          <X className="h-4 w-4" />
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <span className="chip">
                         Номинировал: {playersById.get(voteDraft.nominatorPlayerId)?.name ?? "?"}
@@ -936,10 +948,25 @@ export default function GamePage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 text-sm leading-6 text-stone-300 sm:p-4">
-                    Запусти режим голосования, выбери номинатора и номинированного, затем отметь голоса прямо на круге.
-                  </div>
+                  <button type="button" onClick={() => setVotingSetupOpen(true)} className="secondary-button w-full sm:w-auto">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Номинация
+                  </button>
                 )}
+
+                <div className="mt-4 space-y-3">
+                  {selectedPhaseVoteNotes.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
+                      В этой фазе пока нет истории голосований.
+                    </div>
+                  ) : (
+                    selectedPhaseVoteNotes.map((note) => (
+                      <article key={note.id} className="rounded-2xl border border-ember-200/10 bg-black/18 p-3 sm:p-4">
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-stone-100">{note.text}</p>
+                      </article>
+                    ))
+                  )}
+                </div>
               </section>
             ) : null}
             {contentTab === "notes" ? (
@@ -952,19 +979,39 @@ export default function GamePage() {
                 onUpdateNote={updateNote}
               />
             ) : null}
-            {contentTab === "nightOrder" ? (
-              <NightOrderPanel
-                phase={selectedPhase}
-                roles={roleReferenceRoles}
-                nightOrder={referenceData?.nightOrder ?? null}
-                referenceMap={referenceData?.roleMap ?? new Map()}
-              />
-            ) : null}
-            {contentTab === "roles" ? (
-              <RoleReferencePanel
-                roles={roleReferenceRoles}
-                referenceMap={referenceData?.roleMap ?? new Map()}
-              />
+            {contentTab === "reference" ? (
+              <section className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReferenceTab("roles")}
+                    className={referenceTab === "roles" ? "primary-button w-full" : "secondary-button w-full"}
+                  >
+                    Роли
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReferenceTab("nightOrder")}
+                    className={referenceTab === "nightOrder" ? "primary-button w-full" : "secondary-button w-full"}
+                  >
+                    Ночной порядок
+                  </button>
+                </div>
+
+                {referenceTab === "nightOrder" ? (
+                  <NightOrderPanel
+                    phase={selectedPhase}
+                    roles={roleReferenceRoles}
+                    nightOrder={referenceData?.nightOrder ?? null}
+                    referenceMap={referenceData?.roleMap ?? new Map()}
+                  />
+                ) : (
+                  <RoleReferencePanel
+                    roles={roleReferenceRoles}
+                    referenceMap={referenceData?.roleMap ?? new Map()}
+                  />
+                )}
+              </section>
             ) : null}
           </div>
         </div>
@@ -975,7 +1022,7 @@ export default function GamePage() {
         isMyToken={Boolean(selectedPlayer && effectiveMyPlayerId === selectedPlayer.id)}
         myTokenLocked={Boolean(selectedPlayer && effectiveMyPlayerId && effectiveMyPlayerId !== selectedPlayer.id)}
         myTeam={selectedPlayer && effectiveMyPlayerId === selectedPlayer.id ? game.myTeam : undefined}
-        notes={notes}
+        notes={notes.filter((note) => note.kind !== "vote_history")}
         players={players}
         phases={phases}
         scriptRoles={game.scriptRoles}
@@ -1027,6 +1074,19 @@ export default function GamePage() {
                   <option value="other">Другое</option>
                   <option value="unknown">Неизвестно</option>
                 </select>
+              </label>
+
+              <label className="block space-y-2">
+                <span className="label">Время окончания партии</span>
+                <input
+                  type="time"
+                  value={finishTime}
+                  onChange={(event) => setFinishTime(event.target.value)}
+                  className="field"
+                />
+                <p className="text-xs leading-4 text-stone-500">
+                  Если не указывать время, автоматически сохранится текущее.
+                </p>
               </label>
 
               <label className="block space-y-2">

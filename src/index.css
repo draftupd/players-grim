@@ -133,4 +133,73 @@ button {
   .chip {
     @apply inline-flex max-w-full items-center rounded-full border border-ember-200/15 bg-black/20 px-3 py-1 text-xs font-medium text-stone-300;
   }
+
+  .day-phase-theme {
+    color: #24171b;
+    background:
+      radial-gradient(circle at top, rgba(255, 248, 228, 0.96), rgba(255, 240, 205, 0.84) 34%, transparent 62%),
+      linear-gradient(180deg, #f7e8cf 0%, #e8d3b4 38%, #d7c0a7 100%);
+  }
+
+  .day-phase-theme .panel {
+    @apply border-amber-900/20 shadow-black/10;
+    background-color: rgb(255 247 233 / 0.88);
+  }
+
+  .day-phase-theme .field {
+    @apply border-amber-900/15 text-stone-900 focus:border-amber-700/45;
+    background-color: rgb(255 251 242 / 0.92);
+  }
+
+  .day-phase-theme .field::placeholder {
+    color: rgb(97 72 58);
+  }
+
+  .day-phase-theme .secondary-button {
+    @apply border-amber-900/20 text-stone-900 hover:border-amber-900/35;
+    background-color: rgb(255 250 241 / 0.92);
+  }
+
+  .day-phase-theme .chip {
+    @apply border-amber-900/15 text-stone-800;
+    background-color: rgb(255 249 238 / 0.9);
+  }
+
+  .day-phase-theme .secondary-button:hover {
+    background-color: rgb(255 244 219 / 0.96);
+  }
+
+  .day-phase-theme .label {
+    @apply text-stone-700;
+  }
+
+  .day-phase-theme .text-stone-50,
+  .day-phase-theme .text-stone-100,
+  .day-phase-theme .text-stone-200 {
+    color: rgb(41 27 31);
+  }
+
+  .day-phase-theme .text-stone-300,
+  .day-phase-theme .text-stone-400,
+  .day-phase-theme .text-stone-500 {
+    color: rgb(97 72 58);
+  }
+
+  .day-phase-theme .bg-black\/10,
+  .day-phase-theme .bg-black\/15,
+  .day-phase-theme .bg-black\/18,
+  .day-phase-theme .bg-black\/20,
+  .day-phase-theme .bg-black\/25,
+  .day-phase-theme .bg-black\/35 {
+    background-color: rgb(255 247 232 / 0.72);
+  }
+
+  .day-phase-theme .border-ember-200\/10,
+  .day-phase-theme .border-ember-200\/15,
+  .day-phase-theme .border-ember-200\/20,
+  .day-phase-theme .border-stone-200\/10,
+  .day-phase-theme .border-stone-200\/15,
+  .day-phase-theme .border-stone-200\/20 {
+    border-color: rgb(120 86 58 / 0.18);
+  }
 }

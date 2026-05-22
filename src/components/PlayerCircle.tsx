@@ -490,14 +490,22 @@ export default function PlayerCircle({
 
   return (
     <section className="panel overflow-hidden p-3 sm:p-5">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-stone-50">Гримуар</h2>
-          <p className="text-sm text-stone-400">
-            {regularPlayerCount} игроков{travellerCount > 0 ? ` + ${travellerCount} Traveller` : ""}
-          </p>
-        </div>
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => updateStyle({ lockTokens: !currentStyle.lockTokens })}
+            className={clsx(
+              "inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 transition",
+              currentStyle.lockTokens
+                ? "border-red-200 bg-red-500/35 text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.35)]"
+                : "border-emerald-200 bg-emerald-500/35 text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.3)]",
+            )}
+            aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
+            title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
+          >
+            {currentStyle.lockTokens ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
+          </button>
           {onUpdateSpecialRoles ? (
             <button type="button" onClick={() => setSpecialFormOpen((current) => !current)} className="secondary-button min-h-10 px-3">
               <Plus className="h-4 w-4" />
@@ -510,6 +518,18 @@ export default function PlayerCircle({
               Traveller
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((current) => !current)}
+            className={clsx(
+              "secondary-button min-h-10 w-10 shrink-0 px-0",
+              settingsOpen && "border-ember-200/45 bg-ember-200/10 text-ember-100",
+            )}
+            aria-label={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
+            title={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -578,35 +598,23 @@ export default function PlayerCircle({
         </div>
       ) : null}
 
-      <div className="mb-4 rounded-2xl border border-ember-200/10 bg-black/15">
-        <button
-          type="button"
-          onClick={() => setSettingsOpen((current) => !current)}
-          className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-stone-100 sm:px-4"
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex items-center gap-2 font-medium">
+      {settingsOpen ? (
+        <div className="mb-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-2 text-sm font-medium text-stone-100">
               <Settings2 className="h-4 w-4" />
               Настройки жетонов
             </span>
-            <span
-              className={clsx(
-                "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 shadow-[0_0_22px_rgba(0,0,0,0.28)]",
-                currentStyle.lockTokens
-                  ? "border-red-200 bg-red-500/35 text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.45)]"
-                  : "border-emerald-200 bg-emerald-500/35 text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.45)]",
-              )}
-              aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
-              title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(false)}
+              className="secondary-button min-h-9 w-9 px-0"
+              aria-label="Скрыть настройки жетонов"
             >
-              {currentStyle.lockTokens ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
-            </span>
-          </span>
-          <ChevronDown className={clsx("h-4 w-4 transition-transform", settingsOpen && "rotate-180")} />
-        </button>
-
-        {settingsOpen ? (
-          <div className="grid gap-3 border-t border-ember-200/10 p-3 sm:grid-cols-3 sm:p-4">
+              <ChevronDown className="h-4 w-4 rotate-180" />
+            </button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
             <label className="block space-y-2">
               <span className="label">Размер жетонов</span>
               <input
@@ -643,21 +651,9 @@ export default function PlayerCircle({
                 className="w-full accent-ember-200"
               />
             </label>
-            <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3 sm:col-span-3">
-              <span className="inline-flex items-center gap-2 font-medium text-stone-100">
-                <Lock className="h-4 w-4" />
-                Lock tokens
-              </span>
-              <input
-                type="checkbox"
-                checked={currentStyle.lockTokens}
-                onChange={(event) => updateStyle({ lockTokens: event.target.checked })}
-                className="h-5 w-5 accent-ember-200"
-              />
-            </label>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div
         ref={containerRef}
@@ -672,8 +668,8 @@ export default function PlayerCircle({
         ) : null}
 
         <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/90 text-center shadow-inner ${layout.center}`}>
-          <div className="w-full space-y-1.5">
-            <div className="grid grid-cols-[1fr_auto] gap-x-1 gap-y-0.5 text-[7px] leading-tight sm:gap-x-2 sm:text-[11px]">
+          <div className="w-full max-w-[82%] space-y-2 sm:max-w-[78%]">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-1.5 gap-y-0.5 text-[7px] leading-tight sm:gap-x-2.5 sm:text-[11px]">
               <span className="text-left text-sky-100">Горожане</span>
               <strong className="text-sky-100">{setup.townsfolk}</strong>
 
@@ -695,12 +691,12 @@ export default function PlayerCircle({
             </div>
 
             {activeSpecialRoles.length > 0 ? (
-              <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+              <div className="flex max-w-full flex-wrap justify-center gap-1.5 pt-1">
                 {activeSpecialRoles.map((role) => (
                   <span
                     key={role.id}
                     className={clsx(
-                      "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[6px] font-semibold sm:px-2 sm:py-1 sm:text-[10px]",
+                      "inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-[6px] font-semibold sm:px-2 sm:py-1 sm:text-[10px]",
                       role.type === "fabled"
                         ? "border-violet-200/35 bg-violet-950/50 text-violet-100"
                         : "border-emerald-200/35 bg-emerald-950/50 text-emerald-100",
@@ -712,7 +708,7 @@ export default function PlayerCircle({
                       className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10 bg-black/20 sm:h-5 sm:w-5"
                       imageClassName="h-full w-full object-cover"
                     />
-                    <span className="truncate">{getRoleLabel(role.id, specialRoleOptions)}</span>
+                    <span className="max-w-[56px] truncate sm:max-w-[84px]">{getRoleLabel(role.id, specialRoleOptions)}</span>
                     <button
                       type="button"
                       onClick={() => void removeSpecialRole(role.id, role.type)}
@@ -736,7 +732,7 @@ export default function PlayerCircle({
           const inwardVoteMarkerOffset = density === "dense" ? 18 : density === "compact" ? 22 : 26;
           const voteMarkerOffsetX = (-dx / distance) * inwardVoteMarkerOffset;
           const voteMarkerOffsetY = (-dy / distance) * inwardVoteMarkerOffset;
-          const noteCount = notes.filter((note) => note.linkedPlayerIds.includes(player.id)).length;
+          const noteCount = notes.filter((note) => note.kind !== "vote_history" && note.linkedPlayerIds.includes(player.id)).length;
           const playerRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
           const isMyToken = Boolean((myPlayerId && player.id === myPlayerId) || (!myPlayerId && myRoleId && playerRoleId === myRoleId));
           const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";

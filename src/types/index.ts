@@ -96,6 +96,7 @@ export type Note = {
   id: string;
   gameId: string;
   phaseId: string;
+  kind?: "general" | "vote_history";
   text: string;
   linkedPlayerIds: string[];
   createdAt: string;

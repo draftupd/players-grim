@@ -253,6 +253,9 @@ export const getRoleType = (id: string): RoleType => {
   return match?.[0] ?? "unknown";
 };
 
+const resolveStoredRoleType = (role: Pick<ScriptRole, "id" | "type">): RoleType =>
+  role.type === "unknown" ? getRoleType(role.id) : role.type;
+
 export const parseScriptJson = (json: unknown): ParsedScript => {
   if (!Array.isArray(json)) {
     throw new Error("Сценарий должен быть массивом объектов.");
@@ -296,7 +299,9 @@ export const getRoleTypeFromRoles = (roleId: string | undefined, roles: ScriptRo
     return "unknown";
   }
 
-  return roles.find((role) => role.id === roleId)?.type ?? getRoleType(roleId);
+  const matchingRole = roles.find((role) => role.id === roleId);
+
+  return matchingRole ? resolveStoredRoleType(matchingRole) : getRoleType(roleId);
 };
 
 export const roleTypeLabels: Record<RoleType, string> = {
@@ -327,7 +332,7 @@ export const groupRolesByType = (roles: ScriptRole[]) =>
       type,
       label: roleTypeLabels[type],
       roles: roles
-        .filter((role) => role.type === type)
+        .filter((role) => resolveStoredRoleType(role) === type)
         .sort((a, b) => prettifyRoleName(a.id).localeCompare(prettifyRoleName(b.id), "en")),
     }))
     .filter((group) => group.roles.length > 0);
@@ -336,7 +341,10 @@ export const mergeScriptRoles = (currentRoles: ScriptRole[], nextRoles: ScriptRo
   const rolesById = new Map<string, ScriptRole>();
 
   [...currentRoles, ...nextRoles].forEach((role) => {
-    rolesById.set(normalizeRoleId(role.id), role);
+    rolesById.set(normalizeRoleId(role.id), {
+      ...role,
+      type: resolveStoredRoleType(role),
+    });
   });
 
   return Array.from(rolesById.values());

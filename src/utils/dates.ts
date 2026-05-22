@@ -4,6 +4,29 @@ export const todayInputValue = () => new Date().toISOString().slice(0, 10);
 
 export const timestamp = () => new Date().toISOString();
 
+export const timeInputValue = (value?: string) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
+
+export const combineDateAndTime = (date: string, time: string) => {
+  const [hours, minutes] = time.split(":").map((part) => Number(part));
+
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
+    return timestamp();
+  }
+
+  const nextDate = new Date(`${date}T00:00:00`);
+  nextDate.setHours(hours, minutes, 0, 0);
+  return nextDate.toISOString();
+};
+
 export const formatDate = (date: string) =>
   new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",

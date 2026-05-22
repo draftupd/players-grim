@@ -1,4 +1,4 @@
-import { Edit3, Save, Trash2, X } from "lucide-react";
+import { Edit3, Save, Send, Trash2, UserRound, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Note, PersonalTeam, Phase, Player, PlayerTeam, ScriptRole, TokenTint } from "../types";
 import { sortPhases } from "../utils/dates";
@@ -76,7 +76,7 @@ function PlayerDetailForm({
   player,
   isMyToken,
   myTokenLocked,
-  myTeam,
+  myTeam: _myTeam,
   notes,
   players,
   phases,
@@ -94,21 +94,19 @@ function PlayerDetailForm({
   const [mainRole, setMainRole] = useState(player.mainRole ?? "");
   const [travellerTeam, setTravellerTeam] = useState<PlayerTeam>(player.travellerTeam ?? "unknown");
   const [markedAsMine, setMarkedAsMine] = useState(isMyToken);
-  const [personalTeam, setPersonalTeam] = useState<PersonalTeam>(myTeam ?? "unknown");
   const [additionalRoles, setAdditionalRoles] = useState([
     player.additionalRoles[0] ?? "",
     player.additionalRoles[1] ?? "",
     player.additionalRoles[2] ?? "",
   ]);
+  const [myTokenHint, setMyTokenHint] = useState("");
   const [error, setError] = useState("");
   const [noteText, setNoteText] = useState("");
   const [notePhaseId, setNotePhaseId] = useState(sortPhases(phases)[0]?.id ?? "");
-  const [noteLinks, setNoteLinks] = useState<string[]>([]);
   const [noteError, setNoteError] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [editingLinks, setEditingLinks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
 
@@ -153,19 +151,33 @@ function PlayerDetailForm({
 
     return "unknown";
   }, [currentVisibleRoleId, player.isTraveller, scriptRoles]);
-  const effectivePersonalTeam = tokenTint === "default" ? inferredPersonalTeam : personalTeam;
+  const effectivePersonalTeam = useMemo<PersonalTeam>(() => {
+    if (tokenTint === "good") {
+      return "good";
+    }
+
+    if (tokenTint === "evil") {
+      return "evil";
+    }
+
+    return inferredPersonalTeam;
+  }, [inferredPersonalTeam, tokenTint]);
   const linkedNoteCount = notes.filter((note) => note.linkedPlayerIds.includes(player.id)).length;
 
-  const toggleNoteLink = (playerId: string) => {
-    setNoteLinks((current) =>
-      current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId],
-    );
-  };
+  const appendMention = (
+    currentText: string,
+    setText: (value: string) => void,
+    playerName: string,
+  ) => {
+    const mention = `@${playerName}`;
+    const trimmedEnd = currentText.replace(/\s+$/u, "");
 
-  const toggleEditingLink = (playerId: string) => {
-    setEditingLinks((current) =>
-      current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId],
-    );
+    if (trimmedEnd.includes(mention)) {
+      return;
+    }
+
+    const separator = trimmedEnd.length > 0 ? " " : "";
+    setText(`${trimmedEnd}${separator}${mention} `);
   };
 
   const handleAddPlayerNote = async () => {
@@ -188,10 +200,9 @@ function PlayerDetailForm({
       await onAddNote(
         notePhaseId,
         trimmed,
-        mergeManualAndMentionLinks(trimmed, players, uniqueIds([player.id, ...noteLinks])),
+        mergeManualAndMentionLinks(trimmed, players, uniqueIds([player.id])),
       );
       setNoteText("");
-      setNoteLinks([]);
     } catch {
       setNoteError("Не удалось сохранить заметку.");
     } finally {
@@ -202,13 +213,11 @@ function PlayerDetailForm({
   const startEditingNote = (note: Note) => {
     setEditingNoteId(note.id);
     setEditingText(note.text);
-    setEditingLinks(note.linkedPlayerIds);
   };
 
   const cancelEditingNote = () => {
     setEditingNoteId(null);
     setEditingText("");
-    setEditingLinks([]);
   };
 
   const saveEditingNote = async (noteId: string) => {
@@ -220,12 +229,22 @@ function PlayerDetailForm({
     }
 
     try {
-      await onUpdateNote(noteId, trimmed, mergeManualAndMentionLinks(trimmed, players, editingLinks));
+      await onUpdateNote(noteId, trimmed, mergeManualAndMentionLinks(trimmed, players, [player.id]));
       cancelEditingNote();
       setNoteError("");
     } catch {
       setNoteError("Не удалось обновить заметку.");
     }
+  };
+
+  const handleToggleMyToken = () => {
+    if (myTokenLocked && !markedAsMine) {
+      setMyTokenHint("Сначала снимите «Это мой жетон» с другого жетона.");
+      return;
+    }
+
+    setMyTokenHint("");
+    setMarkedAsMine((current) => !current);
   };
 
   const handleSave = async () => {
@@ -265,91 +284,123 @@ function PlayerDetailForm({
             <p className="text-sm text-stone-400">Карточка игрока</p>
             <h2 className="text-2xl font-bold text-stone-50">{player.name}</h2>
           </div>
-          <button type="button" onClick={onClose} className="secondary-button shrink-0 px-3">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              aria-label="Сохранить игрока"
+              title="Сохранить игрока"
+              className="primary-button min-h-12 px-4"
+            >
+              <Save className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={onClose} className="secondary-button shrink-0 px-3">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-          <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
+          <div className="space-y-4">
             <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block space-y-2">
-                <span className="label">Имя</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} className="field" />
-              </label>
+              <div className="space-y-3">
+                <div className="grid grid-cols-[minmax(0,1fr)_84px] gap-3">
+                  <label className="block">
+                    <input
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      className="field min-h-[56px]"
+                      placeholder="Имя игрока"
+                    />
+                  </label>
 
-              <div className="space-y-2">
-                <span className="label opacity-0">Это мой жетон</span>
-                <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/20 bg-ember-200/10 px-4 py-3 has-[:disabled]:border-stone-200/10 has-[:disabled]:bg-black/15">
-                  <span>
-                    <span className="block font-semibold text-ember-50">Это мой жетон</span>
-                    {myTokenLocked ? (
-                      <span className="mt-1 block text-xs leading-4 text-stone-500">
-                        Сначала снимите галочку с текущего личного жетона.
-                      </span>
-                    ) : null}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={markedAsMine}
-                    disabled={myTokenLocked}
-                    onChange={(event) => setMarkedAsMine(event.target.checked)}
-                    className="h-5 w-5 shrink-0 accent-ember-200 disabled:cursor-not-allowed disabled:opacity-40"
-                  />
-                </label>
-              </div>
-            </div>
+                  <button
+                    type="button"
+                    onClick={handleToggleMyToken}
+                    aria-disabled={myTokenLocked && !markedAsMine}
+                    aria-pressed={markedAsMine}
+                    aria-label="Это мой жетон"
+                    title="Это мой жетон"
+                    className={`flex min-h-[56px] items-center justify-center rounded-xl border px-3 py-2 transition ${
+                      myTokenLocked
+                        ? "cursor-not-allowed border-stone-200/10 bg-black/10 text-stone-600"
+                        : markedAsMine
+                          ? "border-ember-200/35 bg-ember-200/10 text-ember-100 shadow-[0_0_18px_rgba(242,204,116,0.12)]"
+                          : "border-stone-200/10 bg-black/20 text-stone-300"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                        myTokenLocked
+                          ? "bg-black/20 text-stone-600"
+                          : markedAsMine
+                            ? "bg-ember-200 text-ink-900"
+                            : "bg-black/20 text-stone-500"
+                      }`}
+                    >
+                      <UserRound className="h-4.5 w-4.5" />
+                    </span>
+                  </button>
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
-                <span className="font-medium text-stone-100">Игрок жив</span>
-                <input
-                  type="checkbox"
-                  checked={alive}
-                  onChange={(event) => setAlive(event.target.checked)}
-                  className="h-5 w-5 accent-ember-200"
-                />
-              </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAlive((current) => !current)}
+                    aria-pressed={alive}
+                    aria-label="Игрок жив"
+                    title="Игрок жив"
+                    className={`flex min-h-[56px] items-center justify-center rounded-xl border px-3 py-2 transition ${
+                      alive
+                        ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-100 shadow-[0_0_18px_rgba(110,231,183,0.12)]"
+                        : "border-stone-200/10 bg-black/20 text-stone-300"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                        alive ? "bg-emerald-200/18 text-emerald-100" : "bg-black/20 text-stone-500"
+                      }`}
+                    >
+                      <span className="text-xl leading-none">♥</span>
+                    </span>
+                  </button>
 
-              <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3 has-[:disabled]:border-stone-200/10 has-[:disabled]:bg-black/10">
-                <span>
-                  <span className="block font-medium text-stone-100">Есть мертвый голос</span>
-                  <span className="mt-1 block text-xs leading-4 text-stone-500">
-                    Доступно только для мертвого игрока.
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={deadVoteAvailable}
-                  disabled={alive}
-                  onChange={(event) => setDeadVoteAvailable(event.target.checked)}
-                  className="h-5 w-5 shrink-0 accent-ember-200 disabled:cursor-not-allowed disabled:opacity-40"
-                />
-              </label>
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeadVoteAvailable((current) => !current)}
+                    disabled={alive}
+                    aria-pressed={deadVoteAvailable}
+                    aria-label="Есть мертвый голос"
+                    title="Есть мертвый голос"
+                    className={`flex min-h-[56px] items-center justify-center rounded-xl border px-3 py-2 transition ${
+                      alive
+                        ? "cursor-not-allowed border-stone-200/10 bg-black/10 text-stone-600"
+                        : deadVoteAvailable
+                          ? "border-ember-200/35 bg-ember-200/10 text-ember-100 shadow-[0_0_18px_rgba(242,204,116,0.12)]"
+                          : "border-stone-200/10 bg-black/20 text-stone-300"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                        alive
+                          ? "bg-black/20 text-stone-600"
+                          : deadVoteAvailable
+                            ? "bg-ember-200 text-ink-900"
+                            : "bg-black/20 text-stone-500"
+                      }`}
+                    >
+                      <span className="text-xl leading-none">☠</span>
+                    </span>
+                  </button>
+                </div>
 
-            {markedAsMine ? (
-              <label className="block space-y-2 rounded-xl border border-ember-200/15 bg-black/20 px-4 py-3">
-                <span className="label">Моя команда</span>
-                <select
-                  value={effectivePersonalTeam}
-                  onChange={(event) => setPersonalTeam(event.target.value as PersonalTeam)}
-                  disabled={tokenTint === "default"}
-                  className="field"
-                >
-                  <option value="unknown">Неизвестно</option>
-                  <option value="good">Добро</option>
-                  <option value="evil">Зло</option>
-                  <option value="traveller">Traveller</option>
-                </select>
-                {tokenTint === "default" ? (
-                  <p className="text-xs leading-4 text-stone-500">
-                    Команда определяется автоматически по роли, пока окрас жетона стоит `По роли`.
+                {myTokenHint ? (
+                  <p className="text-[10px] leading-3 text-stone-500">
+                    {myTokenHint}
                   </p>
                 ) : null}
-              </label>
-            ) : null}
+              </div>
 
             {player.isTraveller ? (
               <div className="rounded-2xl border border-amber-200/25 bg-amber-400/10 p-4 text-sm text-amber-50">
@@ -447,19 +498,6 @@ function PlayerDetailForm({
               </div>
             </div>
 
-            <label className="block space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
-              <span className="label">Окрас жетона (если игрока перекрасили)</span>
-              <select
-                value={tokenTint}
-                onChange={(event) => setTokenTint(event.target.value as TokenTint)}
-                className="field"
-              >
-                <option value="default">По роли</option>
-                <option value="good">Синий</option>
-                <option value="evil">Красный</option>
-              </select>
-            </label>
-
             {error ? <p className="text-sm text-red-200">{error}</p> : null}
           </div>
 
@@ -470,58 +508,49 @@ function PlayerDetailForm({
             </div>
 
             <div className="space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
+              <div className="space-y-2">
                 <label className="block space-y-2">
                   <span className="label">
                     Новая заметка <span className="text-stone-500">(@имя игрока)</span>
                   </span>
-                  <MentionTextarea
-                    value={noteText}
-                    onChange={setNoteText}
-                    players={players}
-                    minHeightClassName="min-h-24"
-                    placeholder="Что хотите записать?"
-                  />
-                </label>
-                <label className="block space-y-2">
-                  <span className="label">Фаза</span>
-                  <select value={notePhaseId} onChange={(event) => setNotePhaseId(event.target.value)} className="field">
-                    {sortedPhases.map((phase) => (
-                      <option key={phase.id} value={phase.id}>
-                        {phase.title}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <MentionTextarea
+                      value={noteText}
+                      onChange={setNoteText}
+                      players={players}
+                      minHeightClassName="min-h-11 pr-16 pt-3 pb-3"
+                      placeholder="Что хотите записать?"
+                    />
+                    <div className="pointer-events-none absolute right-3 top-[22px] -translate-y-1/2">
+                      <button
+                        type="button"
+                        onClick={handleAddPlayerNote}
+                        disabled={noteSaving}
+                        aria-label="Добавить заметку"
+                        title="Добавить заметку"
+                        className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border border-ember-200/35 bg-ember-200 text-ink-900 transition hover:bg-ember-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Send className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 </label>
               </div>
 
-              <div>
-                <p className="label mb-2">Дополнительно связать с игроками</p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {players.map((linkedPlayer) => (
-                    <label
-                      key={linkedPlayer.id}
-                      className="flex min-h-10 items-center gap-2 rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={linkedPlayer.id === player.id || noteLinks.includes(linkedPlayer.id)}
-                        disabled={linkedPlayer.id === player.id}
-                        onChange={() => toggleNoteLink(linkedPlayer.id)}
-                        className="h-4 w-4 accent-ember-200 disabled:opacity-60"
-                      />
-                      <span className="min-w-0 truncate">{linkedPlayer.name}</span>
-                    </label>
-                  ))}
-                </div>
+              <div className="flex flex-wrap gap-2">
+                {players.map((linkedPlayer) => (
+                  <button
+                    key={linkedPlayer.id}
+                    type="button"
+                    onClick={() => appendMention(noteText, setNoteText, linkedPlayer.name)}
+                    className="rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200 transition hover:border-ember-200/25 hover:bg-ember-200/8 hover:text-stone-50"
+                  >
+                    {linkedPlayer.name}
+                  </button>
+                ))}
               </div>
 
               {noteError ? <p className="text-sm text-red-200">{noteError}</p> : null}
-
-              <button type="button" onClick={handleAddPlayerNote} disabled={noteSaving} className="primary-button w-full sm:w-auto">
-                <Save className="h-4 w-4" />
-                {noteSaving ? "Сохранение" : "Добавить заметку"}
-              </button>
             </div>
 
             <div className="space-y-3">
@@ -546,20 +575,16 @@ function PlayerDetailForm({
                                   players={players}
                                   minHeightClassName="min-h-24"
                                 />
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                <div className="flex flex-wrap gap-2">
                                   {players.map((linkedPlayer) => (
-                                    <label
+                                    <button
                                       key={linkedPlayer.id}
-                                      className="flex min-h-10 items-center gap-2 rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200"
+                                      type="button"
+                                      onClick={() => appendMention(editingText, setEditingText, linkedPlayer.name)}
+                                      className="rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200 transition hover:border-ember-200/25 hover:bg-ember-200/8 hover:text-stone-50"
                                     >
-                                      <input
-                                        type="checkbox"
-                                        checked={editingLinks.includes(linkedPlayer.id)}
-                                        onChange={() => toggleEditingLink(linkedPlayer.id)}
-                                        className="h-4 w-4 accent-ember-200"
-                                      />
-                                      <span className="min-w-0 truncate">{linkedPlayer.name}</span>
-                                    </label>
+                                      {linkedPlayer.name}
+                                    </button>
                                   ))}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -593,14 +618,37 @@ function PlayerDetailForm({
                   ))
               )}
             </div>
+
+            <div className="space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
+              <span className="label">Окрас жетона (если игрока перекрасили)</span>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: "default", label: "По роли", className: "text-stone-200" },
+                  { value: "good", label: "Синий", className: "text-sky-200" },
+                  { value: "evil", label: "Красный", className: "text-rose-200" },
+                ] as const).map((option) => {
+                  const active = tokenTint === option.value;
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setTokenTint(option.value)}
+                      aria-pressed={active}
+                      className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                        active
+                          ? "border-ember-200/35 bg-ember-200/12 shadow-[0_0_16px_rgba(242,204,116,0.10)]"
+                          : "border-stone-200/10 bg-black/20"
+                      } ${option.className}`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
-        </div>
-        <div className="border-t border-ember-200/10 bg-ink-850/95 px-4 py-4 backdrop-blur sm:px-6">
-          <button type="button" onClick={handleSave} disabled={saving} className="primary-button w-full">
-            <Save className="h-4 w-4" />
-            {saving ? "Сохранение" : "Сохранить игрока"}
-          </button>
         </div>
       </div>
     </div>

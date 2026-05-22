@@ -1,4 +1,4 @@
-import { Edit3, Save, Trash2, X } from "lucide-react";
+import { Edit3, Save, Send, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Note, Phase, Player } from "../types";
 import { formatDate } from "../utils/dates";
@@ -23,10 +23,8 @@ export default function PhaseNotes({
   onUpdateNote,
 }: PhaseNotesProps) {
   const [text, setText] = useState("");
-  const [linkedPlayerIds, setLinkedPlayerIds] = useState<string[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [editingLinks, setEditingLinks] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -35,20 +33,20 @@ export default function PhaseNotes({
     [players],
   );
 
-  const toggleLinkedPlayer = (playerId: string) => {
-    setLinkedPlayerIds((current) =>
-      current.includes(playerId)
-        ? current.filter((id) => id !== playerId)
-        : [...current, playerId],
-    );
-  };
+  const appendMention = (
+    currentText: string,
+    setTextValue: (value: string) => void,
+    playerName: string,
+  ) => {
+    const mention = `@${playerName}`;
+    const trimmedEnd = currentText.replace(/\s+$/u, "");
 
-  const toggleEditingLink = (playerId: string) => {
-    setEditingLinks((current) =>
-      current.includes(playerId)
-        ? current.filter((id) => id !== playerId)
-        : [...current, playerId],
-    );
+    if (trimmedEnd.includes(mention)) {
+      return;
+    }
+
+    const separator = trimmedEnd.length > 0 ? " " : "";
+    setTextValue(`${trimmedEnd}${separator}${mention} `);
   };
 
   const handleAdd = async () => {
@@ -63,9 +61,8 @@ export default function PhaseNotes({
     setError("");
 
     try {
-      await onAddNote(trimmed, mergeManualAndMentionLinks(trimmed, players, linkedPlayerIds));
+      await onAddNote(trimmed, mergeManualAndMentionLinks(trimmed, players, []));
       setText("");
-      setLinkedPlayerIds([]);
     } catch {
       setError("Не удалось сохранить заметку.");
     } finally {
@@ -76,13 +73,11 @@ export default function PhaseNotes({
   const startEditing = (note: Note) => {
     setEditingNoteId(note.id);
     setEditingText(note.text);
-    setEditingLinks(note.linkedPlayerIds);
   };
 
   const cancelEditing = () => {
     setEditingNoteId(null);
     setEditingText("");
-    setEditingLinks([]);
   };
 
   const saveEditing = async (noteId: string) => {
@@ -94,7 +89,7 @@ export default function PhaseNotes({
     }
 
     try {
-      await onUpdateNote(noteId, trimmed, mergeManualAndMentionLinks(trimmed, players, editingLinks));
+      await onUpdateNote(noteId, trimmed, mergeManualAndMentionLinks(trimmed, players, []));
       cancelEditing();
       setError("");
     } catch {
@@ -122,41 +117,43 @@ export default function PhaseNotes({
           <span className="label">
             Текст заметки <span className="text-stone-500">(@имя игрока)</span>
           </span>
-          <MentionTextarea
-            value={text}
-            onChange={setText}
-            players={players}
-            minHeightClassName="min-h-28"
-            placeholder="Что стало известно?"
-          />
+          <div className="relative">
+            <MentionTextarea
+              value={text}
+              onChange={setText}
+              players={players}
+              minHeightClassName="min-h-11 pr-16 pt-3 pb-3"
+              placeholder="Что стало известно?"
+            />
+            <div className="pointer-events-none absolute right-3 top-[22px] -translate-y-1/2">
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={saving}
+                aria-label="Добавить заметку"
+                title="Добавить заметку"
+                className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border border-ember-200/35 bg-ember-200 text-ink-900 transition hover:bg-ember-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </label>
 
-        <div>
-          <p className="label mb-2">Связать с игроками</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {players.map((player) => (
-              <label
-                key={player.id}
-                className="flex min-h-11 items-center gap-2 rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200"
-              >
-                <input
-                  type="checkbox"
-                  checked={linkedPlayerIds.includes(player.id)}
-                  onChange={() => toggleLinkedPlayer(player.id)}
-                  className="h-4 w-4 accent-ember-200"
-                />
-                <span className="min-w-0 truncate">{player.name}</span>
-              </label>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-2">
+          {players.map((player) => (
+            <button
+              key={player.id}
+              type="button"
+              onClick={() => appendMention(text, setText, player.name)}
+              className="rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200 transition hover:border-ember-200/25 hover:bg-ember-200/8 hover:text-stone-50"
+            >
+              {player.name}
+            </button>
+          ))}
         </div>
 
         {error ? <p className="text-sm text-red-200">{error}</p> : null}
-
-        <button type="button" onClick={handleAdd} disabled={saving} className="primary-button w-full">
-          <Save className="h-4 w-4" />
-          {saving ? "Сохранение" : "Добавить заметку"}
-        </button>
       </div>
 
       <div className="mt-5 space-y-3">
@@ -179,22 +176,18 @@ export default function PhaseNotes({
                       value={editingText}
                       onChange={setEditingText}
                       players={players}
-                      minHeightClassName="min-h-24"
+                      minHeightClassName="min-h-11"
                     />
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="flex flex-wrap gap-2">
                       {players.map((player) => (
-                        <label
+                        <button
                           key={player.id}
-                          className="flex min-h-10 items-center gap-2 rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200"
+                          type="button"
+                          onClick={() => appendMention(editingText, setEditingText, player.name)}
+                          className="rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200 transition hover:border-ember-200/25 hover:bg-ember-200/8 hover:text-stone-50"
                         >
-                          <input
-                            type="checkbox"
-                            checked={editingLinks.includes(player.id)}
-                            onChange={() => toggleEditingLink(player.id)}
-                            className="h-4 w-4 accent-ember-200"
-                          />
-                          <span className="min-w-0 truncate">{player.name}</span>
-                        </label>
+                          {player.name}
+                        </button>
                       ))}
                     </div>
                     <div className="flex flex-wrap gap-2">
