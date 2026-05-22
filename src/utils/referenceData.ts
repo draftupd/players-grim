@@ -100,7 +100,7 @@ export const loadReferenceData = async (): Promise<ReferenceData> => {
 
         return {
           id: role.id,
-          name: localized?.name || role.name || prettifyRoleName(role.id),
+          name: role.name || prettifyRoleName(role.id),
           type: normalizeTeamToRoleType(role.team) === "unknown" ? getRoleType(role.id) : normalizeTeamToRoleType(role.team),
           ability: localized?.ability || role.ability || "",
           firstNight: role.firstNight ?? 0,

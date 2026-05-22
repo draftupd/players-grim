@@ -42,6 +42,7 @@ export default function RolePicker({
     () => groups.flatMap((group) => group.options).find((option) => option.id === value),
     [groups, value],
   );
+  const selectedLabel = selectedOption?.id ? getRoleLabel(selectedOption.id, roles) || selectedOption.label : undefined;
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -74,7 +75,7 @@ export default function RolePicker({
             />
           ) : null}
           <span className={clsx("truncate", !selectedOption && "text-stone-400")}>
-            {selectedOption?.label ?? placeholder}
+            {selectedLabel ?? placeholder}
           </span>
         </span>
         <ChevronDown className={clsx("h-4 w-4 shrink-0 transition", open && "rotate-180")} />
@@ -102,7 +103,10 @@ export default function RolePicker({
                 </div>
               ) : null}
               <div className="space-y-1">
-                {group.options.map((option) => (
+                {group.options.map((option) => {
+                  const optionLabel = getRoleLabel(option.id, roles) || option.label;
+
+                  return (
                   <button
                     key={option.id}
                     type="button"
@@ -126,9 +130,10 @@ export default function RolePicker({
                         </span>
                       }
                     />
-                    <span className="truncate">{option.label}</span>
+                    <span className="truncate">{optionLabel}</span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}

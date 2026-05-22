@@ -1,5 +1,6 @@
 import clsx from "clsx";
-import type { Player, ScriptRole } from "../types";
+import { Check, Square } from "lucide-react";
+import type { Player, PlayerVoteAvailability, ScriptRole } from "../types";
 import { getRoleLabel, getRoleTypeFromRoles } from "../utils/scripts";
 import RoleTokenImage from "./RoleTokenImage";
 
@@ -13,6 +14,7 @@ type PlayerTokenProps = {
   tokenScale?: number;
   extraTokenScale?: number;
   nameScale?: number;
+  voteAvailability?: PlayerVoteAvailability;
   onClick: (player: Player) => void;
 };
 
@@ -42,6 +44,7 @@ export default function PlayerToken({
   tokenScale = 1,
   extraTokenScale = 1,
   nameScale = 1,
+  voteAvailability,
   onClick,
 }: PlayerTokenProps) {
   const visibleRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
@@ -86,7 +89,9 @@ export default function PlayerToken({
     transform: `translate(-50%, 50%) scale(${extraTokenScale})`,
     transformOrigin: "center top" as const,
   };
-  const deadShellClass = player.alive ? "" : "opacity-85 saturate-[0.45] brightness-[0.72]";
+  const deadShellClass = player.alive ? "" : "opacity-90 saturate-[0.72] brightness-[0.92]";
+  const showShroud = !player.alive;
+  const hasDeadVote = voteAvailability === "dead_available";
 
   return (
     <button
@@ -124,6 +129,20 @@ export default function PlayerToken({
           {noteCount}
         </span>
       ) : null}
+      {showShroud ? (
+        <span className="player-token-shroud pointer-events-none absolute inset-0 z-20">
+          <span
+            className={clsx(
+              "player-token-shroud__vote",
+              hasDeadVote ? "player-token-shroud__vote--available" : "player-token-shroud__vote--spent",
+            )}
+            title={hasDeadVote ? "Мертвый голос доступен" : "Мертвый голос потрачен"}
+          >
+            <Square className="h-[72%] w-[72%]" strokeWidth={2.2} />
+            {hasDeadVote ? <Check className="absolute h-[58%] w-[58%]" strokeWidth={3} /> : <span className="player-token-shroud__slash" />}
+          </span>
+        </span>
+      ) : null}
       <span
         className={clsx(
           "pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 overflow-hidden whitespace-nowrap rounded-full border border-black/45 bg-white/90 text-center font-semibold leading-none text-black shadow-[0_2px_10px_rgba(0,0,0,0.22)] backdrop-blur-[2px]",
@@ -136,11 +155,6 @@ export default function PlayerToken({
       {player.isTraveller ? (
         <span className={clsx("absolute left-1/2 z-10 -translate-x-1/2 font-semibold uppercase tracking-wide text-stone-700 drop-shadow-[0_1px_3px_rgba(255,255,255,0.2)]", statusClass)}>
           {player.leftPhaseId ? "ушел" : "traveller"}
-        </span>
-      ) : null}
-      {!player.alive ? (
-        <span className={clsx("absolute left-1/2 z-10 -translate-x-1/2 font-semibold uppercase tracking-wide text-stone-300 drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]", statusClass)}>
-          мертв
         </span>
       ) : null}
       {extraRoles.length > 0 ? (

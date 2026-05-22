@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { Note, PersonalTeam, Phase, Player, PlayerTeam, ScriptRole, TokenTint } from "../types";
 import { sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
-import { getRoleLabel, groupRolesByType } from "../utils/scripts";
+import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, prettifyRoleName } from "../utils/scripts";
 import MentionTextarea from "./MentionTextarea";
 import RolePicker from "./RolePicker";
 import RoleTokenImage from "./RoleTokenImage";
@@ -133,8 +133,27 @@ function PlayerDetailForm({
   const pickerGroups = roleGroups.map((group) => ({
     key: group.type,
     label: group.label,
-    options: group.roles.map((role) => ({ id: role.id, label: role.name })),
+    options: group.roles.map((role) => ({ id: role.id, label: prettifyRoleName(role.id) })),
   }));
+  const currentVisibleRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
+  const inferredPersonalTeam = useMemo<PersonalTeam>(() => {
+    const roleType = player.isTraveller ? "traveller" : getRoleTypeFromRoles(currentVisibleRoleId, scriptRoles);
+
+    if (roleType === "traveller") {
+      return "traveller";
+    }
+
+    if (roleType === "townsfolk" || roleType === "outsider") {
+      return "good";
+    }
+
+    if (roleType === "minion" || roleType === "demon") {
+      return "evil";
+    }
+
+    return "unknown";
+  }, [currentVisibleRoleId, player.isTraveller, scriptRoles]);
+  const effectivePersonalTeam = tokenTint === "default" ? inferredPersonalTeam : personalTeam;
   const linkedNoteCount = notes.filter((note) => note.linkedPlayerIds.includes(player.id)).length;
 
   const toggleNoteLink = (playerId: string) => {
@@ -229,7 +248,7 @@ function PlayerDetailForm({
         mainRole: mainRole.trim() || undefined,
         additionalRoles: additionalRoles.map((role) => role.trim()).slice(0, 3),
         travellerTeam,
-      }, Boolean(markedAsMine), markedAsMine ? personalTeam : undefined);
+      }, Boolean(markedAsMine), markedAsMine ? effectivePersonalTeam : undefined);
       onClose();
     } catch {
       setError("Не удалось сохранить игрока.");
@@ -314,8 +333,9 @@ function PlayerDetailForm({
               <label className="block space-y-2 rounded-xl border border-ember-200/15 bg-black/20 px-4 py-3">
                 <span className="label">Моя команда</span>
                 <select
-                  value={personalTeam}
+                  value={effectivePersonalTeam}
                   onChange={(event) => setPersonalTeam(event.target.value as PersonalTeam)}
+                  disabled={tokenTint === "default"}
                   className="field"
                 >
                   <option value="unknown">Неизвестно</option>
@@ -323,6 +343,11 @@ function PlayerDetailForm({
                   <option value="evil">Зло</option>
                   <option value="traveller">Traveller</option>
                 </select>
+                {tokenTint === "default" ? (
+                  <p className="text-xs leading-4 text-stone-500">
+                    Команда определяется автоматически по роли, пока окрас жетона стоит `По роли`.
+                  </p>
+                ) : null}
               </label>
             ) : null}
 

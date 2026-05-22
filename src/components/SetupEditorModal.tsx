@@ -2,7 +2,7 @@ import { FileJson, Plus, Save, Trash2, X } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import type { Game, Player, RoleType, ScriptRole } from "../types";
 import { readImportedScript } from "../utils/importErrors";
-import { mergeScriptRoles, prettifyRoleName } from "../utils/scripts";
+import { getRoleLabel, mergeScriptRoles, prettifyRoleName } from "../utils/scripts";
 
 type SetupEditorModalProps = {
   game: Game | null;
@@ -292,7 +292,7 @@ function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProp
                     className="flex items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-ink-900/60 px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-stone-100">{role.name}</p>
+                      <p className="truncate font-medium text-stone-100">{getRoleLabel(role.id, scriptRoles)}</p>
                       <p className="text-xs uppercase tracking-wide text-stone-500">{role.type}</p>
                     </div>
                     <button type="button" onClick={() => removeRole(role.id)} className="danger-button px-3">

@@ -833,6 +833,7 @@ export default function GamePage() {
             players={players}
             notes={notes}
             phases={phases}
+            currentPhase={selectedPhase}
             scriptRoles={game.scriptRoles}
             myPlayerId={effectiveMyPlayerId}
             myRoleId={game.myRoleId}

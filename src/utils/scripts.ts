@@ -267,7 +267,7 @@ export const parseScriptJson = (json: unknown): ParsedScript => {
 
       return {
         id,
-        name: typeof item.name === "string" ? item.name : prettifyRoleName(id),
+        name: prettifyRoleName(id),
         type: getRoleType(id),
       };
     });
@@ -288,7 +288,7 @@ export const getRoleLabel = (roleId: string | undefined, roles: ScriptRole[] = [
     return "";
   }
 
-  return roles.find((role) => role.id === roleId)?.name ?? prettifyRoleName(roleId);
+  return prettifyRoleName(roleId);
 };
 
 export const getRoleTypeFromRoles = (roleId: string | undefined, roles: ScriptRole[] = []) => {
@@ -328,7 +328,7 @@ export const groupRolesByType = (roles: ScriptRole[]) =>
       label: roleTypeLabels[type],
       roles: roles
         .filter((role) => role.type === type)
-        .sort((a, b) => a.name.localeCompare(b.name, "en")),
+        .sort((a, b) => prettifyRoleName(a.id).localeCompare(prettifyRoleName(b.id), "en")),
     }))
     .filter((group) => group.roles.length > 0);
 

@@ -14,7 +14,7 @@ import type {
 } from "../types";
 import { phaseTitle, sortPhases } from "../utils/dates";
 import { getPlayerSetup } from "../utils/playerSetup";
-import { defaultFabledRoles, defaultLoricRoles, defaultTravellerRoles, mergeScriptRoles } from "../utils/scripts";
+import { defaultFabledRoles, defaultLoricRoles, defaultTravellerRoles, getRoleLabel, mergeScriptRoles, prettifyRoleName } from "../utils/scripts";
 import RoleTokenImage from "./RoleTokenImage";
 import PlayerToken from "./PlayerToken";
 import RolePicker from "./RolePicker";
@@ -23,6 +23,7 @@ type PlayerCircleProps = {
   players: Player[];
   notes: Note[];
   phases?: Phase[];
+  currentPhase?: Phase;
   scriptRoles?: ScriptRole[];
   myPlayerId?: string;
   myRoleId?: string;
@@ -130,6 +131,7 @@ export default function PlayerCircle({
   players,
   notes,
   phases = [],
+  currentPhase,
   scriptRoles = [],
   myPlayerId,
   myRoleId,
@@ -186,7 +188,7 @@ export default function PlayerCircle({
   const travellerRoleOptions = useMemo(
     () =>
       mergeScriptRoles(defaultTravellerRoles, scriptRoles.filter((role) => role.type === "traveller")).sort((a, b) =>
-        a.name.localeCompare(b.name, "en"),
+        getRoleLabel(a.id).localeCompare(getRoleLabel(b.id), "en"),
       ),
     [scriptRoles],
   );
@@ -195,7 +197,7 @@ export default function PlayerCircle({
       mergeScriptRoles(
         mergeScriptRoles(defaultFabledRoles, defaultLoricRoles),
         scriptRoles.filter((role) => role.type === "fabled" || role.type === "loric"),
-      ).sort((a, b) => a.name.localeCompare(b.name, "en")),
+      ).sort((a, b) => getRoleLabel(a.id).localeCompare(getRoleLabel(b.id), "en")),
     [scriptRoles],
   );
   const activeSpecialRoles = useMemo(
@@ -220,7 +222,7 @@ export default function PlayerCircle({
       {
         key: "traveller",
         label: "Traveller",
-        options: travellerRoleOptions.map((role) => ({ id: role.id, label: role.name })),
+        options: travellerRoleOptions.map((role) => ({ id: role.id, label: prettifyRoleName(role.id) })),
       },
     ],
     [travellerRoleOptions],
@@ -232,14 +234,14 @@ export default function PlayerCircle({
         label: "Fabled",
         options: specialRoleOptions
           .filter((role) => role.type === "fabled")
-          .map((role) => ({ id: role.id, label: role.name })),
+          .map((role) => ({ id: role.id, label: prettifyRoleName(role.id) })),
       },
       {
         key: "loric",
         label: "Loric",
         options: specialRoleOptions
           .filter((role) => role.type === "loric")
-          .map((role) => ({ id: role.id, label: role.name })),
+          .map((role) => ({ id: role.id, label: prettifyRoleName(role.id) })),
       },
     ].filter((group) => group.options.length > 0),
     [specialRoleOptions],
@@ -661,6 +663,14 @@ export default function PlayerCircle({
         ref={containerRef}
         className={`relative mx-auto w-full overflow-visible bg-black/15 ${layout.aspect} ${layout.maxWidth}`}
       >
+        {currentPhase ? (
+          <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-[225%] sm:-translate-y-[235%]">
+            <span className="inline-flex rounded-full border border-ember-100/55 bg-ink-900/95 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-ember-100 shadow-[0_0_18px_rgba(242,204,116,0.42),0_0_36px_rgba(242,204,116,0.18),0_12px_24px_rgba(0,0,0,0.35)] sm:px-5 sm:py-2.5 sm:text-lg">
+              {currentPhase.title || phaseTitle(currentPhase.number, currentPhase.type)}
+            </span>
+          </div>
+        ) : null}
+
         <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/90 text-center shadow-inner ${layout.center}`}>
           <div className="w-full space-y-1.5">
             <div className="grid grid-cols-[1fr_auto] gap-x-1 gap-y-0.5 text-[7px] leading-tight sm:gap-x-2 sm:text-[11px]">
@@ -702,12 +712,12 @@ export default function PlayerCircle({
                       className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10 bg-black/20 sm:h-5 sm:w-5"
                       imageClassName="h-full w-full object-cover"
                     />
-                    <span className="truncate">{role.name}</span>
+                    <span className="truncate">{getRoleLabel(role.id, specialRoleOptions)}</span>
                     <button
                       type="button"
                       onClick={() => void removeSpecialRole(role.id, role.type)}
                       className="rounded-full p-[1px] text-current opacity-80 transition hover:opacity-100"
-                      aria-label={`Убрать ${role.name}`}
+                      aria-label={`Убрать ${getRoleLabel(role.id, specialRoleOptions)}`}
                     >
                       <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                     </button>
@@ -816,6 +826,7 @@ export default function PlayerCircle({
                 tokenScale={currentStyle.tokenScale}
                 extraTokenScale={currentStyle.extraTokenScale}
                 nameScale={currentStyle.nameScale}
+                voteAvailability={voteAvailability}
                 onClick={handleTokenClick}
               />
             </div>
