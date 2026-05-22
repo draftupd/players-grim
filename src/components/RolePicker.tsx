@@ -22,8 +22,11 @@ type RolePickerProps = {
   groups: RolePickerGroup[];
   roles?: ScriptRole[];
   placeholder: string;
+  iconOnly?: boolean;
   className?: string;
   buttonClassName?: string;
+  dropdownClassName?: string;
+  iconGridClassName?: string;
 };
 
 export default function RolePicker({
@@ -32,8 +35,11 @@ export default function RolePicker({
   groups,
   roles = [],
   placeholder,
+  iconOnly = false,
   className,
   buttonClassName,
+  dropdownClassName,
+  iconGridClassName,
 }: RolePickerProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -62,37 +68,52 @@ export default function RolePicker({
         onClick={() => setOpen((current) => !current)}
         className={clsx(
           "field flex min-h-11 items-center justify-between gap-3 text-left",
+          iconOnly && "justify-center gap-2 px-3",
           buttonClassName,
         )}
+        title={selectedLabel ?? placeholder}
       >
-        <span className="flex min-w-0 items-center gap-3">
+        <span className={clsx("flex min-w-0 items-center gap-3", iconOnly && "justify-center")}>
           {selectedOption?.id ? (
             <RoleTokenImage
               roleId={selectedOption.id}
               roles={roles}
               className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-black/20"
               imageClassName="h-full w-full object-cover"
+              fallback={
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-ember-200/20 bg-black/20 text-[10px] font-bold text-stone-300">
+                  {getRoleLabel(selectedOption.id, roles).slice(0, 2)}
+                </span>
+              }
             />
+          ) : (
+            <span className="h-8 w-8 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+          )}
+          {!iconOnly ? (
+            <span className={clsx("truncate", !selectedOption && "text-stone-400")}>
+              {selectedLabel ?? placeholder}
+            </span>
           ) : null}
-          <span className={clsx("truncate", !selectedOption && "text-stone-400")}>
-            {selectedLabel ?? placeholder}
-          </span>
         </span>
         <ChevronDown className={clsx("h-4 w-4 shrink-0 transition", open && "rotate-180")} />
       </button>
 
       {open ? (
-        <div className="absolute z-50 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-ember-200/15 bg-ink-850 p-2 shadow-2xl shadow-black/40">
+        <div className={clsx("absolute z-50 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-ember-200/15 bg-ink-850 p-2 shadow-2xl shadow-black/40", dropdownClassName)}>
           <button
             type="button"
             onClick={() => {
               onChange("");
               setOpen(false);
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-stone-300 transition hover:bg-black/20"
+            className={clsx(
+              "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-stone-300 transition hover:bg-black/20",
+              iconOnly && "justify-center",
+            )}
+            title={placeholder}
           >
             <span className="h-8 w-8 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
-            <span className="truncate">{placeholder}</span>
+            {!iconOnly ? <span className="truncate">{placeholder}</span> : null}
           </button>
 
           {groups.map((group) => (
@@ -102,7 +123,7 @@ export default function RolePicker({
                   {group.label}
                 </div>
               ) : null}
-              <div className="space-y-1">
+              <div className={clsx(iconOnly ? "grid grid-cols-4 gap-2" : "space-y-1", iconOnly && iconGridClassName)}>
                 {group.options.map((option) => {
                   const optionLabel = getRoleLabel(option.id, roles) || option.label;
 
@@ -116,8 +137,10 @@ export default function RolePicker({
                     }}
                     className={clsx(
                       "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-black/20",
+                      iconOnly && "justify-center px-2",
                       option.id === value && "bg-ember-200/10 text-ember-50",
                     )}
+                    title={optionLabel}
                   >
                     <RoleTokenImage
                       roleId={option.id}
@@ -130,7 +153,7 @@ export default function RolePicker({
                         </span>
                       }
                     />
-                    <span className="truncate">{optionLabel}</span>
+                    {!iconOnly ? <span className="truncate">{optionLabel}</span> : null}
                   </button>
                   );
                 })}

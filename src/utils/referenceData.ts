@@ -164,7 +164,14 @@ export const mergeReferenceRoles = (
   const mergedById = new Map<string, ScriptRole>();
 
   scriptRoles.forEach((role) => {
-    mergedById.set(normalizeRoleId(role.id), role);
+    const normalizedId = normalizeRoleId(role.id);
+    const reference = referenceMap.get(normalizedId);
+
+    mergedById.set(normalizedId, {
+      id: reference?.id ?? role.id,
+      name: role.name || reference?.name || role.id,
+      type: role.type === "unknown" && reference ? reference.type : role.type,
+    });
   });
 
   extraRoleIds.forEach((roleId) => {

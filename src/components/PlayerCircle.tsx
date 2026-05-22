@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { ChevronDown, Lock, LockOpen, Plus, Settings2, X } from "lucide-react";
+import { ChevronDown, Lock, LockOpen, Plus, Save, Settings2, X } from "lucide-react";
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type {
   GrimoireStyle,
@@ -31,6 +31,10 @@ type PlayerCircleProps = {
   showVoteMarkers?: boolean;
   voteAvailabilityByPlayerId?: ReadonlyMap<string, PlayerVoteAvailability>;
   onToggleVoteVoter?: (playerId: string) => void;
+  onSelectVotingPlayer?: (player: Player) => void;
+  onSaveVoteDraft?: () => void;
+  onCancelVoteDraft?: () => void;
+  voteSaving?: boolean;
   customTokenPositions?: Record<string, TokenPosition>;
   onUpdateTokenPosition?: (playerId: string, position: TokenPosition) => Promise<void> | void;
   grimoireStyle?: GrimoireStyle;
@@ -139,6 +143,10 @@ export default function PlayerCircle({
   showVoteMarkers = false,
   voteAvailabilityByPlayerId,
   onToggleVoteVoter,
+  onSelectVotingPlayer,
+  onSaveVoteDraft,
+  onCancelVoteDraft,
+  voteSaving = false,
   customTokenPositions,
   onUpdateTokenPosition,
   grimoireStyle,
@@ -149,6 +157,8 @@ export default function PlayerCircle({
   onUpdateSpecialRoles,
   onPlayerClick,
 }: PlayerCircleProps) {
+  const isSmallViewport = typeof window !== "undefined" && window.innerWidth < 640;
+  const defaultMobileTokenScale = 1 / 1.5;
   const sortedPlayers = [...players].sort((a, b) => a.seatIndex - b.seatIndex);
   const regularPlayerCount = players.filter((player) => !player.isTraveller).length;
   const travellerCount = players.filter((player) => player.isTraveller).length;
@@ -275,15 +285,10 @@ export default function PlayerCircle({
       : density === "compact"
         ? "h-4 w-4 sm:h-5 sm:w-5"
         : "h-4 w-4 sm:h-6 sm:w-6";
-  const votingCheckboxClass =
-    density === "dense"
-      ? "h-4 w-4 sm:h-5 sm:w-5"
-      : density === "compact"
-        ? "h-4.5 w-4.5 sm:h-5 sm:w-5"
-        : "h-5 w-5 sm:h-6 sm:w-6";
-  const isVotingMode = Boolean(voteDraft && onToggleVoteVoter);
+  const votingStage = voteDraft?.stage ?? null;
+  const isVotingMode = Boolean(voteDraft);
   const currentStyle = {
-    tokenScale: grimoireStyle?.tokenScale ?? 1,
+    tokenScale: grimoireStyle?.tokenScale ?? (isSmallViewport ? defaultMobileTokenScale : 1),
     extraTokenScale: grimoireStyle?.extraTokenScale ?? 1,
     nameScale: grimoireStyle?.nameScale ?? 1,
     lockTokens: grimoireStyle?.lockTokens ?? false,
@@ -391,6 +396,38 @@ export default function PlayerCircle({
     setDragPositions((current) => ({ ...current, [playerId]: nextPosition }));
   };
 
+  function handleTokenClick(player: Player) {
+    if (suppressClickRef.current === player.id) {
+      suppressClickRef.current = null;
+      return;
+    }
+
+    if (votingStage === "select_nominator") {
+      if (player.alive) {
+        onSelectVotingPlayer?.(player);
+      }
+      return;
+    }
+
+    if (votingStage === "select_nominee") {
+      if (voteDraft?.nominatorPlayerId !== player.id) {
+        onSelectVotingPlayer?.(player);
+      }
+      return;
+    }
+
+    if (votingStage === "select_voters") {
+      const availability = voteAvailabilityByPlayerId?.get(player.id);
+
+      if (availability !== "dead_spent") {
+        onToggleVoteVoter?.(player.id);
+      }
+      return;
+    }
+
+    onPlayerClick(player);
+  }
+
   const finishDragging = async (playerId: string, event: ReactPointerEvent<HTMLDivElement>) => {
     const dragState = dragStateRef.current;
 
@@ -404,7 +441,7 @@ export default function PlayerCircle({
     event.currentTarget.releasePointerCapture(event.pointerId);
 
     if (!dragState.moved) {
-      onPlayerClick(sortedPlayers.find((player) => player.id === playerId)!);
+      handleTokenClick(sortedPlayers.find((player) => player.id === playerId)!);
       return;
     }
 
@@ -419,15 +456,6 @@ export default function PlayerCircle({
         }
       }, 50);
     }
-  };
-
-  const handleTokenClick = (player: Player) => {
-    if (suppressClickRef.current === player.id) {
-      suppressClickRef.current = null;
-      return;
-    }
-
-    onPlayerClick(player);
   };
 
   const updateStyle = (patch: Partial<GrimoireStyle>) => {
@@ -667,62 +695,110 @@ export default function PlayerCircle({
           </div>
         ) : null}
 
-        <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/90 text-center shadow-inner ${layout.center}`}>
-          <div className="w-full max-w-[82%] space-y-2 sm:max-w-[78%]">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-1.5 gap-y-0.5 text-[7px] leading-tight sm:gap-x-2.5 sm:text-[11px]">
-              <span className="text-left text-sky-100">Горожане</span>
-              <strong className="text-sky-100">{setup.townsfolk}</strong>
+        {votingStage ? (
+          <div
+            className="absolute left-1/2 top-1/2 z-20 flex w-[138px] max-w-[74%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2.5 rounded-[24px] border border-ember-100/30 px-3 py-3 text-center shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:w-[196px] sm:max-w-[68%] sm:px-4 sm:py-4"
+            style={{ backgroundColor: "rgba(53, 53, 57, 0.72)" }}
+          >
+            <p className="text-xs font-semibold leading-snug text-white sm:text-base">
+              {votingStage === "select_nominator"
+                ? "Выберите, кто номинировал"
+                : votingStage === "select_nominee"
+                  ? "Выберите, кого номинировали"
+                  : "Отметьте, кто голосовал"}
+            </p>
+            {votingStage === "select_voters" ? (
+              <div className="flex w-full justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onSaveVoteDraft?.()}
+                  disabled={voteSaving}
+                  className="primary-button min-h-9 w-9 rounded-2xl px-0 sm:min-h-10 sm:w-10"
+                  aria-label="Сохранить голосование"
+                  title="Сохранить голосование"
+                >
+                  <Save className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCancelVoteDraft?.()}
+                  className="secondary-button min-h-9 w-9 rounded-2xl px-0 text-white sm:min-h-10 sm:w-10"
+                  aria-label="Отменить голосование"
+                  title="Отменить голосование"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onCancelVoteDraft?.()}
+                className="secondary-button min-h-9 w-9 rounded-2xl px-0 text-white sm:min-h-10 sm:w-10"
+                aria-label="Отменить голосование"
+                title="Отменить голосование"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/90 text-center shadow-inner ${layout.center}`}>
+            <div className="w-full max-w-[82%] space-y-2 sm:max-w-[78%]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-1.5 gap-y-0.5 text-[7px] leading-tight sm:gap-x-2.5 sm:text-[11px]">
+                <span className="text-left text-sky-100">Горожане</span>
+                <strong className="text-sky-100">{setup.townsfolk}</strong>
 
-              <span className="text-left text-sky-200/80">Изгои</span>
-              <strong className="text-sky-200">{setup.outsiders}</strong>
+                <span className="text-left text-sky-200/80">Изгои</span>
+                <strong className="text-sky-200">{setup.outsiders}</strong>
 
-              <span className="text-left text-red-100">Присп.</span>
-              <strong className="text-red-100">{setup.minions}</strong>
+                <span className="text-left text-red-100">Присп.</span>
+                <strong className="text-red-100">{setup.minions}</strong>
 
-              <span className="text-left text-red-200">Демоны</span>
-              <strong className="text-red-200">{setup.demons}</strong>
+                <span className="text-left text-red-200">Демоны</span>
+                <strong className="text-red-200">{setup.demons}</strong>
 
-              {travellerCount > 0 ? (
-                <>
-                  <span className="text-left text-amber-100">Travellers</span>
-                  <strong className="text-amber-100">{travellerCount}</strong>
-                </>
+                {travellerCount > 0 ? (
+                  <>
+                    <span className="text-left text-amber-100">Travellers</span>
+                    <strong className="text-amber-100">{travellerCount}</strong>
+                  </>
+                ) : null}
+              </div>
+
+              {activeSpecialRoles.length > 0 ? (
+                <div className="flex max-w-full flex-wrap justify-center gap-1.5 pt-1">
+                  {activeSpecialRoles.map((role) => (
+                    <span
+                      key={role.id}
+                      className={clsx(
+                        "inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-[6px] font-semibold sm:px-2 sm:py-1 sm:text-[10px]",
+                        role.type === "fabled"
+                          ? "border-violet-200/35 bg-violet-950/50 text-violet-100"
+                          : "border-emerald-200/35 bg-emerald-950/50 text-emerald-100",
+                      )}
+                    >
+                      <RoleTokenImage
+                        roleId={role.id}
+                        roles={specialRoleOptions}
+                        className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10 bg-black/20 sm:h-5 sm:w-5"
+                        imageClassName="h-full w-full object-cover"
+                      />
+                      <span className="max-w-[56px] truncate sm:max-w-[84px]">{getRoleLabel(role.id, specialRoleOptions)}</span>
+                      <button
+                        type="button"
+                        onClick={() => void removeSpecialRole(role.id, role.type)}
+                        className="rounded-full p-[1px] text-current opacity-80 transition hover:opacity-100"
+                        aria-label={`Убрать ${getRoleLabel(role.id, specialRoleOptions)}`}
+                      >
+                        <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
               ) : null}
             </div>
-
-            {activeSpecialRoles.length > 0 ? (
-              <div className="flex max-w-full flex-wrap justify-center gap-1.5 pt-1">
-                {activeSpecialRoles.map((role) => (
-                  <span
-                    key={role.id}
-                    className={clsx(
-                      "inline-flex max-w-full items-center gap-1 rounded-full border px-1.5 py-0.5 text-[6px] font-semibold sm:px-2 sm:py-1 sm:text-[10px]",
-                      role.type === "fabled"
-                        ? "border-violet-200/35 bg-violet-950/50 text-violet-100"
-                        : "border-emerald-200/35 bg-emerald-950/50 text-emerald-100",
-                    )}
-                  >
-                    <RoleTokenImage
-                      roleId={role.id}
-                      roles={specialRoleOptions}
-                      className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10 bg-black/20 sm:h-5 sm:w-5"
-                      imageClassName="h-full w-full object-cover"
-                    />
-                    <span className="max-w-[56px] truncate sm:max-w-[84px]">{getRoleLabel(role.id, specialRoleOptions)}</span>
-                    <button
-                      type="button"
-                      onClick={() => void removeSpecialRole(role.id, role.type)}
-                      className="rounded-full p-[1px] text-current opacity-80 transition hover:opacity-100"
-                      aria-label={`Убрать ${getRoleLabel(role.id, specialRoleOptions)}`}
-                    >
-                      <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            ) : null}
           </div>
-        </div>
+        )}
 
         {sortedPlayers.map((player) => {
           const position = getBasePositionForPlayer(player.id);
@@ -738,12 +814,19 @@ export default function PlayerCircle({
           const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";
           const canVoteInCurrentSession = voteAvailability !== "dead_spent";
           const isSelectedVoter = voteDraft?.selectedVoterIds.includes(player.id) ?? false;
+          const isSelectableNominator = votingStage === "select_nominator" && player.alive;
+          const isSelectableNominee = votingStage === "select_nominee" && voteDraft?.nominatorPlayerId !== player.id;
+          const isSelectedNominator = voteDraft?.nominatorPlayerId === player.id;
+          const isSelectedNominee = voteDraft?.nomineePlayerId === player.id;
 
           return (
             <div
               key={player.id}
               className={clsx(
                 "absolute -translate-x-1/2 -translate-y-1/2",
+                (isSelectableNominator || isSelectableNominee) && "rounded-full ring-2 ring-amber-200/70 ring-offset-4 ring-offset-transparent",
+                (isSelectedNominator || isSelectedNominee) && "rounded-full ring-4 ring-amber-300/90 ring-offset-4 ring-offset-transparent shadow-[0_0_24px_rgba(242,204,116,0.45)]",
+                (votingStage === "select_voters" && isSelectedVoter) && "rounded-full ring-4 ring-emerald-300/90 ring-offset-4 ring-offset-transparent shadow-[0_0_22px_rgba(74,222,128,0.4)]",
                 canManualArrange ? "cursor-grab active:cursor-grabbing touch-none" : "",
               )}
               style={{
@@ -790,35 +873,13 @@ export default function PlayerCircle({
                 </div>
               ) : null}
 
-              {isVotingMode ? (
-                <label
-                  className={clsx(
-                    "absolute left-1/2 top-0 z-30 flex -translate-x-1/2 -translate-y-[125%] items-center justify-center rounded-full border border-ember-100/20 bg-black/70 p-1 shadow-lg shadow-black/35 backdrop-blur-sm",
-                    !canVoteInCurrentSession && "opacity-45",
-                  )}
-                  title={
-                    canVoteInCurrentSession
-                      ? "Отметить, что игрок голосовал"
-                      : "У мертвого игрока больше нет голоса"
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelectedVoter}
-                    disabled={!canVoteInCurrentSession}
-                    onChange={() => onToggleVoteVoter?.(player.id)}
-                    className={clsx("accent-emerald-300", votingCheckboxClass)}
-                  />
-                </label>
-              ) : null}
-
               <PlayerToken
                 player={player}
                 noteCount={noteCount}
                 scriptRoles={scriptRoles}
                 isMyToken={isMyToken}
                 density={density}
-                disabled={isVotingMode}
+                disabled={false}
                 tokenScale={currentStyle.tokenScale}
                 extraTokenScale={currentStyle.extraTokenScale}
                 nameScale={currentStyle.nameScale}

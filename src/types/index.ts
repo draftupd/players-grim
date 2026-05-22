@@ -96,9 +96,11 @@ export type Note = {
   id: string;
   gameId: string;
   phaseId: string;
-  kind?: "general" | "vote_history";
+  kind?: "general" | "vote_history" | "execution";
   text: string;
   linkedPlayerIds: string[];
+  executionPlayerId?: string;
+  executionMode?: "without_nomination";
   createdAt: string;
   updatedAt: string;
 };
@@ -111,6 +113,8 @@ export type VoteRecord = {
   nomineePlayerId: string;
   voterPlayerIds: string[];
   deadVoterPlayerIds: string[];
+  resultedInExecution?: boolean;
+  executedPlayerId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -119,7 +123,8 @@ export type PlayerVoteAvailability = "alive" | "dead_available" | "dead_spent";
 
 export type VoteDraft = {
   phaseId: string;
-  nominatorPlayerId: string;
-  nomineePlayerId: string;
+  stage: "select_nominator" | "select_nominee" | "select_voters";
+  nominatorPlayerId?: string;
+  nomineePlayerId?: string;
   selectedVoterIds: string[];
 };

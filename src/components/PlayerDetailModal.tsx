@@ -1,8 +1,9 @@
 import { Edit3, Save, Send, Trash2, UserRound, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { Note, PersonalTeam, Phase, Player, PlayerTeam, ScriptRole, TokenTint } from "../types";
+import type { Note, PersonalTeam, Phase, Player, ScriptRole, TokenTint } from "../types";
 import { sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
+import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
 import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, prettifyRoleName } from "../utils/scripts";
 import MentionTextarea from "./MentionTextarea";
 import RolePicker from "./RolePicker";
@@ -92,7 +93,6 @@ function PlayerDetailForm({
   const [deadVoteAvailable, setDeadVoteAvailable] = useState(player.deadVoteAvailable ?? true);
   const [tokenTint, setTokenTint] = useState<TokenTint>(player.tokenTint ?? "default");
   const [mainRole, setMainRole] = useState(player.mainRole ?? "");
-  const [travellerTeam, setTravellerTeam] = useState<PlayerTeam>(player.travellerTeam ?? "unknown");
   const [markedAsMine, setMarkedAsMine] = useState(isMyToken);
   const [additionalRoles, setAdditionalRoles] = useState([
     player.additionalRoles[0] ?? "",
@@ -109,6 +109,7 @@ function PlayerDetailForm({
   const [editingText, setEditingText] = useState("");
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
+  const { data: referenceData } = useReferenceData();
 
   const notesByPhase = useMemo(() => {
     return sortPhases(phases).map((phase) => ({
@@ -123,9 +124,21 @@ function PlayerDetailForm({
     );
   };
 
+  const mergedScriptRoles = useMemo(
+    () =>
+      mergeReferenceRoles(
+        scriptRoles,
+        referenceData?.roleMap ?? new Map(),
+        scriptRoles.map((role) => role.id),
+      ),
+    [referenceData?.roleMap, scriptRoles],
+  );
   const roleOptions = useMemo(
-    () => scriptRoles.filter((role) => role.type !== "traveller" && role.type !== "fabled" && role.type !== "loric"),
-    [scriptRoles],
+    () =>
+      mergedScriptRoles.filter(
+        (role) => role.type !== "traveller" && role.type !== "fabled" && role.type !== "loric",
+      ),
+    [mergedScriptRoles],
   );
   const roleGroups = groupRolesByType(roleOptions);
   const pickerGroups = roleGroups.map((group) => ({
@@ -135,7 +148,7 @@ function PlayerDetailForm({
   }));
   const currentVisibleRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
   const inferredPersonalTeam = useMemo<PersonalTeam>(() => {
-    const roleType = player.isTraveller ? "traveller" : getRoleTypeFromRoles(currentVisibleRoleId, scriptRoles);
+    const roleType = player.isTraveller ? "traveller" : getRoleTypeFromRoles(currentVisibleRoleId, mergedScriptRoles);
 
     if (roleType === "traveller") {
       return "traveller";
@@ -150,7 +163,7 @@ function PlayerDetailForm({
     }
 
     return "unknown";
-  }, [currentVisibleRoleId, player.isTraveller, scriptRoles]);
+  }, [currentVisibleRoleId, mergedScriptRoles, player.isTraveller]);
   const effectivePersonalTeam = useMemo<PersonalTeam>(() => {
     if (tokenTint === "good") {
       return "good";
@@ -266,7 +279,7 @@ function PlayerDetailForm({
         tokenTint,
         mainRole: mainRole.trim() || undefined,
         additionalRoles: additionalRoles.map((role) => role.trim()).slice(0, 3),
-        travellerTeam,
+        travellerTeam: player.travellerTeam,
       }, Boolean(markedAsMine), markedAsMine ? effectivePersonalTeam : undefined);
       onClose();
     } catch {
@@ -277,9 +290,9 @@ function PlayerDetailForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl">
-        <div className="flex items-start justify-between gap-3 border-b border-ember-200/10 bg-ink-850/95 px-4 py-4 backdrop-blur sm:px-6 sm:py-5">
+    <div className="player-detail-modal fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+      <div className="player-detail-shell flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl">
+        <div className="player-detail-header flex items-start justify-between gap-3 border-b border-ember-200/10 bg-ink-850/95 px-4 py-4 backdrop-blur sm:px-6 sm:py-5">
           <div>
             <p className="text-sm text-stone-400">Карточка игрока</p>
             <h2 className="text-2xl font-bold text-stone-50">{player.name}</h2>
@@ -301,11 +314,11 @@ function PlayerDetailForm({
           </div>
         </div>
 
-        <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+        <div className="player-detail-body overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
           <div className="space-y-4">
-            <div className="space-y-4">
+            <div className="player-detail-top space-y-4">
               <div className="space-y-3">
-                <div className="grid grid-cols-[minmax(0,1fr)_84px] gap-3">
+                <div className="grid grid-cols-[minmax(0,1fr)_56px_56px_56px] gap-3">
                   <label className="block">
                     <input
                       value={name}
@@ -342,9 +355,6 @@ function PlayerDetailForm({
                       <UserRound className="h-4.5 w-4.5" />
                     </span>
                   </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setAlive((current) => !current)}
@@ -377,7 +387,7 @@ function PlayerDetailForm({
                       alive
                         ? "cursor-not-allowed border-stone-200/10 bg-black/10 text-stone-600"
                         : deadVoteAvailable
-                          ? "border-ember-200/35 bg-ember-200/10 text-ember-100 shadow-[0_0_18px_rgba(242,204,116,0.12)]"
+                          ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-100 shadow-[0_0_18px_rgba(110,231,183,0.12)]"
                           : "border-stone-200/10 bg-black/20 text-stone-300"
                     }`}
                   >
@@ -386,7 +396,7 @@ function PlayerDetailForm({
                         alive
                           ? "bg-black/20 text-stone-600"
                           : deadVoteAvailable
-                            ? "bg-ember-200 text-ink-900"
+                            ? "bg-emerald-200/18 text-emerald-100"
                             : "bg-black/20 text-stone-500"
                       }`}
                     >
@@ -402,28 +412,8 @@ function PlayerDetailForm({
                 ) : null}
               </div>
 
-            {player.isTraveller ? (
-              <div className="rounded-2xl border border-amber-200/25 bg-amber-400/10 p-4 text-sm text-amber-50">
-                <p className="font-semibold">Traveller</p>
-                <p className="mt-1">
-                  Роль Traveller: {getRoleLabel(player.travellerRole ?? player.mainRole, scriptRoles)}
-                </p>
-                <div className="mt-3">
-                  <select
-                    value={travellerTeam}
-                    onChange={(event) => setTravellerTeam(event.target.value as PlayerTeam)}
-                    className="field"
-                  >
-                    <option value="unknown">Неизвестно</option>
-                    <option value="good">Синий / добро</option>
-                    <option value="evil">Красный / зло</option>
-                  </select>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block space-y-2 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
+            <div className="grid grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] gap-3">
+              <label className="player-detail-role-panel block space-y-2 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
                 <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
                 <div className="flex items-center gap-3">
                   {player.isTraveller ? (
@@ -440,7 +430,9 @@ function PlayerDetailForm({
                       roles={roleOptions}
                       placeholder="Не выбрана"
                       className="w-full"
-                      buttonClassName="border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
+                      iconOnly
+                      buttonClassName="min-h-[62px] border-ember-100/35 bg-black/35 text-stone-50"
+                      iconGridClassName="grid-cols-4"
                     />
                   ) : (
                     <div className="w-full space-y-2">
@@ -458,22 +450,25 @@ function PlayerDetailForm({
                 </div>
               </label>
 
-              <div className="space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
+              <div className="player-detail-extra-roles space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
                 <p className="text-xs font-medium text-stone-500">Дополнительные роли</p>
-                {[0, 1, 2].map((index) => (
-                  roleOptions.length > 0 ? (
-                    <div key={index} className="flex items-center gap-2">
+                <div className="grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map((index) => (
+                    roleOptions.length > 0 ? (
                       <RolePicker
+                        key={index}
                         value={additionalRoles[index]}
                         onChange={(value) => updateAdditionalRole(index, value)}
                         groups={pickerGroups}
                         roles={roleOptions}
                         placeholder={`Роль ${index + 1}`}
                         className="w-full"
-                        buttonClassName="min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
+                        iconOnly
+                        buttonClassName="min-h-[62px] justify-center border-stone-200/10 bg-black/20 text-stone-400"
+                        dropdownClassName="right-0 w-[220px] sm:w-[260px]"
+                        iconGridClassName="grid-cols-3 sm:grid-cols-4"
                       />
-                    </div>
-                  ) : (
+                    ) : (
                     <div key={index} className="flex items-center gap-2">
                       <RoleTokenImage
                         roleId={additionalRoles[index]}
@@ -488,8 +483,9 @@ function PlayerDetailForm({
                         placeholder={`Роль ${index + 1}`}
                       />
                     </div>
-                  )
-                ))}
+                    )
+                  ))}
+                </div>
                 {roleOptions.length === 0 ? (
                   <p className="text-xs leading-4 text-stone-500">
                     После загрузки сценария дополнительные роли тоже начнут выпадать списком.
@@ -501,13 +497,13 @@ function PlayerDetailForm({
             {error ? <p className="text-sm text-red-200">{error}</p> : null}
           </div>
 
-          <div className="space-y-3">
+          <div className="player-detail-notes space-y-3">
             <div>
               <h3 className="text-lg font-semibold text-stone-50">Заметки игрока</h3>
               <p className="text-sm text-stone-400">{linkedNoteCount} записей</p>
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3">
+            <div className="player-detail-note-composer space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3">
               <div className="space-y-2">
                 <label className="block space-y-2">
                   <span className="label">
@@ -562,7 +558,7 @@ function PlayerDetailForm({
                 notesByPhase
                   .filter((group) => group.notes.length > 0)
                   .map(({ phase, notes: phaseNotes }) => (
-                    <section key={phase.id} className="rounded-2xl border border-ember-200/10 bg-black/18 p-4">
+                    <section key={phase.id} className="player-detail-note-group rounded-2xl border border-ember-200/10 bg-black/18 p-4">
                       <h4 className="mb-3 font-semibold text-ember-100">{phase.title}</h4>
                       <div className="space-y-3">
                         {phaseNotes.map((note) => (
@@ -619,7 +615,7 @@ function PlayerDetailForm({
               )}
             </div>
 
-            <div className="space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
+            <div className="player-detail-token-tint space-y-2 rounded-xl border border-ember-200/10 bg-black/20 px-4 py-3">
               <span className="label">Окрас жетона (если игрока перекрасили)</span>
               <div className="grid grid-cols-3 gap-2">
                 {([

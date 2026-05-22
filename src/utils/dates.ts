@@ -4,12 +4,23 @@ export const todayInputValue = () => new Date().toISOString().slice(0, 10);
 
 export const timestamp = () => new Date().toISOString();
 
-export const timeInputValue = (value?: string) => {
+const parseDateValue = (value?: string) => {
   if (!value) {
+    return null;
+  }
+
+  const parsed = value.includes("T") ? new Date(value) : new Date(`${value}T00:00:00`);
+
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+};
+
+export const timeInputValue = (value?: string) => {
+  const date = parseDateValue(value);
+
+  if (!date) {
     return "";
   }
 
-  const date = new Date(value);
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
@@ -27,22 +38,31 @@ export const combineDateAndTime = (date: string, time: string) => {
   return nextDate.toISOString();
 };
 
-export const formatDate = (date: string) =>
-  new Intl.DateTimeFormat("ru-RU", {
+export const formatDate = (value?: string) => {
+  const date = parseDateValue(value);
+
+  if (!date) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
     month: "long",
     year: "numeric",
-  }).format(new Date(`${date}T00:00:00`));
+  }).format(date);
+};
 
 export const formatTime = (value?: string) => {
-  if (!value) {
+  const date = parseDateValue(value);
+
+  if (!date) {
     return "";
   }
 
   return new Intl.DateTimeFormat("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(date);
 };
 
 export const gameDisplayTitle = (game: Game) => {

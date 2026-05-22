@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Save, Settings, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, Crown, Gavel, Save, Settings, Skull, Target, Users, X } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -9,7 +9,6 @@ import PlayerCircle from "../components/PlayerCircle";
 import PlayerDetailModal from "../components/PlayerDetailModal";
 import RoleReferencePanel from "../components/RoleReferencePanel";
 import SetupEditorModal from "../components/SetupEditorModal";
-import VotingSetupModal from "../components/VotingSetupModal";
 import { db } from "../db/db";
 import type {
   Game,
@@ -52,6 +51,7 @@ const findMyPlayerIdByRole = (players: Player[], myRoleId?: string) => {
 
 const buildVotingNoteText = ({
   voteNumber,
+  phaseTitleText,
   nominatorName,
   nomineeName,
   voterNames,
@@ -59,6 +59,7 @@ const buildVotingNoteText = ({
   alivePlayerCount,
 }: {
   voteNumber: number;
+  phaseTitleText: string;
   nominatorName: string;
   nomineeName: string;
   voterNames: string[];
@@ -71,6 +72,7 @@ const buildVotingNoteText = ({
 
   return [
     `Голосование #${voteNumber}`,
+    `Фаза: ${phaseTitleText}`,
     `Номинировал: ${nominatorName}`,
     `Номинирован: ${nomineeName}`,
     `Голосовали (${voteCount}): ${voterNames.length > 0 ? voterNames.join(", ") : "никто"}`,
@@ -78,6 +80,25 @@ const buildVotingNoteText = ({
     `Порог: ${threshold} из ${alivePlayerCount} живых`,
     `Итог: ${outcome}`,
   ].join("\n");
+};
+
+type VoteAnalysis = {
+  voteRecord: VoteRecord;
+  voteNumber: number;
+  voteCount: number;
+  threshold: number;
+  thresholdLabel: string;
+  voteCountLabel: string;
+  remainingAliveVotes: number;
+  remainingDeadVotes: number;
+  neededToTie: number;
+  neededToBeat: number;
+  canTie: boolean;
+  canBeat: boolean;
+  isOnTheBlock: boolean;
+  removedPreviousFromBlock: boolean;
+  statusLabel: string;
+  prognosisLabel: string;
 };
 
 export default function GamePage() {
@@ -92,9 +113,11 @@ export default function GamePage() {
   const [finishNotes, setFinishNotes] = useState("");
   const [finishTime, setFinishTime] = useState("");
   const [localMyPlayerId, setLocalMyPlayerId] = useState<string | null | undefined>();
-  const [votingSetupOpen, setVotingSetupOpen] = useState(false);
   const [voteDraft, setVoteDraft] = useState<VoteDraft | null>(null);
   const [voteSaving, setVoteSaving] = useState(false);
+  const [executionModalOpen, setExecutionModalOpen] = useState(false);
+  const [executionPlayerId, setExecutionPlayerId] = useState("");
+  const [executionSaving, setExecutionSaving] = useState(false);
   const [pageError, setPageError] = useState("");
   const [contentTab, setContentTab] = useState<"notes" | "reference" | "voting">("notes");
   const [referenceTab, setReferenceTab] = useState<"roles" | "nightOrder">("roles");
@@ -160,11 +183,20 @@ export default function GamePage() {
     localMyPlayerId === undefined ? storedOrDerivedMyPlayerId : localMyPlayerId || undefined;
 
   const selectedPhaseNotes = useMemo(
-    () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind !== "vote_history"),
+    () =>
+      notes.filter(
+        (note) =>
+          note.phaseId === effectiveSelectedPhaseId &&
+          note.kind !== "vote_history" &&
+          note.kind !== "execution",
+      ),
     [notes, effectiveSelectedPhaseId],
   );
   const selectedPhaseVoteNotes = useMemo(
-    () => notes.filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "vote_history"),
+    () =>
+      notes
+        .filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "vote_history")
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [notes, effectiveSelectedPhaseId],
   );
   const roleReferenceRoles = useMemo(() => {
@@ -187,6 +219,111 @@ export default function GamePage() {
   const selectedPhaseVoteRecords = useMemo(
     () => voteRecords.filter((voteRecord) => voteRecord.phaseId === effectiveSelectedPhaseId),
     [voteRecords, effectiveSelectedPhaseId],
+  );
+  const selectedPhaseVoteAnalysesAsc = useMemo<VoteAnalysis[]>(() => {
+    const selectedVoteRecordsAsc = [...selectedPhaseVoteRecords].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const alivePlayerCount = players.filter((player) => player.alive).length;
+    const threshold = Math.ceil(alivePlayerCount / 2);
+    const selectedVoteRecordIds = new Set(selectedVoteRecordsAsc.map((voteRecord) => voteRecord.id));
+    const spentDeadVotesBeforePhase = new Set<string>();
+
+    voteRecords
+      .filter((voteRecord) => !selectedVoteRecordIds.has(voteRecord.id))
+      .forEach((voteRecord) => {
+        if (voteRecord.createdAt.localeCompare(selectedVoteRecordsAsc[0]?.createdAt ?? "") < 0) {
+          voteRecord.deadVoterPlayerIds.forEach((playerId) => spentDeadVotesBeforePhase.add(playerId));
+        }
+      });
+
+    let highestVotes = 0;
+    let currentBlockVoteRecordId: string | null = null;
+    const spentDeadVotes = new Set(spentDeadVotesBeforePhase);
+
+    return selectedVoteRecordsAsc.map((voteRecord, index) => {
+      const previousHighestVotes = highestVotes;
+      const previousBlockVoteRecordId = currentBlockVoteRecordId;
+      const voteCount = voteRecord.voterPlayerIds.length;
+      const enoughVotes = voteCount >= threshold;
+      let removedPreviousFromBlock = false;
+
+      if (enoughVotes) {
+        if (voteCount > highestVotes) {
+          removedPreviousFromBlock = currentBlockVoteRecordId !== null && currentBlockVoteRecordId !== voteRecord.id;
+          highestVotes = voteCount;
+          currentBlockVoteRecordId = voteRecord.id;
+        } else if (voteCount === highestVotes && highestVotes > 0) {
+          removedPreviousFromBlock = currentBlockVoteRecordId !== null;
+          currentBlockVoteRecordId = null;
+        }
+      }
+
+      voteRecord.deadVoterPlayerIds.forEach((playerId) => spentDeadVotes.add(playerId));
+
+      const remainingDeadVotes = players.filter((player) => !player.alive && !spentDeadVotes.has(player.id)).length;
+      const remainingAliveVotes = alivePlayerCount;
+      const remainingPotentialVotes = remainingAliveVotes + remainingDeadVotes;
+      const currentTargetVotes = highestVotes > 0 ? highestVotes : threshold;
+      const neededToTie = currentTargetVotes;
+      const neededToBeat = highestVotes > 0 ? highestVotes + 1 : threshold;
+      const canTie = remainingPotentialVotes >= neededToTie;
+      const canBeat = remainingPotentialVotes >= neededToBeat;
+      const isOnTheBlock = currentBlockVoteRecordId === voteRecord.id;
+
+      let statusLabel = "Ниже порога";
+
+      if (isOnTheBlock) {
+        statusLabel = "На плахе";
+      } else if (!enoughVotes && currentBlockVoteRecordId === null) {
+        statusLabel = "Никто не номинирован";
+      } else if (removedPreviousFromBlock) {
+        statusLabel = "Кандидата сняли с плахи";
+      } else if (enoughVotes && previousHighestVotes > voteCount) {
+        statusLabel = "Не перебил плаху";
+      } else if (enoughVotes && previousBlockVoteRecordId === null && voteCount === previousHighestVotes) {
+        statusLabel = "Плаха пуста";
+      }
+
+      let prognosisLabel = "";
+
+      if (highestVotes === 0) {
+        prognosisLabel = canBeat
+          ? `Следующего можно вывести на плаху: нужно ${threshold}`
+          : "Следующего уже не вывести на плаху";
+      } else if (canBeat) {
+        prognosisLabel = `Можно перебить за ${neededToBeat} или сравнять за ${neededToTie}`;
+      } else if (canTie) {
+        prognosisLabel = `Можно только сравнять: нужно ${neededToTie}`;
+      } else {
+        prognosisLabel = "Перебить уже не хватит голосов";
+      }
+
+      return {
+        voteRecord,
+        voteNumber: index + 1,
+        voteCount,
+        threshold,
+        thresholdLabel: `Нужно ${threshold} ${threshold === 1 ? "голос" : threshold < 5 ? "голоса" : "голосов"} для казни`,
+        voteCountLabel: `${voteCount} ${voteCount === 1 ? "голос" : voteCount < 5 ? "голоса" : "голосов"}`,
+        remainingAliveVotes,
+        remainingDeadVotes,
+        neededToTie,
+        neededToBeat,
+        canTie,
+        canBeat,
+        isOnTheBlock,
+        removedPreviousFromBlock,
+        statusLabel,
+        prognosisLabel,
+      };
+    });
+  }, [players, selectedPhaseVoteRecords, voteRecords]);
+  const selectedPhaseVoteAnalysesDesc = useMemo(
+    () => [...selectedPhaseVoteAnalysesAsc].reverse(),
+    [selectedPhaseVoteAnalysesAsc],
+  );
+  const selectedPhaseExecutionNote = useMemo(
+    () => notes.find((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "execution"),
+    [notes, effectiveSelectedPhaseId],
   );
   const deadVoteSpentPlayerIds = useMemo(
     () => new Set(voteRecords.flatMap((voteRecord) => voteRecord.deadVoterPlayerIds)),
@@ -219,15 +356,10 @@ export default function GamePage() {
 
   useEffect(() => {
     if (selectedPhase?.type !== "day") {
-      setVotingSetupOpen(false);
+      setVoteDraft(null);
+      setExecutionModalOpen(false);
     }
   }, [selectedPhase?.type]);
-
-  useEffect(() => {
-    if (selectedPhase?.type !== "night" && referenceTab === "nightOrder") {
-      setReferenceTab("roles");
-    }
-  }, [referenceTab, selectedPhase?.type]);
 
   const updateGameTimestamp = async (now = timestamp()) => {
     if (gameId) {
@@ -616,18 +748,54 @@ export default function GamePage() {
     }
   };
 
-  const beginVoteDraft = (nominatorPlayerId: string, nomineePlayerId: string) => {
+  const beginVoteDraft = () => {
     if (!selectedPhase || selectedPhase.type !== "day") {
       return;
     }
 
     setVoteDraft({
       phaseId: selectedPhase.id,
-      nominatorPlayerId,
-      nomineePlayerId,
+      stage: "select_nominator",
       selectedVoterIds: [],
     });
-    setVotingSetupOpen(false);
+    setPageError("");
+  };
+
+  const selectVoteDraftPlayer = (player: Player) => {
+    setVoteDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      if (current.stage === "select_nominator") {
+        if (!player.alive) {
+          return current;
+        }
+
+        return {
+          ...current,
+          nominatorPlayerId: player.id,
+          nomineePlayerId: undefined,
+          selectedVoterIds: [],
+          stage: "select_nominee",
+        };
+      }
+
+      if (current.stage === "select_nominee") {
+        if (current.nominatorPlayerId === player.id) {
+          return current;
+        }
+
+        return {
+          ...current,
+          nomineePlayerId: player.id,
+          selectedVoterIds: [],
+          stage: "select_voters",
+        };
+      }
+
+      return current;
+    });
     setPageError("");
   };
 
@@ -654,11 +822,143 @@ export default function GamePage() {
 
   const cancelVoteDraft = () => {
     setVoteDraft(null);
-    setVotingSetupOpen(false);
+  };
+
+  const openExecutionWithoutNominationModal = () => {
+    setExecutionPlayerId(selectedPhaseExecutionNote?.executionPlayerId ?? "");
+    setExecutionModalOpen(true);
+    setPageError("");
+  };
+
+  const closeExecutionWithoutNominationModal = () => {
+    setExecutionModalOpen(false);
+    setExecutionPlayerId("");
+  };
+
+  const markVoteRecordAsExecution = async (voteRecordId: string) => {
+    if (!gameId || !effectiveSelectedPhaseId) {
+      return;
+    }
+
+    const now = timestamp();
+    const currentVoteRecord = selectedPhaseVoteRecords.find((voteRecord) => voteRecord.id === voteRecordId);
+
+    if (!currentVoteRecord) {
+      return;
+    }
+
+    try {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, async () => {
+        await Promise.all(
+          selectedPhaseVoteRecords.map((voteRecord) =>
+            db.voteRecords.update(voteRecord.id, {
+              resultedInExecution: voteRecord.id === voteRecordId ? !voteRecord.resultedInExecution : false,
+              executedPlayerId:
+                voteRecord.id === voteRecordId && !voteRecord.resultedInExecution
+                  ? voteRecord.nomineePlayerId
+                  : undefined,
+              updatedAt: now,
+            }),
+          ),
+        );
+
+        if (selectedPhaseExecutionNote) {
+          await db.notes.delete(selectedPhaseExecutionNote.id);
+        }
+
+        await updateGameTimestamp(now);
+      });
+      setPageError("");
+    } catch {
+      setPageError("Не удалось отметить результат казни.");
+    }
+  };
+
+  const saveExecutionWithoutNomination = async () => {
+    if (!gameId || !effectiveSelectedPhaseId || !selectedPhase || !executionPlayerId) {
+      setPageError("Выберите, кто был казнён.");
+      return;
+    }
+
+    const executedPlayer = playersById.get(executionPlayerId);
+
+    if (!executedPlayer) {
+      setPageError("Не удалось найти выбранного игрока.");
+      return;
+    }
+
+    const now = timestamp();
+    const executionText = `Казнь без номинации: ${executedPlayer.name}`;
+
+    setExecutionSaving(true);
+
+    try {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, async () => {
+        await Promise.all(
+          selectedPhaseVoteRecords.map((voteRecord) =>
+            db.voteRecords.update(voteRecord.id, {
+              resultedInExecution: false,
+              executedPlayerId: undefined,
+              updatedAt: now,
+            }),
+          ),
+        );
+
+        if (selectedPhaseExecutionNote) {
+          await db.notes.update(selectedPhaseExecutionNote.id, {
+            text: executionText,
+            linkedPlayerIds: [executionPlayerId],
+            executionPlayerId,
+            executionMode: "without_nomination",
+            updatedAt: now,
+          });
+        } else {
+          await db.notes.add({
+            id: createId(),
+            gameId,
+            phaseId: selectedPhase.id,
+            kind: "execution",
+            text: executionText,
+            linkedPlayerIds: [executionPlayerId],
+            executionPlayerId,
+            executionMode: "without_nomination",
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+
+        await updateGameTimestamp(now);
+      });
+
+      closeExecutionWithoutNominationModal();
+      setPageError("");
+    } catch {
+      setPageError("Не удалось сохранить казнь без номинации.");
+    } finally {
+      setExecutionSaving(false);
+    }
+  };
+
+  const clearExecutionWithoutNomination = async () => {
+    if (!selectedPhaseExecutionNote) {
+      return;
+    }
+
+    const now = timestamp();
+
+    try {
+      await db.transaction("rw", db.notes, db.games, async () => {
+        await db.notes.delete(selectedPhaseExecutionNote.id);
+        await updateGameTimestamp(now);
+      });
+      setPageError("");
+    } catch {
+      setPageError("Не удалось убрать казнь без номинации.");
+    }
   };
 
   const saveVoteDraft = async () => {
-    if (!gameId || !voteDraft) {
+    if (!gameId || !voteDraft || !voteDraft.nominatorPlayerId || !voteDraft.nomineePlayerId) {
       return;
     }
 
@@ -681,6 +981,7 @@ export default function GamePage() {
     const now = timestamp();
     const noteText = buildVotingNoteText({
       voteNumber: selectedPhaseVoteRecords.length + 1,
+      phaseTitleText: selectedPhase?.title ?? "Дневная фаза",
       nominatorName: nominator.name,
       nomineeName: nominee.name,
       voterNames,
@@ -868,9 +1169,13 @@ export default function GamePage() {
             activeFabledIds={game.activeFabledIds}
             activeLoricIds={game.activeLoricIds}
             voteDraft={voteDraft}
-            showVoteMarkers={selectedPhase?.type === "day" || Boolean(voteDraft)}
+            showVoteMarkers={voteDraft?.stage === "select_voters"}
             voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
             onToggleVoteVoter={voteDraft ? toggleVoteDraftVoter : undefined}
+            onSelectVotingPlayer={voteDraft ? selectVoteDraftPlayer : undefined}
+            onSaveVoteDraft={voteDraft?.stage === "select_voters" ? saveVoteDraft : undefined}
+            onCancelVoteDraft={voteDraft ? cancelVoteDraft : undefined}
+            voteSaving={voteSaving}
             onUpdateTokenPosition={updateTokenPosition}
             onUpdateGrimoireStyle={updateGrimoireStyle}
             onUpdateSpecialRoles={updateSpecialRoles}
@@ -916,55 +1221,217 @@ export default function GamePage() {
               <section className="panel min-w-0 p-3 sm:p-5">
                 {voteDraft ? (
                   <div className="mt-4 space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <h2 className="text-lg font-semibold text-stone-50">Голосование</h2>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={saveVoteDraft}
-                          disabled={voteSaving}
-                          className="primary-button w-full sm:w-auto"
-                        >
-                          <Save className="h-4 w-4" />
-                          {voteSaving ? "Сохранение" : "Сохранить голосование"}
-                        </button>
-                        <button type="button" onClick={cancelVoteDraft} className="secondary-button w-full sm:w-auto">
-                          <X className="h-4 w-4" />
-                          Отмена
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="chip">
-                        Номинировал: {playersById.get(voteDraft.nominatorPlayerId)?.name ?? "?"}
-                      </span>
-                      <span className="chip">
-                        Номинирован: {playersById.get(voteDraft.nomineePlayerId)?.name ?? "?"}
-                      </span>
-                      <span className="chip">Отмечено голосов: {voteDraft.selectedVoterIds.length}</span>
-                    </div>
+                    <h2 className="text-lg font-semibold text-stone-50">Голосование</h2>
                     <p className="text-sm leading-6 text-stone-300">
-                      На круге появились чекбоксы. Отметь всех, кто голосовал по этой номинации, затем сохрани результат.
+                      {voteDraft.stage === "select_nominator"
+                        ? "На круге выберите игрока, который номинировал."
+                        : voteDraft.stage === "select_nominee"
+                          ? "Теперь выберите игрока, которого номинировали."
+                          : "На круге отметьте всех, кто голосовал по этой номинации, затем сохраните результат."}
                     </p>
+                    <div className="flex flex-wrap gap-2">
+                      {voteDraft.nominatorPlayerId ? (
+                        <span className="chip">
+                          Номинировал: {playersById.get(voteDraft.nominatorPlayerId)?.name ?? "?"}
+                        </span>
+                      ) : null}
+                      {voteDraft.nomineePlayerId ? (
+                        <span className="chip">
+                          Номинирован: {playersById.get(voteDraft.nomineePlayerId)?.name ?? "?"}
+                        </span>
+                      ) : null}
+                      {voteDraft.stage === "select_voters" ? (
+                        <span className="chip">Отмечено голосов: {voteDraft.selectedVoterIds.length}</span>
+                      ) : null}
+                    </div>
                   </div>
                 ) : (
-                  <button type="button" onClick={() => setVotingSetupOpen(true)} className="secondary-button w-full sm:w-auto">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Номинация
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={beginVoteDraft} className="secondary-button w-full sm:w-auto">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Номинация
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openExecutionWithoutNominationModal}
+                      className={`secondary-button w-full sm:w-auto ${
+                        selectedPhaseExecutionNote ? "border-amber-700/25 bg-amber-200/20 text-stone-900" : ""
+                      }`}
+                    >
+                      <Crown className="h-4 w-4" />
+                      Казнь без номинации
+                    </button>
+                  </div>
                 )}
 
                 <div className="mt-4 space-y-3">
-                  {selectedPhaseVoteNotes.length === 0 ? (
+                  {selectedPhaseVoteAnalysesDesc.length === 0 &&
+                  selectedPhaseVoteNotes.length === 0 &&
+                  !selectedPhaseExecutionNote ? (
                     <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
                       В этой фазе пока нет истории голосований.
                     </div>
                   ) : (
-                    selectedPhaseVoteNotes.map((note) => (
-                      <article key={note.id} className="rounded-2xl border border-ember-200/10 bg-black/18 p-3 sm:p-4">
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-stone-100">{note.text}</p>
-                      </article>
-                    ))
+                    <>
+                      {selectedPhaseExecutionNote ? (
+                        <article className="rounded-[20px] border border-amber-700/20 bg-amber-200/18 p-2.5 shadow-[0_6px_20px_rgba(165,120,35,0.12)]">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-amber-300 text-stone-900 shadow-lg shadow-amber-950/10">
+                                <Crown className="h-4 w-4" />
+                              </span>
+                              <div>
+                                <h3 className="text-sm font-semibold text-stone-50">Казнь без номинации</h3>
+                                <p className="text-xs text-stone-100">
+                                  Казнён: {playersById.get(selectedPhaseExecutionNote.executionPlayerId ?? "")?.name ?? "Неизвестно"}
+                                </p>
+                              </div>
+                            </div>
+                            <button type="button" onClick={clearExecutionWithoutNomination} className="secondary-button min-h-8 px-2.5 text-stone-900">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </article>
+                      ) : null}
+
+                      {selectedPhaseVoteAnalysesDesc.map((analysis, index) => {
+                        const { voteRecord } = analysis;
+                        const nominatorName = playersById.get(voteRecord.nominatorPlayerId)?.name ?? "Неизвестно";
+                        const nomineeName = playersById.get(voteRecord.nomineePlayerId)?.name ?? "Неизвестно";
+                        const voterNames = voteRecord.voterPlayerIds
+                          .map((playerId) => playersById.get(playerId)?.name)
+                          .filter((name): name is string => Boolean(name));
+                        const deadVoterNames = voteRecord.deadVoterPlayerIds
+                          .map((playerId) => playersById.get(playerId)?.name)
+                          .filter((name): name is string => Boolean(name));
+                        const leadsToExecution = Boolean(voteRecord.resultedInExecution);
+
+                        return (
+                          <article
+                            key={voteRecord.id}
+                            className={`rounded-[20px] border p-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.09)] ${
+                              index === 0
+                                ? "border-amber-500/45 bg-amber-200/28 shadow-[0_0_0_2px_rgba(245,158,11,0.18),0_0_0_8px_rgba(51,51,56,0.16),0_18px_34px_rgba(32,28,24,0.24)]"
+                                : leadsToExecution
+                                  ? "border-emerald-700/20 bg-emerald-200/14"
+                                  : "border-ember-200/15 bg-black/18"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-1.5">
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-amber-300 text-stone-900 shadow-lg shadow-amber-950/10">
+                                    <Gavel className="h-3.5 w-3.5" />
+                                  </span>
+                                  <div>
+                                    <h3 className="text-sm font-semibold leading-tight text-stone-100">{analysis.voteNumber}</h3>
+                                    <p className="mt-0.5 flex items-center gap-1 text-[10px] text-stone-500">
+                                      <Clock3 className="h-2.5 w-2.5 text-stone-700" />
+                                      {formatDate(voteRecord.createdAt)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                <span className="inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-stone-800">
+                                  {analysis.voteCountLabel}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    leadsToExecution
+                                      ? "bg-emerald-500 text-white ring-1 ring-emerald-700/20 shadow-[0_8px_18px_rgba(16,185,129,0.28)]"
+                                      : analysis.isOnTheBlock
+                                        ? "bg-emerald-400/90 text-emerald-950 ring-1 ring-emerald-700/15"
+                                        : analysis.removedPreviousFromBlock
+                                          ? "bg-amber-300/70 text-amber-950 ring-1 ring-amber-700/15"
+                                          : "bg-stone-200/16 text-stone-700 ring-1 ring-stone-500/12"
+                                  }`}
+                                >
+                                  {leadsToExecution ? "Казнь выбрана" : analysis.statusLabel}
+                                </span>
+                                {analysis.removedPreviousFromBlock && analysis.isOnTheBlock ? (
+                                  <span className="inline-flex items-center rounded-full bg-amber-200/75 px-2 py-0.5 text-[10px] font-medium text-amber-950">
+                                    Предыдущего сняли
+                                  </span>
+                                ) : null}
+                                {analysis.removedPreviousFromBlock && !analysis.isOnTheBlock ? (
+                                  <span className="inline-flex items-center rounded-full bg-stone-200/70 px-2 py-0.5 text-[10px] font-medium text-stone-800">
+                                    Никто не номинирован
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => void markVoteRecordAsExecution(voteRecord.id)}
+                                  className={`secondary-button min-h-7 w-7 shrink-0 px-0 ${
+                                    leadsToExecution
+                                      ? "border-emerald-700/20 bg-emerald-300/18 text-emerald-950"
+                                      : "text-stone-900"
+                                  }`}
+                                  aria-label={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
+                                  title={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
+                                >
+                                  <Skull className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="mt-2.5 grid gap-1.5 text-[12px] leading-4 text-stone-200">
+                              <div className="grid gap-1.5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,2.2fr)_minmax(0,1fr)]">
+                                <div className="flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5">
+                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-amber-200/85 text-amber-900">
+                                    <Target className="h-3 w-3" />
+                                  </span>
+                                  <div className="space-y-0.5">
+                                    <p>{nominatorName}</p>
+                                    <p>{nomineeName}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5">
+                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-sky-200/85 text-sky-900">
+                                    <Users className="h-3 w-3" />
+                                  </span>
+                                  <p className="line-clamp-2">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
+                                </div>
+
+                                <div className="rounded-2xl bg-black/10 px-2 py-1.5 text-[11px] leading-4">
+                                  <p>Живых: {analysis.remainingAliveVotes}</p>
+                                  <p>Мёртвых: {analysis.remainingDeadVotes}</p>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                <div className="flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5">
+                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-rose-200/85 text-rose-900">
+                                    <Skull className="h-3 w-3" />
+                                  </span>
+                                  <p>{deadVoterNames.length > 0 ? deadVoterNames.join(", ") : "нет"}</p>
+                                </div>
+
+                                <div className="ml-auto flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5 sm:justify-self-end">
+                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-yellow-200/85 text-yellow-900">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                  </span>
+                                  <p>{analysis.thresholdLabel}</p>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl bg-black/10 px-2 py-1.5 text-[11px] leading-4 text-stone-600">
+                                {analysis.prognosisLabel}
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+
+                      {selectedPhaseVoteAnalysesDesc.length === 0
+                        ? selectedPhaseVoteNotes.map((note) => (
+                            <article key={note.id} className="rounded-2xl border border-ember-200/10 bg-black/18 p-3 sm:p-4">
+                              <p className="whitespace-pre-wrap text-sm leading-6 text-stone-100">{note.text}</p>
+                            </article>
+                          ))
+                        : null}
+                    </>
                   )}
                 </div>
               </section>
@@ -1022,7 +1489,7 @@ export default function GamePage() {
         isMyToken={Boolean(selectedPlayer && effectiveMyPlayerId === selectedPlayer.id)}
         myTokenLocked={Boolean(selectedPlayer && effectiveMyPlayerId && effectiveMyPlayerId !== selectedPlayer.id)}
         myTeam={selectedPlayer && effectiveMyPlayerId === selectedPlayer.id ? game.myTeam : undefined}
-        notes={notes.filter((note) => note.kind !== "vote_history")}
+        notes={notes.filter((note) => note.kind !== "vote_history" && note.kind !== "execution")}
         players={players}
         phases={phases}
         scriptRoles={game.scriptRoles}
@@ -1033,19 +1500,57 @@ export default function GamePage() {
         onUpdateNote={updateNote}
       />
 
+      {executionModalOpen && selectedPhase?.type === "day" ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+          <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-md sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-stone-50">Казнь без номинации</h2>
+                <p className="mt-1 text-sm text-stone-200">Выберите, кто был казнён в этой дневной фазе.</p>
+              </div>
+              <button type="button" onClick={closeExecutionWithoutNominationModal} className="secondary-button px-3">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <select
+                value={executionPlayerId}
+                onChange={(event) => setExecutionPlayerId(event.target.value)}
+                className="field"
+              >
+                <option value="">Кто казнён?</option>
+                {players.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    {player.name}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void saveExecutionWithoutNomination()}
+                  disabled={executionSaving || !executionPlayerId}
+                  className="primary-button"
+                >
+                  <Save className="h-4 w-4" />
+                  Сохранить
+                </button>
+                <button type="button" onClick={closeExecutionWithoutNominationModal} className="secondary-button">
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       <SetupEditorModal
         game={setupOpen ? game : null}
         players={players}
         onClose={() => setSetupOpen(false)}
         onSave={saveSetup}
-      />
-
-      <VotingSetupModal
-        open={votingSetupOpen}
-        phase={selectedPhase?.type === "day" ? selectedPhase : undefined}
-        players={players}
-        onClose={() => setVotingSetupOpen(false)}
-        onConfirm={beginVoteDraft}
       />
 
       {finishOpen ? (

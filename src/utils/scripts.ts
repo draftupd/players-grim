@@ -4,6 +4,8 @@ type ScriptItem = {
   id?: unknown;
   name?: unknown;
   author?: unknown;
+  team?: unknown;
+  type?: unknown;
 };
 
 export type ParsedScript = {
@@ -253,6 +255,32 @@ export const getRoleType = (id: string): RoleType => {
   return match?.[0] ?? "unknown";
 };
 
+const normalizeImportedRoleType = (value: unknown): RoleType => {
+  if (typeof value !== "string") {
+    return "unknown";
+  }
+
+  const normalized = normalizeRoleId(value);
+
+  if (normalized === "traveler") {
+    return "traveller";
+  }
+
+  if (
+    normalized === "townsfolk" ||
+    normalized === "outsider" ||
+    normalized === "minion" ||
+    normalized === "demon" ||
+    normalized === "traveller" ||
+    normalized === "fabled" ||
+    normalized === "loric"
+  ) {
+    return normalized;
+  }
+
+  return "unknown";
+};
+
 const resolveStoredRoleType = (role: Pick<ScriptRole, "id" | "type">): RoleType =>
   role.type === "unknown" ? getRoleType(role.id) : role.type;
 
@@ -267,11 +295,14 @@ export const parseScriptJson = (json: unknown): ParsedScript => {
     .filter((item) => typeof item.id === "string" && item.id !== "_meta")
     .map((item) => {
       const id = String(item.id);
+      const importedType = normalizeImportedRoleType(item.team) !== "unknown"
+        ? normalizeImportedRoleType(item.team)
+        : normalizeImportedRoleType(item.type);
 
       return {
         id,
         name: prettifyRoleName(id),
-        type: getRoleType(id),
+        type: importedType === "unknown" ? getRoleType(id) : importedType,
       };
     });
 
