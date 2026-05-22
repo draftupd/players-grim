@@ -30,6 +30,8 @@ type PlayerCircleProps = {
   voteDraft?: VoteDraft | null;
   showVoteMarkers?: boolean;
   voteAvailabilityByPlayerId?: ReadonlyMap<string, PlayerVoteAvailability>;
+  selectableNominatorIds?: ReadonlySet<string>;
+  selectableNomineeIds?: ReadonlySet<string>;
   onToggleVoteVoter?: (playerId: string) => void;
   onSelectVotingPlayer?: (player: Player) => void;
   onSaveVoteDraft?: () => void;
@@ -142,6 +144,8 @@ export default function PlayerCircle({
   voteDraft = null,
   showVoteMarkers = false,
   voteAvailabilityByPlayerId,
+  selectableNominatorIds,
+  selectableNomineeIds,
   onToggleVoteVoter,
   onSelectVotingPlayer,
   onSaveVoteDraft,
@@ -418,14 +422,14 @@ export default function PlayerCircle({
     }
 
     if (votingStage === "select_nominator") {
-      if (player.alive) {
+      if (selectableNominatorIds?.has(player.id)) {
         onSelectVotingPlayer?.(player);
       }
       return;
     }
 
     if (votingStage === "select_nominee") {
-      if (voteDraft?.nominatorPlayerId !== player.id) {
+      if (selectableNomineeIds?.has(player.id)) {
         onSelectVotingPlayer?.(player);
       }
       return;
@@ -717,9 +721,13 @@ export default function PlayerCircle({
           >
             <p className="text-xs font-semibold leading-snug text-white sm:text-base">
               {votingStage === "select_nominator"
-                ? "Выберите, кто номинировал"
+                ? voteDraft?.voteType === "traveller_exile"
+                  ? "Выберите, кто номинировал изгнание"
+                  : "Выберите, кто номинировал"
                 : votingStage === "select_nominee"
-                  ? "Выберите, кого номинировали"
+                  ? voteDraft?.voteType === "traveller_exile"
+                    ? "Выберите Traveller на изгнание"
+                    : "Выберите, кого номинировали"
                   : "Отметьте, кто голосовал"}
             </p>
             {votingStage === "select_voters" ? (
@@ -829,8 +837,8 @@ export default function PlayerCircle({
           const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";
           const canVoteInCurrentSession = voteAvailability !== "dead_spent";
           const isSelectedVoter = voteDraft?.selectedVoterIds.includes(player.id) ?? false;
-          const isSelectableNominator = votingStage === "select_nominator" && player.alive;
-          const isSelectableNominee = votingStage === "select_nominee" && voteDraft?.nominatorPlayerId !== player.id;
+          const isSelectableNominator = votingStage === "select_nominator" && Boolean(selectableNominatorIds?.has(player.id));
+          const isSelectableNominee = votingStage === "select_nominee" && Boolean(selectableNomineeIds?.has(player.id));
           const isSelectedNominator = voteDraft?.nominatorPlayerId === player.id;
           const isSelectedNominee = voteDraft?.nomineePlayerId === player.id;
 

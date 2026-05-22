@@ -99,7 +99,8 @@ export default function NewGamePage() {
       scriptRoles,
       playerCount,
       status: "active",
-      startedAt: now,
+      hasStarted: false,
+      currentPhaseId: undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -120,8 +121,6 @@ export default function NewGamePage() {
     const initialPhaseItems: Array<Pick<Phase, "number" | "type">> = [
       { number: 1, type: "night" },
       { number: 1, type: "day" },
-      { number: 2, type: "night" },
-      { number: 2, type: "day" },
     ];
 
     const phases: Phase[] = initialPhaseItems.map((phase) => ({

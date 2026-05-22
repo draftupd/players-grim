@@ -1,12 +1,28 @@
-import { ArrowLeft, CheckCircle2, Clock3, Crown, Gavel, Save, Settings, Skull, Target, Users, X } from "lucide-react";
+import {
+  ArrowLeft,
+  BedDouble,
+  CheckCircle2,
+  Clock3,
+  Crown,
+  Edit3,
+  Gavel,
+  Play,
+  Save,
+  Settings,
+  Skull,
+  Target,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import NightOrderPanel from "../components/NightOrderPanel";
 import PhaseNotes from "../components/PhaseNotes";
-import PhaseTabs from "../components/PhaseTabs";
 import PlayerCircle from "../components/PlayerCircle";
 import PlayerDetailModal from "../components/PlayerDetailModal";
+import RoleIntelPanel from "../components/RoleIntelPanel";
 import RoleReferencePanel from "../components/RoleReferencePanel";
 import SetupEditorModal from "../components/SetupEditorModal";
 import { db } from "../db/db";
@@ -22,6 +38,7 @@ import type {
 } from "../types";
 import {
   formatDate,
+  formatTime,
   personalResultLabel,
   personalTeamLabel,
   gameDisplayTitle,
@@ -33,6 +50,7 @@ import {
   winnerLabel,
 } from "../utils/dates";
 import { createId } from "../utils/ids";
+import { mergeManualAndMentionLinks } from "../utils/mentions";
 import { getRoleLabel } from "../utils/scripts";
 import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
 
@@ -51,33 +69,41 @@ const findMyPlayerIdByRole = (players: Player[], myRoleId?: string) => {
 
 const buildVotingNoteText = ({
   voteNumber,
+  voteType,
   phaseTitleText,
   nominatorName,
   nomineeName,
   voterNames,
   deadVoterNames,
-  alivePlayerCount,
+  threshold,
+  thresholdText,
 }: {
   voteNumber: number;
+  voteType: "execution" | "traveller_exile";
   phaseTitleText: string;
   nominatorName: string;
   nomineeName: string;
   voterNames: string[];
   deadVoterNames: string[];
-  alivePlayerCount: number;
+  threshold: number;
+  thresholdText: string;
 }) => {
-  const threshold = Math.ceil(alivePlayerCount / 2);
   const voteCount = voterNames.length;
-  const outcome = voteCount >= threshold ? "достаточно голосов для казни" : "недостаточно голосов";
+  const outcome =
+    voteCount >= threshold
+      ? voteType === "traveller_exile"
+        ? "достаточно голосов для изгнания"
+        : "достаточно голосов для казни"
+      : "недостаточно голосов";
 
   return [
-    `Голосование #${voteNumber}`,
+    `${voteType === "traveller_exile" ? "Изгнание Traveller" : "Голосование"} #${voteNumber}`,
     `Фаза: ${phaseTitleText}`,
     `Номинировал: ${nominatorName}`,
     `Номинирован: ${nomineeName}`,
     `Голосовали (${voteCount}): ${voterNames.length > 0 ? voterNames.join(", ") : "никто"}`,
     `Мертвые голоса: ${deadVoterNames.length > 0 ? deadVoterNames.join(", ") : "нет"}`,
-    `Порог: ${threshold} из ${alivePlayerCount} живых`,
+    `Порог: ${thresholdText}`,
     `Итог: ${outcome}`,
   ].join("\n");
 };
@@ -99,12 +125,91 @@ type VoteAnalysis = {
   removedPreviousFromBlock: boolean;
   statusLabel: string;
   prognosisLabel: string;
+  voteType: "execution" | "traveller_exile";
+};
+
+const resolveVoteType = (voteRecord: VoteRecord) => voteRecord.voteType ?? "execution";
+
+const getExecutionThreshold = (alivePlayerCount: number) => Math.ceil(alivePlayerCount / 2);
+
+const getTravellerExileThreshold = (participantCount: number) =>
+  participantCount % 2 === 0 ? participantCount / 2 : Math.floor(participantCount / 2) + 1;
+
+type SummaryItem =
+  | {
+      id: string;
+      createdAt: string;
+      kind: "note";
+      phase?: Phase;
+      note: Note;
+    }
+  | {
+      id: string;
+      createdAt: string;
+      kind: "execution";
+      phase?: Phase;
+      note: Note;
+    }
+  | {
+      id: string;
+      createdAt: string;
+      kind: "vote";
+      phase?: Phase;
+      voteRecord: VoteRecord;
+      analysis?: VoteAnalysis;
+    };
+
+const countVotesLabel = (count: number) =>
+  `${count} ${count === 1 ? "голос" : count >= 2 && count <= 4 ? "голоса" : "голосов"}`;
+
+const buildPhase = (gameId: string, number: number, type: Phase["type"], createdAt: string): Phase => ({
+  id: createId(),
+  gameId,
+  number,
+  type,
+  title: phaseTitle(number, type),
+  createdAt,
+});
+
+const inferCurrentPhaseId = ({
+  game,
+  phases,
+  notes,
+  voteRecords,
+}: {
+  game?: Game;
+  phases: Phase[];
+  notes: Note[];
+  voteRecords: VoteRecord[];
+}) => {
+  if (game?.currentPhaseId && phases.some((phase) => phase.id === game.currentPhaseId)) {
+    return game.currentPhaseId;
+  }
+
+  const recentPhaseId =
+    [...voteRecords]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((voteRecord) => voteRecord.phaseId)
+      .find((phaseId) => phases.some((phase) => phase.id === phaseId)) ??
+    [...notes]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((note) => note.phaseId)
+      .find((phaseId) => phases.some((phase) => phase.id === phaseId));
+
+  if (recentPhaseId) {
+    return recentPhaseId;
+  }
+
+  if (game?.hasStarted || game?.startedAt) {
+    return phases.at(-1)?.id;
+  }
+
+  return undefined;
 };
 
 export default function GamePage() {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
-  const [selectedPhaseId, setSelectedPhaseId] = useState<string>();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [gameInfoOpen, setGameInfoOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
@@ -118,9 +223,14 @@ export default function GamePage() {
   const [executionModalOpen, setExecutionModalOpen] = useState(false);
   const [executionPlayerId, setExecutionPlayerId] = useState("");
   const [executionSaving, setExecutionSaving] = useState(false);
+  const [executionPhaseId, setExecutionPhaseId] = useState<string | null>(null);
   const [pageError, setPageError] = useState("");
-  const [contentTab, setContentTab] = useState<"notes" | "reference" | "voting">("notes");
+  const [contentTab, setContentTab] = useState<"notes" | "roleIntel" | "reference" | "voting" | "summary">("notes");
   const [referenceTab, setReferenceTab] = useState<"roles" | "nightOrder">("roles");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
+  const [editingVoteRecordId, setEditingVoteRecordId] = useState<string | null>(null);
+  const [editingVoteDraft, setEditingVoteDraft] = useState<VoteDraft | null>(null);
   const { data: referenceData } = useReferenceData();
 
   const gameResult = useLiveQuery(
@@ -170,14 +280,21 @@ export default function GamePage() {
     [],
   );
 
-  const effectiveSelectedPhaseId = phases.some((phase) => phase.id === selectedPhaseId)
-    ? selectedPhaseId
-    : phases[0]?.id;
+  const effectiveSelectedPhaseId = inferCurrentPhaseId({
+    game: gameResult.game,
+    phases,
+    notes,
+    voteRecords,
+  });
   const selectedPhase = phases.find((phase) => phase.id === effectiveSelectedPhaseId);
   const selectedPlayer = players.find((player) => player.id === selectedPlayerId) ?? null;
   const playersById = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
     [players],
+  );
+  const phasesById = useMemo(
+    () => new Map(phases.map((phase) => [phase.id, phase])),
+    [phases],
   );
   const storedOrDerivedMyPlayerId =
     gameResult.game?.myPlayerId ?? findMyPlayerIdByRole(players, gameResult.game?.myRoleId);
@@ -190,8 +307,16 @@ export default function GamePage() {
         (note) =>
           note.phaseId === effectiveSelectedPhaseId &&
           note.kind !== "vote_history" &&
-          note.kind !== "execution",
+          note.kind !== "execution" &&
+          note.kind !== "role_intel",
       ),
+    [notes, effectiveSelectedPhaseId],
+  );
+  const selectedPhaseRoleIntelNotes = useMemo(
+    () =>
+      notes
+        .filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "role_intel")
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [notes, effectiveSelectedPhaseId],
   );
   const selectedPhaseVoteNotes = useMemo(
@@ -222,10 +347,48 @@ export default function GamePage() {
     () => voteRecords.filter((voteRecord) => voteRecord.phaseId === effectiveSelectedPhaseId),
     [voteRecords, effectiveSelectedPhaseId],
   );
+  const selectedPhaseExecutionVoteRecords = useMemo(
+    () => selectedPhaseVoteRecords.filter((voteRecord) => resolveVoteType(voteRecord) === "execution"),
+    [selectedPhaseVoteRecords],
+  );
+  const usedExecutionNominatorIds = useMemo(
+    () => new Set(selectedPhaseExecutionVoteRecords.map((voteRecord) => voteRecord.nominatorPlayerId)),
+    [selectedPhaseExecutionVoteRecords],
+  );
+  const usedExecutionNomineeIds = useMemo(
+    () => new Set(selectedPhaseExecutionVoteRecords.map((voteRecord) => voteRecord.nomineePlayerId)),
+    [selectedPhaseExecutionVoteRecords],
+  );
+  const selectableExecutionNominatorIds = useMemo(
+    () =>
+      new Set(
+        players
+          .filter((player) => player.alive && !usedExecutionNominatorIds.has(player.id))
+          .map((player) => player.id),
+      ),
+    [players, usedExecutionNominatorIds],
+  );
+  const selectableTravellerExileNominatorIds = useMemo(
+    () => new Set(players.map((player) => player.id)),
+    [players],
+  );
+  const selectableExecutionNomineeIds = useMemo(
+    () =>
+      new Set(
+        players
+          .filter((player) => player.alive && !player.isTraveller && !usedExecutionNomineeIds.has(player.id))
+          .map((player) => player.id),
+      ),
+    [players, usedExecutionNomineeIds],
+  );
+  const selectableTravellerExileNomineeIds = useMemo(
+    () => new Set(players.filter((player) => player.isTraveller).map((player) => player.id)),
+    [players],
+  );
   const selectedPhaseVoteAnalysesAsc = useMemo<VoteAnalysis[]>(() => {
     const selectedVoteRecordsAsc = [...selectedPhaseVoteRecords].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const alivePlayerCount = players.filter((player) => player.alive).length;
-    const threshold = Math.ceil(alivePlayerCount / 2);
+    const participantCount = players.length;
     const selectedVoteRecordIds = new Set(selectedVoteRecordsAsc.map((voteRecord) => voteRecord.id));
     const spentDeadVotesBeforePhase = new Set<string>();
 
@@ -242,13 +405,18 @@ export default function GamePage() {
     const spentDeadVotes = new Set(spentDeadVotesBeforePhase);
 
     return selectedVoteRecordsAsc.map((voteRecord, index) => {
+      const voteType = resolveVoteType(voteRecord);
+      const threshold =
+        voteType === "traveller_exile"
+          ? getTravellerExileThreshold(participantCount)
+          : getExecutionThreshold(alivePlayerCount);
       const previousHighestVotes = highestVotes;
       const previousBlockVoteRecordId = currentBlockVoteRecordId;
       const voteCount = voteRecord.voterPlayerIds.length;
       const enoughVotes = voteCount >= threshold;
       let removedPreviousFromBlock = false;
 
-      if (enoughVotes) {
+      if (voteType === "execution" && enoughVotes) {
         if (voteCount > highestVotes) {
           removedPreviousFromBlock = currentBlockVoteRecordId !== null && currentBlockVoteRecordId !== voteRecord.id;
           highestVotes = voteCount;
@@ -264,16 +432,18 @@ export default function GamePage() {
       const remainingDeadVotes = players.filter((player) => !player.alive && !spentDeadVotes.has(player.id)).length;
       const remainingAliveVotes = alivePlayerCount;
       const remainingPotentialVotes = remainingAliveVotes + remainingDeadVotes;
-      const currentTargetVotes = highestVotes > 0 ? highestVotes : threshold;
+      const currentTargetVotes = voteType === "traveller_exile" ? threshold : highestVotes > 0 ? highestVotes : threshold;
       const neededToTie = currentTargetVotes;
-      const neededToBeat = highestVotes > 0 ? highestVotes + 1 : threshold;
+      const neededToBeat = voteType === "traveller_exile" ? threshold : highestVotes > 0 ? highestVotes + 1 : threshold;
       const canTie = remainingPotentialVotes >= neededToTie;
       const canBeat = remainingPotentialVotes >= neededToBeat;
-      const isOnTheBlock = currentBlockVoteRecordId === voteRecord.id;
+      const isOnTheBlock = voteType === "traveller_exile" ? enoughVotes : currentBlockVoteRecordId === voteRecord.id;
 
-      let statusLabel = "Ниже порога";
+      let statusLabel = voteType === "traveller_exile" ? "Голосов не хватило" : "Ниже порога";
 
-      if (isOnTheBlock) {
+      if (voteType === "traveller_exile") {
+        statusLabel = enoughVotes ? "Изгнание проходит" : "Голосов не хватило";
+      } else if (isOnTheBlock) {
         statusLabel = "На плахе";
       } else if (!enoughVotes && currentBlockVoteRecordId === null) {
         statusLabel = "Никто не номинирован";
@@ -287,7 +457,11 @@ export default function GamePage() {
 
       let prognosisLabel = "";
 
-      if (highestVotes === 0) {
+      if (voteType === "traveller_exile") {
+        prognosisLabel = enoughVotes
+          ? "Голосов хватает для изгнания Traveller"
+          : `Для изгнания нужно ещё ${Math.max(0, threshold - voteCount)}`;
+      } else if (highestVotes === 0) {
         prognosisLabel = canBeat
           ? `Следующего можно вывести на плаху: нужно ${threshold}`
           : "Следующего уже не вывести на плаху";
@@ -304,8 +478,11 @@ export default function GamePage() {
         voteNumber: index + 1,
         voteCount,
         threshold,
-        thresholdLabel: `Нужно ${threshold} ${threshold === 1 ? "голос" : threshold < 5 ? "голоса" : "голосов"} для казни`,
-        voteCountLabel: `${voteCount} ${voteCount === 1 ? "голос" : voteCount < 5 ? "голоса" : "голосов"}`,
+        thresholdLabel:
+          voteType === "traveller_exile"
+            ? `Нужно ${threshold} ${threshold === 1 ? "голос" : threshold < 5 ? "голоса" : "голосов"} для изгнания`
+            : `Нужно ${threshold} ${threshold === 1 ? "голос" : threshold < 5 ? "голоса" : "голосов"} для казни`,
+        voteCountLabel: countVotesLabel(voteCount),
         remainingAliveVotes,
         remainingDeadVotes,
         neededToTie,
@@ -316,6 +493,7 @@ export default function GamePage() {
         removedPreviousFromBlock,
         statusLabel,
         prognosisLabel,
+        voteType,
       };
     });
   }, [players, selectedPhaseVoteRecords, voteRecords]);
@@ -326,6 +504,15 @@ export default function GamePage() {
   const selectedPhaseExecutionNote = useMemo(
     () => notes.find((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "execution"),
     [notes, effectiveSelectedPhaseId],
+  );
+  const executionNoteByPhaseId = useMemo(
+    () =>
+      new Map(
+        notes
+          .filter((note) => note.kind === "execution")
+          .map((note) => [note.phaseId, note] as const),
+      ),
+    [notes],
   );
   const deadVoteSpentPlayerIds = useMemo(
     () => new Set(voteRecords.flatMap((voteRecord) => voteRecord.deadVoterPlayerIds)),
@@ -357,15 +544,109 @@ export default function GamePage() {
   }, [effectiveSelectedPhaseId, selectedPhase?.type, voteDraft]);
 
   useEffect(() => {
-    if (selectedPhase?.type !== "day") {
+    const modalPhase = phasesById.get(executionPhaseId ?? selectedPhase?.id ?? "");
+
+    if (modalPhase?.type !== "day") {
       setVoteDraft(null);
       setExecutionModalOpen(false);
     }
-  }, [selectedPhase?.type]);
+  }, [executionPhaseId, phasesById, selectedPhase?.id, selectedPhase?.type]);
 
   const updateGameTimestamp = async (now = timestamp()) => {
     if (gameId) {
       await db.games.update(gameId, { updatedAt: now });
+    }
+  };
+
+  const ensurePhaseExists = async (number: number, type: Phase["type"], now = timestamp()) => {
+    if (!gameId) {
+      return undefined;
+    }
+
+    const existingPhase = phases.find((phase) => phase.number === number && phase.type === type);
+
+    if (existingPhase) {
+      return existingPhase;
+    }
+
+    const nextPhase = buildPhase(gameId, number, type, now);
+    await db.phases.add(nextPhase);
+    return nextPhase;
+  };
+
+  const setCurrentPhase = async (phase: Phase, now = timestamp(), options?: { startGame?: boolean }) => {
+    if (!gameId) {
+      return;
+    }
+
+    await db.games.update(gameId, {
+      currentPhaseId: phase.id,
+      hasStarted: true,
+      startedAt: options?.startGame ? gameResult.game?.startedAt ?? now : gameResult.game?.startedAt,
+      updatedAt: now,
+    });
+  };
+
+  const reconcileDeadVoteAvailability = async (now = timestamp()) => {
+    if (!gameId) {
+      return;
+    }
+
+    const allVoteRecords = await db.voteRecords
+      .where("[gameId+createdAt]")
+      .between([gameId, ""], [gameId, "\uffff"])
+      .toArray();
+    const spentDeadVotes = new Set(allVoteRecords.flatMap((voteRecord) => voteRecord.deadVoterPlayerIds));
+
+    await Promise.all(
+      players.map((player) =>
+        db.players.update(player.id, {
+          deadVoteAvailable: player.alive ? true : !spentDeadVotes.has(player.id),
+          updatedAt: now,
+        }),
+      ),
+    );
+  };
+
+  const startGame = async () => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+
+    try {
+      await db.transaction("rw", db.phases, db.games, async () => {
+        const firstNight = (await ensurePhaseExists(1, "night", now)) ?? buildPhase(gameId, 1, "night", now);
+        await setCurrentPhase(firstNight, now, { startGame: true });
+      });
+      setPageError("");
+      setContentTab("notes");
+    } catch {
+      setPageError("Не удалось начать игру.");
+    }
+  };
+
+  const advanceToNextPhase = async (mode: "night_to_day" | "day_to_night") => {
+    if (!gameId || !selectedPhase) {
+      return;
+    }
+
+    const now = timestamp();
+    const nextNumber = mode === "night_to_day" ? selectedPhase.number : selectedPhase.number + 1;
+    const nextType: Phase["type"] = mode === "night_to_day" ? "day" : "night";
+
+    try {
+      await db.transaction("rw", db.phases, db.games, async () => {
+        const nextPhase =
+          (await ensurePhaseExists(nextNumber, nextType, now)) ??
+          buildPhase(gameId, nextNumber, nextType, now);
+        await setCurrentPhase(nextPhase, now);
+      });
+      setPageError("");
+      setContentTab(nextType === "day" ? "notes" : "notes");
+    } catch {
+      setPageError("Не удалось перейти к следующей фазе.");
     }
   };
 
@@ -467,9 +748,11 @@ export default function GamePage() {
       id: newGameId,
       title: `${sourceGame.scriptName?.trim() || sourceGame.title} — копия setup`,
       status: "active",
+      hasStarted: false,
+      currentPhaseId: undefined,
       winner: undefined,
       finalNotes: undefined,
-      startedAt: now,
+      startedAt: undefined,
       finishedAt: undefined,
       pinnedAt: undefined,
       trashedAt: undefined,
@@ -489,10 +772,8 @@ export default function GamePage() {
     }));
 
     const duplicatedPhases: Phase[] = [
-      { id: createId(), gameId: newGameId, number: 1, type: "night", title: phaseTitle(1, "night"), createdAt: now },
-      { id: createId(), gameId: newGameId, number: 1, type: "day", title: phaseTitle(1, "day"), createdAt: now },
-      { id: createId(), gameId: newGameId, number: 2, type: "night", title: phaseTitle(2, "night"), createdAt: now },
-      { id: createId(), gameId: newGameId, number: 2, type: "day", title: phaseTitle(2, "day"), createdAt: now },
+      buildPhase(newGameId, 1, "night", now),
+      buildPhase(newGameId, 1, "day", now),
     ];
 
     await db.transaction("rw", db.games, db.players, db.phases, async () => {
@@ -503,39 +784,12 @@ export default function GamePage() {
 
     navigate(`/games/${newGameId}`);
   };
-
-  const addNextPhase = async () => {
-    if (!gameId) {
-      return;
-    }
-
-    const sorted = sortPhases(phases);
-    const lastPhase = sorted.at(-1);
-    const nextNumber = !lastPhase ? 1 : lastPhase.type === "night" ? lastPhase.number : lastPhase.number + 1;
-    const nextType = !lastPhase ? "night" : lastPhase.type === "night" ? "day" : "night";
-    const now = timestamp();
-
-    const phase: Phase = {
-      id: createId(),
-      gameId,
-      number: nextNumber,
-      type: nextType,
-      title: phaseTitle(nextNumber, nextType),
-      createdAt: now,
-    };
-
-    try {
-      await db.transaction("rw", db.phases, db.games, async () => {
-        await db.phases.add(phase);
-        await updateGameTimestamp(now);
-      });
-      setSelectedPhaseId(phase.id);
-    } catch {
-      setPageError("Не удалось добавить фазу.");
-    }
-  };
-
-  const addNoteToPhase = async (phaseId: string, text: string, linkedPlayerIds: string[]) => {
+  const addNoteToPhase = async (
+    phaseId: string,
+    text: string,
+    linkedPlayerIds: string[],
+    options?: { kind?: Note["kind"]; roleId?: string },
+  ) => {
     if (!gameId) {
       return;
     }
@@ -545,7 +799,8 @@ export default function GamePage() {
       id: createId(),
       gameId,
       phaseId,
-      kind: "general",
+      kind: options?.kind ?? "general",
+      roleId: options?.roleId,
       text,
       linkedPlayerIds,
       createdAt: now,
@@ -564,6 +819,17 @@ export default function GamePage() {
     }
 
     await addNoteToPhase(selectedPhase.id, text, linkedPlayerIds);
+  };
+
+  const addRoleIntelNote = async (roleId: string, text: string, linkedPlayerIds: string[]) => {
+    if (!selectedPhase) {
+      return;
+    }
+
+    await addNoteToPhase(selectedPhase.id, text, linkedPlayerIds, {
+      kind: "role_intel",
+      roleId,
+    });
   };
 
   const deleteNote = async (noteId: string) => {
@@ -607,11 +873,23 @@ export default function GamePage() {
 
     setLocalMyPlayerId(nextMyPlayerId ?? null);
 
-    await db.transaction("rw", db.players, db.games, async () => {
+    await db.transaction("rw", db.players, db.games, db.notes, async () => {
       await db.players.update(playerId, {
         ...values,
         updatedAt: now,
       });
+      if (currentPlayer?.alive && !values.alive && selectedPhase) {
+        await db.notes.add({
+          id: createId(),
+          gameId: gameId!,
+          phaseId: selectedPhase.id,
+          kind: "general",
+          text: `${values.name} умер${selectedPhase.type === "day" ? " днём" : " ночью"}.`,
+          linkedPlayerIds: [playerId],
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
       await db.games.update(gameId!, {
         myPlayerId: nextMyPlayerId,
         myRoleId: nextMyRoleId,
@@ -750,13 +1028,24 @@ export default function GamePage() {
     }
   };
 
-  const beginVoteDraft = () => {
+  const beginVoteDraft = (voteType: "execution" | "traveller_exile") => {
     if (!selectedPhase || selectedPhase.type !== "day") {
+      return;
+    }
+
+    if (voteType === "execution" && selectableExecutionNominatorIds.size === 0) {
+      setPageError("В этой дневной фазе больше некому номинировать на казнь.");
+      return;
+    }
+
+    if (voteType === "traveller_exile" && selectableTravellerExileNomineeIds.size === 0) {
+      setPageError("Сейчас в игре нет Traveller для изгнания.");
       return;
     }
 
     setVoteDraft({
       phaseId: selectedPhase.id,
+      voteType,
       stage: "select_nominator",
       selectedVoterIds: [],
     });
@@ -770,7 +1059,12 @@ export default function GamePage() {
       }
 
       if (current.stage === "select_nominator") {
-        if (!player.alive) {
+        const canSelect =
+          (current.voteType ?? "execution") === "traveller_exile"
+            ? selectableTravellerExileNominatorIds.has(player.id)
+            : selectableExecutionNominatorIds.has(player.id);
+
+        if (!canSelect) {
           return current;
         }
 
@@ -784,7 +1078,12 @@ export default function GamePage() {
       }
 
       if (current.stage === "select_nominee") {
-        if (current.nominatorPlayerId === player.id) {
+        const canSelect =
+          (current.voteType ?? "execution") === "traveller_exile"
+            ? selectableTravellerExileNomineeIds.has(player.id)
+            : selectableExecutionNomineeIds.has(player.id);
+
+        if (current.nominatorPlayerId === player.id || !canSelect) {
           return current;
         }
 
@@ -826,8 +1125,9 @@ export default function GamePage() {
     setVoteDraft(null);
   };
 
-  const openExecutionWithoutNominationModal = () => {
-    setExecutionPlayerId(selectedPhaseExecutionNote?.executionPlayerId ?? "");
+  const openExecutionWithoutNominationModal = (phaseId = selectedPhase?.id, executionNote = selectedPhaseExecutionNote) => {
+    setExecutionPhaseId(phaseId ?? null);
+    setExecutionPlayerId(executionNote?.executionPlayerId ?? "");
     setExecutionModalOpen(true);
     setPageError("");
   };
@@ -835,10 +1135,11 @@ export default function GamePage() {
   const closeExecutionWithoutNominationModal = () => {
     setExecutionModalOpen(false);
     setExecutionPlayerId("");
+    setExecutionPhaseId(null);
   };
 
   const markVoteRecordAsExecution = async (voteRecordId: string) => {
-    if (!gameId || !effectiveSelectedPhaseId) {
+    if (!gameId || !effectiveSelectedPhaseId || !selectedPhase) {
       return;
     }
 
@@ -849,8 +1150,10 @@ export default function GamePage() {
       return;
     }
 
+    const nextWillExecute = !currentVoteRecord.resultedInExecution;
+
     try {
-      await db.transaction("rw", db.voteRecords, db.notes, db.games, async () => {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
         await Promise.all(
           selectedPhaseVoteRecords.map((voteRecord) =>
             db.voteRecords.update(voteRecord.id, {
@@ -864,12 +1167,23 @@ export default function GamePage() {
           ),
         );
 
+        if (!currentVoteRecord.resultedInExecution) {
+          await db.players.update(currentVoteRecord.nomineePlayerId, {
+            alive: false,
+            deadVoteAvailable: false,
+            updatedAt: now,
+          });
+        }
+
         if (selectedPhaseExecutionNote) {
           await db.notes.delete(selectedPhaseExecutionNote.id);
         }
 
         await updateGameTimestamp(now);
       });
+      if (nextWillExecute) {
+        await advanceToNextPhase("day_to_night");
+      }
       setPageError("");
     } catch {
       setPageError("Не удалось отметить результат казни.");
@@ -877,7 +1191,12 @@ export default function GamePage() {
   };
 
   const saveExecutionWithoutNomination = async () => {
-    if (!gameId || !effectiveSelectedPhaseId || !selectedPhase || !executionPlayerId) {
+    const targetPhaseId = executionPhaseId ?? selectedPhase?.id;
+    const targetPhase = phasesById.get(targetPhaseId ?? "");
+    const targetExecutionNote = executionNoteByPhaseId.get(targetPhaseId ?? "");
+    const phaseVoteRecords = voteRecords.filter((voteRecord) => voteRecord.phaseId === targetPhaseId);
+
+    if (!gameId || !targetPhaseId || !targetPhase || !executionPlayerId) {
       setPageError("Выберите, кто был казнён.");
       return;
     }
@@ -895,9 +1214,9 @@ export default function GamePage() {
     setExecutionSaving(true);
 
     try {
-      await db.transaction("rw", db.voteRecords, db.notes, db.games, async () => {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
         await Promise.all(
-          selectedPhaseVoteRecords.map((voteRecord) =>
+          phaseVoteRecords.map((voteRecord) =>
             db.voteRecords.update(voteRecord.id, {
               resultedInExecution: false,
               executedPlayerId: undefined,
@@ -906,8 +1225,8 @@ export default function GamePage() {
           ),
         );
 
-        if (selectedPhaseExecutionNote) {
-          await db.notes.update(selectedPhaseExecutionNote.id, {
+        if (targetExecutionNote) {
+          await db.notes.update(targetExecutionNote.id, {
             text: executionText,
             linkedPlayerIds: [executionPlayerId],
             executionPlayerId,
@@ -918,7 +1237,7 @@ export default function GamePage() {
           await db.notes.add({
             id: createId(),
             gameId,
-            phaseId: selectedPhase.id,
+            phaseId: targetPhase.id,
             kind: "execution",
             text: executionText,
             linkedPlayerIds: [executionPlayerId],
@@ -929,10 +1248,19 @@ export default function GamePage() {
           });
         }
 
+        await db.players.update(executionPlayerId, {
+          alive: false,
+          deadVoteAvailable: false,
+          updatedAt: now,
+        });
+
         await updateGameTimestamp(now);
       });
 
       closeExecutionWithoutNominationModal();
+      if (selectedPhase?.id === targetPhase.id && targetPhase.type === "day") {
+        await advanceToNextPhase("day_to_night");
+      }
       setPageError("");
     } catch {
       setPageError("Не удалось сохранить казнь без номинации.");
@@ -942,7 +1270,9 @@ export default function GamePage() {
   };
 
   const clearExecutionWithoutNomination = async () => {
-    if (!selectedPhaseExecutionNote) {
+    const targetExecutionNote = executionNoteByPhaseId.get(executionPhaseId ?? selectedPhase?.id ?? "");
+
+    if (!targetExecutionNote) {
       return;
     }
 
@@ -950,9 +1280,10 @@ export default function GamePage() {
 
     try {
       await db.transaction("rw", db.notes, db.games, async () => {
-        await db.notes.delete(selectedPhaseExecutionNote.id);
+        await db.notes.delete(targetExecutionNote.id);
         await updateGameTimestamp(now);
       });
+      closeExecutionWithoutNominationModal();
       setPageError("");
     } catch {
       setPageError("Не удалось убрать казнь без номинации.");
@@ -972,7 +1303,42 @@ export default function GamePage() {
       return;
     }
 
+    const voteType = voteDraft.voteType ?? "execution";
     const alivePlayerCount = players.filter((player) => player.alive).length;
+    const participantCount = players.length;
+
+    if (voteType === "execution") {
+      if (!nominator.alive) {
+        setPageError("Мёртвый игрок не может номинировать на казнь.");
+        return;
+      }
+
+      if (!nominee.alive) {
+        setPageError("Мёртвого игрока нельзя номинировать на казнь.");
+        return;
+      }
+
+      if (nominee.isTraveller) {
+        setPageError("Traveller нельзя номинировать на казнь. Используйте изгнание.");
+        return;
+      }
+
+      if (usedExecutionNominatorIds.has(nominator.id)) {
+        setPageError("Этот игрок уже номинировал в текущий день.");
+        return;
+      }
+
+      if (usedExecutionNomineeIds.has(nominee.id)) {
+        setPageError("Этот игрок уже был номинирован в текущий день.");
+        return;
+      }
+    }
+
+    if (voteType === "traveller_exile" && !nominee.isTraveller) {
+      setPageError("На изгнание можно номинировать только Traveller.");
+      return;
+    }
+
     const deadVoterPlayerIds = voteDraft.selectedVoterIds.filter((playerId) => !playersById.get(playerId)?.alive);
     const voterNames = voteDraft.selectedVoterIds
       .map((playerId) => playersById.get(playerId)?.name)
@@ -980,15 +1346,24 @@ export default function GamePage() {
     const deadVoterNames = deadVoterPlayerIds
       .map((playerId) => playersById.get(playerId)?.name)
       .filter((name): name is string => Boolean(name));
+    const threshold =
+      voteType === "traveller_exile"
+        ? getTravellerExileThreshold(participantCount)
+        : getExecutionThreshold(alivePlayerCount);
     const now = timestamp();
     const noteText = buildVotingNoteText({
       voteNumber: selectedPhaseVoteRecords.length + 1,
+      voteType,
       phaseTitleText: selectedPhase?.title ?? "Дневная фаза",
       nominatorName: nominator.name,
       nomineeName: nominee.name,
       voterNames,
       deadVoterNames,
-      alivePlayerCount,
+      threshold,
+      thresholdText:
+        voteType === "traveller_exile"
+          ? `${threshold} из ${participantCount} всех участников`
+          : `${threshold} из ${alivePlayerCount} живых`,
     });
     const note: Note = {
       id: createId(),
@@ -1006,6 +1381,7 @@ export default function GamePage() {
       id: createId(),
       gameId,
       phaseId: voteDraft.phaseId,
+      voteType,
       nominatorPlayerId: voteDraft.nominatorPlayerId,
       nomineePlayerId: voteDraft.nomineePlayerId,
       voterPlayerIds: voteDraft.selectedVoterIds,
@@ -1021,14 +1397,7 @@ export default function GamePage() {
       await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
         await db.voteRecords.add(voteRecord);
         await db.notes.add(note);
-        await Promise.all(
-          deadVoterPlayerIds.map((playerId) =>
-            db.players.update(playerId, {
-              deadVoteAvailable: false,
-              updatedAt: now,
-            }),
-          ),
-        );
+        await reconcileDeadVoteAvailability(now);
         await updateGameTimestamp(now);
       });
       setVoteDraft(null);
@@ -1038,6 +1407,214 @@ export default function GamePage() {
       setVoteSaving(false);
     }
   };
+
+  const startEditingHistoryNote = (note: Note) => {
+    setEditingNoteId(note.id);
+    setEditingNoteText(note.text);
+    setEditingVoteRecordId(null);
+    setEditingVoteDraft(null);
+  };
+
+  const cancelEditingHistoryNote = () => {
+    setEditingNoteId(null);
+    setEditingNoteText("");
+  };
+
+  const saveHistoryNote = async (note: Note) => {
+    const trimmed = editingNoteText.trim();
+
+    if (!trimmed) {
+      setPageError("Текст карточки не должен быть пустым.");
+      return;
+    }
+
+    const now = timestamp();
+
+    try {
+      await db.transaction("rw", db.notes, db.games, async () => {
+        await db.notes.update(note.id, {
+          text: trimmed,
+          linkedPlayerIds: mergeManualAndMentionLinks(trimmed, players, note.linkedPlayerIds),
+          updatedAt: now,
+        });
+        await updateGameTimestamp(now);
+      });
+      cancelEditingHistoryNote();
+      setPageError("");
+    } catch {
+      setPageError("Не удалось обновить карточку истории.");
+    }
+  };
+
+  const startEditingVoteRecord = (voteRecord: VoteRecord) => {
+    setEditingVoteRecordId(voteRecord.id);
+    setEditingVoteDraft({
+      phaseId: voteRecord.phaseId,
+      stage: "select_voters",
+      nominatorPlayerId: voteRecord.nominatorPlayerId,
+      nomineePlayerId: voteRecord.nomineePlayerId,
+      selectedVoterIds: voteRecord.voterPlayerIds,
+    });
+    setEditingNoteId(null);
+    setEditingNoteText("");
+  };
+
+  const cancelEditingVoteRecord = () => {
+    setEditingVoteRecordId(null);
+    setEditingVoteDraft(null);
+  };
+
+  const toggleEditingVoteRecordVoter = (playerId: string) => {
+    setEditingVoteDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        selectedVoterIds: current.selectedVoterIds.includes(playerId)
+          ? current.selectedVoterIds.filter((id) => id !== playerId)
+          : [...current.selectedVoterIds, playerId],
+      };
+    });
+  };
+
+  const saveEditedVoteRecord = async (voteRecord: VoteRecord) => {
+    if (!gameId || !editingVoteDraft?.nominatorPlayerId || !editingVoteDraft.nomineePlayerId) {
+      return;
+    }
+
+    const nominator = playersById.get(editingVoteDraft.nominatorPlayerId);
+    const nominee = playersById.get(editingVoteDraft.nomineePlayerId);
+
+    if (!nominator || !nominee) {
+      setPageError("Не удалось сохранить номинацию.");
+      return;
+    }
+
+    const deadVoterPlayerIds = editingVoteDraft.selectedVoterIds.filter((playerId) => !playersById.get(playerId)?.alive);
+    const voterNames = editingVoteDraft.selectedVoterIds
+      .map((playerId) => playersById.get(playerId)?.name)
+      .filter((name): name is string => Boolean(name));
+    const deadVoterNames = deadVoterPlayerIds
+      .map((playerId) => playersById.get(playerId)?.name)
+      .filter((name): name is string => Boolean(name));
+    const alivePlayerCount = players.filter((player) => player.alive).length;
+    const participantCount = players.length;
+    const voteType = resolveVoteType(voteRecord);
+    const threshold =
+      voteType === "traveller_exile"
+        ? getTravellerExileThreshold(participantCount)
+        : getExecutionThreshold(alivePlayerCount);
+    const now = timestamp();
+    const historyNote = notes.find(
+      (note) =>
+        note.phaseId === voteRecord.phaseId &&
+        note.kind === "vote_history" &&
+        note.createdAt === voteRecord.createdAt,
+    );
+    const phaseVoteNumber =
+      voteRecords
+        .filter((currentVoteRecord) => currentVoteRecord.phaseId === voteRecord.phaseId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .findIndex((currentVoteRecord) => currentVoteRecord.id === voteRecord.id) + 1;
+    const noteText = buildVotingNoteText({
+      voteNumber: Math.max(phaseVoteNumber, 1),
+      voteType,
+      phaseTitleText: phasesById.get(voteRecord.phaseId)?.title ?? "Дневная фаза",
+      nominatorName: nominator.name,
+      nomineeName: nominee.name,
+      voterNames,
+      deadVoterNames,
+      threshold,
+      thresholdText:
+        voteType === "traveller_exile"
+          ? `${threshold} из ${participantCount} всех участников`
+          : `${threshold} из ${alivePlayerCount} живых`,
+    });
+
+    try {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
+        await db.voteRecords.update(voteRecord.id, {
+          nominatorPlayerId: editingVoteDraft.nominatorPlayerId,
+          nomineePlayerId: editingVoteDraft.nomineePlayerId,
+          voterPlayerIds: editingVoteDraft.selectedVoterIds,
+          deadVoterPlayerIds,
+          executedPlayerId: voteRecord.resultedInExecution ? editingVoteDraft.nomineePlayerId : voteRecord.executedPlayerId,
+          updatedAt: now,
+        });
+
+        if (historyNote) {
+          await db.notes.update(historyNote.id, {
+            text: noteText,
+            linkedPlayerIds: Array.from(
+              new Set([
+                editingVoteDraft.nominatorPlayerId,
+                editingVoteDraft.nomineePlayerId,
+                ...editingVoteDraft.selectedVoterIds,
+              ]),
+            ),
+            updatedAt: now,
+          });
+        }
+
+        await reconcileDeadVoteAvailability(now);
+        await updateGameTimestamp(now);
+      });
+
+      cancelEditingVoteRecord();
+      setPageError("");
+    } catch {
+      setPageError("Не удалось обновить номинацию.");
+    }
+  };
+
+  const deleteVoteRecord = async (voteRecord: VoteRecord) => {
+    const now = timestamp();
+    const historyNote = notes.find(
+      (note) =>
+        note.phaseId === voteRecord.phaseId &&
+        note.kind === "vote_history" &&
+        note.createdAt === voteRecord.createdAt,
+    );
+
+    try {
+      await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
+        await db.voteRecords.delete(voteRecord.id);
+
+        if (historyNote) {
+          await db.notes.delete(historyNote.id);
+        }
+
+        await reconcileDeadVoteAvailability(now);
+        await updateGameTimestamp(now);
+      });
+      setPageError("");
+    } catch {
+      setPageError("Не удалось удалить номинацию.");
+    }
+  };
+
+  const summaryItems = useMemo<SummaryItem[]>(() => {
+    return [
+      ...notes
+        .filter((note) => note.kind !== "vote_history")
+        .map((note) => ({
+          id: note.id,
+          createdAt: note.createdAt,
+          kind: note.kind === "execution" ? "execution" : "note",
+          phase: phasesById.get(note.phaseId),
+          note,
+        })),
+      ...voteRecords.map((voteRecord) => ({
+        id: voteRecord.id,
+        createdAt: voteRecord.createdAt,
+        kind: "vote" as const,
+        phase: phasesById.get(voteRecord.phaseId),
+        voteRecord,
+      })),
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [notes, phasesById, voteRecords]);
 
   if (gameResult.loading) {
     return (
@@ -1074,7 +1651,8 @@ export default function GamePage() {
         : game.status === "finished" && game.winner !== "unknown"
           ? "border-red-200/45 bg-red-400/15 text-red-100"
           : "border-stone-200/20 bg-stone-100/5 text-stone-200";
-  const isDayPhase = selectedPhase?.type === "day";
+  const gameHasStarted = game.hasStarted ?? Boolean(game.startedAt || effectiveSelectedPhaseId);
+  const isDayPhase = !selectedPhase || selectedPhase.type === "day";
 
   return (
     <main className={`page-shell ${isDayPhase ? "day-phase-theme" : ""}`}>
@@ -1173,6 +1751,16 @@ export default function GamePage() {
             voteDraft={voteDraft}
             showVoteMarkers={voteDraft?.stage === "select_voters"}
             voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
+            selectableNominatorIds={
+              (voteDraft?.voteType ?? "execution") === "traveller_exile"
+                ? selectableTravellerExileNominatorIds
+                : selectableExecutionNominatorIds
+            }
+            selectableNomineeIds={
+              (voteDraft?.voteType ?? "execution") === "traveller_exile"
+                ? selectableTravellerExileNomineeIds
+                : selectableExecutionNomineeIds
+            }
             onToggleVoteVoter={voteDraft ? toggleVoteDraftVoter : undefined}
             onSelectVotingPlayer={voteDraft ? selectVoteDraftPlayer : undefined}
             onSaveVoteDraft={voteDraft?.stage === "select_voters" ? saveVoteDraft : undefined}
@@ -1186,14 +1774,56 @@ export default function GamePage() {
           />
 
           <div className="min-w-0 space-y-4 sm:space-y-5">
-            <PhaseTabs
-              phases={phases}
-              selectedPhaseId={effectiveSelectedPhaseId}
-              onSelect={setSelectedPhaseId}
-              onAddNextPhase={addNextPhase}
-            />
+            <section className="panel space-y-3 p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-stone-50">
+                    {gameHasStarted && selectedPhase ? selectedPhase.title : "Игра ещё не началась"}
+                  </h2>
+                  <p className="mt-1 text-sm text-stone-400">
+                    {gameHasStarted && selectedPhase
+                      ? selectedPhase.type === "night"
+                        ? "Ночная фаза в процессе."
+                        : "Дневная фаза в процессе."
+                      : "До старта интерфейс остаётся светлым, а заметки и голосования начнутся после кнопки «Начать игру»."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!gameHasStarted ? (
+                    <button type="button" onClick={startGame} className="primary-button">
+                      <Play className="h-4 w-4" />
+                      Начать игру
+                    </button>
+                  ) : !selectedPhase ? (
+                    <button type="button" disabled className="secondary-button opacity-60">
+                      Фаза не найдена
+                    </button>
+                  ) : selectedPhase?.type === "night" ? (
+                    <button type="button" onClick={() => void advanceToNextPhase("night_to_day")} className="primary-button">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Ночь завершилась
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void advanceToNextPhase("day_to_night")}
+                      className="secondary-button"
+                    >
+                      <BedDouble className="h-4 w-4" />
+                      Ушли спать без казни
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
             <section className="panel p-2 sm:p-3">
-              <div className={`grid gap-2 ${selectedPhase?.type === "day" ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-2"}`}>
+              <div
+                className={`grid gap-2 ${
+                  gameHasStarted && selectedPhase?.type === "day"
+                    ? "grid-cols-5"
+                    : "grid-cols-4"
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => setContentTab("notes")}
@@ -1201,7 +1831,7 @@ export default function GamePage() {
                 >
                   Заметки
                 </button>
-                {selectedPhase?.type === "day" ? (
+                {gameHasStarted && selectedPhase?.type === "day" ? (
                 <button
                   type="button"
                   onClick={() => setContentTab("voting")}
@@ -1212,23 +1842,46 @@ export default function GamePage() {
                 ) : null}
                 <button
                   type="button"
+                  onClick={() => setContentTab("roleIntel")}
+                  className={contentTab === "roleIntel" ? "primary-button w-full" : "secondary-button w-full"}
+                >
+                  По ролям
+                </button>
+                <button
+                  type="button"
                   onClick={() => setContentTab("reference")}
                   className={contentTab === "reference" ? "primary-button w-full" : "secondary-button w-full"}
                 >
                   Роли
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setContentTab("summary")}
+                  className={contentTab === "summary" ? "primary-button w-full" : "secondary-button w-full"}
+                >
+                  Summary
+                </button>
               </div>
             </section>
-            {contentTab === "voting" && selectedPhase?.type === "day" ? (
+            {!gameHasStarted && contentTab !== "summary" ? (
+              <section className="panel p-5 text-center text-stone-500">
+                Игра ещё не началась. Нажмите «Начать игру», чтобы перейти в 1 ночь.
+              </section>
+            ) : null}
+            {gameHasStarted && contentTab === "voting" && selectedPhase?.type === "day" ? (
               <section className="panel min-w-0 p-3 sm:p-5">
                 {voteDraft ? (
                   <div className="mt-4 space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
                     <h2 className="text-lg font-semibold text-stone-50">Голосование</h2>
                     <p className="text-sm leading-6 text-stone-300">
                       {voteDraft.stage === "select_nominator"
-                        ? "На круге выберите игрока, который номинировал."
+                        ? voteDraft.voteType === "traveller_exile"
+                          ? "На круге выберите игрока, который номинировал Traveller на изгнание."
+                          : "На круге выберите игрока, который номинировал."
                         : voteDraft.stage === "select_nominee"
-                          ? "Теперь выберите игрока, которого номинировали."
+                          ? voteDraft.voteType === "traveller_exile"
+                            ? "Теперь выберите Traveller, которого номинировали на изгнание."
+                            : "Теперь выберите игрока, которого номинировали."
                           : "На круге отметьте всех, кто голосовал по этой номинации, затем сохраните результат."}
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1248,14 +1901,20 @@ export default function GamePage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={beginVoteDraft} className="secondary-button w-full sm:w-auto">
+                    <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => beginVoteDraft("execution")} className="secondary-button w-full sm:w-auto">
                       <CheckCircle2 className="h-4 w-4" />
                       Номинация
                     </button>
+                    {players.some((player) => player.isTraveller) ? (
+                      <button type="button" onClick={() => beginVoteDraft("traveller_exile")} className="secondary-button w-full sm:w-auto">
+                        <Crown className="h-4 w-4" />
+                        Изгнание Traveller
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      onClick={openExecutionWithoutNominationModal}
+                      onClick={() => openExecutionWithoutNominationModal()}
                       className={`secondary-button w-full sm:w-auto ${
                         selectedPhaseExecutionNote ? "border-amber-700/25 bg-amber-200/20 text-stone-900" : ""
                       }`}
@@ -1307,6 +1966,7 @@ export default function GamePage() {
                           .map((playerId) => playersById.get(playerId)?.name)
                           .filter((name): name is string => Boolean(name));
                         const leadsToExecution = Boolean(voteRecord.resultedInExecution);
+                        const isTravellerExile = analysis.voteType === "traveller_exile";
 
                         return (
                           <article
@@ -1314,6 +1974,8 @@ export default function GamePage() {
                             className={`rounded-[20px] border p-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.09)] ${
                               index === 0
                                 ? "border-amber-500/45 bg-amber-200/28 shadow-[0_0_0_2px_rgba(245,158,11,0.18),0_0_0_8px_rgba(51,51,56,0.16),0_18px_34px_rgba(32,28,24,0.24)]"
+                                : isTravellerExile
+                                  ? "border-sky-600/25 bg-sky-200/18 shadow-[0_8px_22px_rgba(59,130,246,0.12)]"
                                 : leadsToExecution
                                   ? "border-emerald-700/20 bg-emerald-200/14"
                                   : "border-ember-200/15 bg-black/18"
@@ -1323,10 +1985,12 @@ export default function GamePage() {
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-amber-300 text-stone-900 shadow-lg shadow-amber-950/10">
-                                    <Gavel className="h-3.5 w-3.5" />
+                                    {isTravellerExile ? <Crown className="h-3.5 w-3.5" /> : <Gavel className="h-3.5 w-3.5" />}
                                   </span>
                                   <div>
-                                    <h3 className="text-sm font-semibold leading-tight text-stone-100">{analysis.voteNumber}</h3>
+                                    <h3 className="text-sm font-semibold leading-tight text-stone-100">
+                                      {isTravellerExile ? `Изгнание ${analysis.voteNumber}` : analysis.voteNumber}
+                                    </h3>
                                     <p className="mt-0.5 flex items-center gap-1 text-[10px] text-stone-500">
                                       <Clock3 className="h-2.5 w-2.5 text-stone-700" />
                                       {formatDate(voteRecord.createdAt)}
@@ -1342,6 +2006,8 @@ export default function GamePage() {
                                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                     leadsToExecution
                                       ? "bg-emerald-500 text-white ring-1 ring-emerald-700/20 shadow-[0_8px_18px_rgba(16,185,129,0.28)]"
+                                      : isTravellerExile
+                                        ? "bg-sky-300/80 text-sky-950 ring-1 ring-sky-700/15"
                                       : analysis.isOnTheBlock
                                         ? "bg-emerald-400/90 text-emerald-950 ring-1 ring-emerald-700/15"
                                         : analysis.removedPreviousFromBlock
@@ -1361,19 +2027,21 @@ export default function GamePage() {
                                     Никто не номинирован
                                   </span>
                                 ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => void markVoteRecordAsExecution(voteRecord.id)}
-                                  className={`secondary-button min-h-7 w-7 shrink-0 px-0 ${
-                                    leadsToExecution
-                                      ? "border-emerald-700/20 bg-emerald-300/18 text-emerald-950"
-                                      : "text-stone-900"
-                                  }`}
-                                  aria-label={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
-                                  title={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
-                                >
-                                  <Skull className="h-3.5 w-3.5" />
-                                </button>
+                                {!isTravellerExile ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void markVoteRecordAsExecution(voteRecord.id)}
+                                    className={`secondary-button min-h-7 w-7 shrink-0 px-0 ${
+                                      leadsToExecution
+                                        ? "border-emerald-700/20 bg-emerald-300/18 text-emerald-950"
+                                        : "text-stone-900"
+                                    }`}
+                                    aria-label={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
+                                    title={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
+                                  >
+                                    <Skull className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
                               </div>
                             </div>
 
@@ -1438,7 +2106,7 @@ export default function GamePage() {
                 </div>
               </section>
             ) : null}
-            {contentTab === "notes" ? (
+            {gameHasStarted && contentTab === "notes" ? (
               <PhaseNotes
                 phase={selectedPhase}
                 notes={selectedPhaseNotes}
@@ -1448,7 +2116,18 @@ export default function GamePage() {
                 onUpdateNote={updateNote}
               />
             ) : null}
-            {contentTab === "reference" ? (
+            {gameHasStarted && contentTab === "roleIntel" ? (
+              <RoleIntelPanel
+                phase={selectedPhase}
+                notes={selectedPhaseRoleIntelNotes}
+                players={players}
+                roles={roleReferenceRoles}
+                onAddNote={addRoleIntelNote}
+                onDeleteNote={deleteNote}
+                onUpdateNote={updateNote}
+              />
+            ) : null}
+            {gameHasStarted && contentTab === "reference" ? (
               <section className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -1482,6 +2161,223 @@ export default function GamePage() {
                 )}
               </section>
             ) : null}
+            {contentTab === "summary" ? (
+              <section className="panel min-w-0 p-3 sm:p-5">
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-stone-50">Summary</h2>
+                  <p className="text-sm text-stone-400">
+                    История заметок, номинаций и казней. Новые карточки сверху.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {summaryItems.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
+                      История пока пустая.
+                    </div>
+                  ) : (
+                    summaryItems.map((item) => {
+                      if (item.kind === "vote") {
+                        const voteRecord = item.voteRecord;
+                        const isEditingVote = editingVoteRecordId === voteRecord.id;
+                        const nominatorName = playersById.get(voteRecord.nominatorPlayerId)?.name ?? "Неизвестно";
+                        const nomineeName = playersById.get(voteRecord.nomineePlayerId)?.name ?? "Неизвестно";
+                        const voterNames = voteRecord.voterPlayerIds
+                          .map((playerId) => playersById.get(playerId)?.name)
+                          .filter((name): name is string => Boolean(name));
+
+                        return (
+                          <article key={item.id} className="rounded-2xl border border-ember-200/12 bg-black/18 p-3">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-amber-300 text-stone-900">
+                                    <Gavel className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <h3 className="text-sm font-semibold text-stone-100">
+                                      {item.phase?.title ?? "Дневная фаза"}
+                                    </h3>
+                                    <p className="text-xs text-stone-500">
+                                      {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <button type="button" onClick={() => startEditingVoteRecord(voteRecord)} className="secondary-button min-h-10 px-3">
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                                <button type="button" onClick={() => void deleteVoteRecord(voteRecord)} className="danger-button">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {isEditingVote && editingVoteDraft ? (
+                              <div className="mt-3 space-y-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <select
+                                    value={editingVoteDraft.nominatorPlayerId ?? ""}
+                                    onChange={(event) =>
+                                      setEditingVoteDraft((current) =>
+                                        current ? { ...current, nominatorPlayerId: event.target.value } : current,
+                                      )
+                                    }
+                                    className="field"
+                                  >
+                                    <option value="">Кто номинировал?</option>
+                                    {players.map((player) => (
+                                      <option key={player.id} value={player.id}>
+                                        {player.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    value={editingVoteDraft.nomineePlayerId ?? ""}
+                                    onChange={(event) =>
+                                      setEditingVoteDraft((current) =>
+                                        current ? { ...current, nomineePlayerId: event.target.value } : current,
+                                      )
+                                    }
+                                    className="field"
+                                  >
+                                    <option value="">Кого номинировали?</option>
+                                    {players.map((player) => (
+                                      <option key={player.id} value={player.id}>
+                                        {player.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                  {players.map((player) => {
+                                    const selected = editingVoteDraft.selectedVoterIds.includes(player.id);
+
+                                    return (
+                                      <button
+                                        key={player.id}
+                                        type="button"
+                                        onClick={() => toggleEditingVoteRecordVoter(player.id)}
+                                        className={`rounded-xl border px-3 py-2 text-sm transition ${
+                                          selected
+                                            ? "border-emerald-300/35 bg-emerald-300/12 text-emerald-100"
+                                            : "border-ember-200/10 bg-black/20 text-stone-200"
+                                        }`}
+                                      >
+                                        {player.name}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <button type="button" onClick={() => void saveEditedVoteRecord(voteRecord)} className="primary-button">
+                                    <Save className="h-4 w-4" />
+                                    Сохранить
+                                  </button>
+                                  <button type="button" onClick={cancelEditingVoteRecord} className="secondary-button">
+                                    <X className="h-4 w-4" />
+                                    Отмена
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-3 grid gap-2 text-sm text-stone-200 sm:grid-cols-2">
+                                <div className="rounded-2xl bg-black/10 px-3 py-2">
+                                  <p>{nominatorName}</p>
+                                  <p>{nomineeName}</p>
+                                </div>
+                                <div className="rounded-2xl bg-black/10 px-3 py-2">
+                                  <p>{countVotesLabel(voteRecord.voterPlayerIds.length)}</p>
+                                  <p className="line-clamp-2">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
+                                </div>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      }
+
+                      const note = item.note;
+                      const linkedPlayers = note.linkedPlayerIds
+                        .map((playerId) => playersById.get(playerId))
+                        .filter((player): player is Player => Boolean(player));
+                      const isEditingNote = editingNoteId === note.id;
+
+                      return (
+                        <article key={item.id} className="rounded-2xl border border-ember-200/12 bg-black/18 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-semibold text-stone-100">
+                                {item.kind === "execution" ? "Казнь" : item.phase?.title ?? "История"}
+                              </h3>
+                              <p className="text-xs text-stone-500">
+                                {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (item.kind === "execution") {
+                                    openExecutionWithoutNominationModal(note.phaseId, note);
+                                    return;
+                                  }
+
+                                  startEditingHistoryNote(note);
+                                }}
+                                className="secondary-button min-h-10 px-3"
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </button>
+                              <button type="button" onClick={() => void deleteNote(note.id)} className="danger-button">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {isEditingNote ? (
+                            <div className="mt-3 space-y-3">
+                              <textarea
+                                value={editingNoteText}
+                                onChange={(event) => setEditingNoteText(event.target.value)}
+                                className="field min-h-28"
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button">
+                                  <Save className="h-4 w-4" />
+                                  Сохранить
+                                </button>
+                                <button type="button" onClick={cancelEditingHistoryNote} className="secondary-button">
+                                  <X className="h-4 w-4" />
+                                  Отмена
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-100">{note.text}</p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {linkedPlayers.length > 0 ? (
+                                  linkedPlayers.map((player) => (
+                                    <span key={player.id} className="chip">
+                                      {player.name}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-stone-500">Без привязки к игрокам</span>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1502,7 +2398,7 @@ export default function GamePage() {
         onUpdateNote={updateNote}
       />
 
-      {executionModalOpen && selectedPhase?.type === "day" ? (
+      {executionModalOpen && phasesById.get(executionPhaseId ?? selectedPhase?.id ?? "")?.type === "day" ? (
         <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
           <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-md sm:rounded-3xl sm:p-6">
             <div className="flex items-start justify-between gap-3">
@@ -1539,6 +2435,12 @@ export default function GamePage() {
                   <Save className="h-4 w-4" />
                   Сохранить
                 </button>
+                {executionNoteByPhaseId.get(executionPhaseId ?? selectedPhase?.id ?? "") ? (
+                  <button type="button" onClick={() => void clearExecutionWithoutNomination()} className="danger-button">
+                    <Trash2 className="h-4 w-4" />
+                    Удалить
+                  </button>
+                ) : null}
                 <button type="button" onClick={closeExecutionWithoutNominationModal} className="secondary-button">
                   Отмена
                 </button>
@@ -1551,17 +2453,24 @@ export default function GamePage() {
       <SetupEditorModal
         game={setupOpen ? game : null}
         players={players}
+        lightTheme={isDayPhase || !gameHasStarted}
         onClose={() => setSetupOpen(false)}
         onSave={saveSetup}
       />
 
       {finishOpen ? (
         <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-          <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-xl sm:rounded-3xl sm:p-6">
+          <section
+            className={`w-full rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-xl sm:rounded-3xl sm:p-6 ${
+              isDayPhase || !gameHasStarted
+                ? "border-amber-700/16 bg-[#f7eddc] shadow-[0_22px_60px_rgba(60,44,20,0.18)]"
+                : "border-ember-200/15 bg-ink-850"
+            }`}
+          >
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm text-stone-400">Завершение партии</p>
-                <h2 className="text-2xl font-bold text-stone-50">Итог</h2>
+                <p className={`text-sm ${isDayPhase || !gameHasStarted ? "text-stone-500" : "text-stone-400"}`}>Завершение партии</p>
+                <h2 className={`text-2xl font-bold ${isDayPhase || !gameHasStarted ? "text-stone-800" : "text-stone-50"}`}>Итог</h2>
               </div>
               <button type="button" onClick={() => setFinishOpen(false)} className="secondary-button px-3">
                 <X className="h-5 w-5" />

@@ -15,7 +15,7 @@ export default function RoleReferencePanel({ roles, referenceMap }: RoleReferenc
   return (
     <section className="panel p-4 sm:p-5">
       <div className="mb-4 flex items-center gap-2">
-        <BookOpen className="h-5 w-5 text-ember-100" />
+        <BookOpen className="role-reference-icon h-5 w-5 text-ember-100" />
         <div>
           <h2 className="text-lg font-semibold text-stone-50">Роли и способности</h2>
           <p className="text-sm text-stone-400">Справочник по ролям текущего сценария.</p>
@@ -30,7 +30,7 @@ export default function RoleReferencePanel({ roles, referenceMap }: RoleReferenc
         <div className="space-y-5">
           {roleGroups.map((group) => (
             <section key={group.type} className="space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-ember-100">
+              <h3 className="role-reference-group-label text-sm font-semibold uppercase tracking-[0.18em] text-ember-100">
                 {group.label}
               </h3>
               <div className="space-y-3">

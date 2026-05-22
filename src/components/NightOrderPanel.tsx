@@ -24,10 +24,10 @@ export default function NightOrderPanel({
   nightOrder,
   referenceMap,
 }: NightOrderPanelProps) {
-  if (!phase || phase.type !== "night") {
+  if (!phase) {
     return (
       <section className="panel p-4 sm:p-5">
-        <p className="text-sm text-stone-400">Ночная очередь доступна только для ночных фаз.</p>
+        <p className="text-sm text-stone-400">Фаза пока не выбрана.</p>
       </section>
     );
   }
@@ -56,9 +56,11 @@ export default function NightOrderPanel({
         <Moon className="h-5 w-5 text-ember-100" />
         <div>
           <h2 className="text-lg font-semibold text-stone-50">
-            {phase.number === 1 ? "Очередь 1 ночи" : `Очередь ${phase.number} ночи`}
+            {phase.number === 1 ? "Порядок 1 ночи" : `Порядок ${phase.number} ночи`}
           </h2>
-          <p className="text-sm text-stone-400">Порядок хода ролей для текущего сценария.</p>
+          <p className="text-sm text-stone-400">
+            Ночной порядок для текущего сценария доступен из любой фазы.
+          </p>
         </div>
       </div>
 

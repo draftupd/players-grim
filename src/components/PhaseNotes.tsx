@@ -113,17 +113,14 @@ export default function PhaseNotes({
       </div>
 
       <div className="space-y-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
-        <label className="block space-y-2">
-          <span className="label">
-            Текст заметки <span className="text-stone-500">(@имя игрока)</span>
-          </span>
+        <label className="block">
           <div className="relative">
             <MentionTextarea
               value={text}
               onChange={setText}
               players={players}
               minHeightClassName="min-h-11 pr-16 pt-3 pb-3"
-              placeholder="Что стало известно?"
+              placeholder="Что стало известно? Игроков можно выбрать кнопками ниже или ввести @ для быстрого выбора."
             />
             <div className="pointer-events-none absolute right-3 top-[22px] -translate-y-1/2">
               <button

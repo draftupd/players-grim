@@ -300,6 +300,12 @@ button {
     color: rgb(185 28 28);
   }
 
+  .day-phase-theme .text-sky-100,
+  .day-phase-theme .text-sky-200,
+  .day-phase-theme .text-sky-300 {
+    color: rgb(29 78 216);
+  }
+
   .day-phase-theme .bg-emerald-300\/10,
   .day-phase-theme .bg-emerald-300\/14,
   .day-phase-theme .bg-emerald-300\/18,
@@ -314,6 +320,11 @@ button {
     background-color: rgb(239 68 68 / 0.2);
   }
 
+  .day-phase-theme .bg-sky-200\/85,
+  .day-phase-theme .bg-sky-300\/80 {
+    background-color: rgb(59 130 246 / 0.22);
+  }
+
   .day-phase-theme .border-emerald-300\/40,
   .day-phase-theme .border-emerald-700\/12,
   .day-phase-theme .border-emerald-700\/15,
@@ -324,5 +335,15 @@ button {
   .day-phase-theme .border-red-300\/20,
   .day-phase-theme .border-red-200\/45 {
     border-color: rgb(185 28 28 / 0.28);
+  }
+
+  .day-phase-theme .border-sky-600\/25,
+  .day-phase-theme .border-sky-700\/15 {
+    border-color: rgb(29 78 216 / 0.32);
+  }
+
+  .day-phase-theme .role-reference-icon,
+  .day-phase-theme .role-reference-group-label {
+    color: rgb(73 52 36);
   }
 }

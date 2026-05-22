@@ -52,6 +52,8 @@ export type Game = {
   status: GameStatus;
   winner?: Winner;
   finalNotes?: string;
+  hasStarted?: boolean;
+  currentPhaseId?: string;
   startedAt?: string;
   finishedAt?: string;
   pinnedAt?: string;
@@ -96,7 +98,8 @@ export type Note = {
   id: string;
   gameId: string;
   phaseId: string;
-  kind?: "general" | "vote_history" | "execution";
+  kind?: "general" | "vote_history" | "execution" | "role_intel";
+  roleId?: string;
   text: string;
   linkedPlayerIds: string[];
   executionPlayerId?: string;
@@ -109,6 +112,7 @@ export type VoteRecord = {
   id: string;
   gameId: string;
   phaseId: string;
+  voteType?: "execution" | "traveller_exile";
   nominatorPlayerId: string;
   nomineePlayerId: string;
   voterPlayerIds: string[];
@@ -123,6 +127,7 @@ export type PlayerVoteAvailability = "alive" | "dead_available" | "dead_spent";
 
 export type VoteDraft = {
   phaseId: string;
+  voteType?: "execution" | "traveller_exile";
   stage: "select_nominator" | "select_nominee" | "select_voters";
   nominatorPlayerId?: string;
   nomineePlayerId?: string;

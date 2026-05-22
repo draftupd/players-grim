@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { FileJson, Plus, Save, Trash2, X } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import type { Game, Player, RoleType, ScriptRole } from "../types";
@@ -7,6 +8,7 @@ import { getRoleLabel, mergeScriptRoles, prettifyRoleName } from "../utils/scrip
 type SetupEditorModalProps = {
   game: Game | null;
   players: Player[];
+  lightTheme?: boolean;
   onClose: () => void;
   onSave: (
     gameValues: Pick<
@@ -46,15 +48,15 @@ const editableRoleTypes: Array<{ value: RoleType; label: string }> = [
   { value: "unknown", label: "Другое" },
 ];
 
-export default function SetupEditorModal({ game, players, onClose, onSave }: SetupEditorModalProps) {
+export default function SetupEditorModal({ game, players, lightTheme = false, onClose, onSave }: SetupEditorModalProps) {
   if (!game) {
     return null;
   }
 
-  return <SetupEditorForm key={game.updatedAt} game={game} players={players} onClose={onClose} onSave={onSave} />;
+  return <SetupEditorForm key={game.updatedAt} game={game} players={players} lightTheme={lightTheme} onClose={onClose} onSave={onSave} />;
 }
 
-function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProps) {
+function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }: SetupEditorFormProps) {
   const sortedPlayers = [...players].filter((player) => !player.isTraveller).sort((a, b) => a.seatIndex - b.seatIndex);
   const [title, setTitle] = useState(game.title);
   const [date, setDate] = useState(game.date);
@@ -169,11 +171,18 @@ function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-5xl sm:rounded-3xl sm:p-6">
+      <div
+        className={clsx(
+          "max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-5xl sm:rounded-3xl sm:p-6",
+          lightTheme
+            ? "border-amber-700/18 bg-[#f7eddc] text-stone-800 shadow-[0_22px_60px_rgba(60,44,20,0.18)]"
+            : "border-ember-200/15 bg-ink-850",
+        )}
+      >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-stone-400">Setup активной партии</p>
-            <h2 className="text-2xl font-bold text-stone-50">Редактирование</h2>
+            <p className={clsx("text-sm", lightTheme ? "text-stone-500" : "text-stone-400")}>Setup активной партии</p>
+            <h2 className={clsx("text-2xl font-bold", lightTheme ? "text-stone-800" : "text-stone-50")}>Редактирование</h2>
           </div>
           <button type="button" onClick={onClose} className="secondary-button px-3">
             <X className="h-5 w-5" />
@@ -201,11 +210,11 @@ function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProp
               </label>
             </div>
 
-            <div className="rounded-2xl border border-ember-200/10 bg-black/15 p-4">
+            <div className={clsx("rounded-2xl border p-4", lightTheme ? "border-amber-700/14 bg-white/55" : "border-ember-200/10 bg-black/15")}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="font-semibold text-stone-50">Сценарий</h3>
-                  <p className="text-sm text-stone-400">{scriptRoles.length} ролей</p>
+                  <h3 className={clsx("font-semibold", lightTheme ? "text-stone-800" : "text-stone-50")}>Сценарий</h3>
+                  <p className={clsx("text-sm", lightTheme ? "text-stone-500" : "text-stone-400")}>{scriptRoles.length} ролей</p>
                 </div>
                 <label className="secondary-button cursor-pointer">
                   <FileJson className="h-4 w-4" />
@@ -235,12 +244,15 @@ function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProp
             </div>
 
             <div>
-              <h3 className="mb-3 font-semibold text-stone-50">Имена игроков</h3>
+              <h3 className={clsx("mb-3 font-semibold", lightTheme ? "text-stone-800" : "text-stone-50")}>Имена игроков</h3>
               <div className="space-y-3">
                 {playerNames.map((player, index) => (
                   <div
                     key={player.id}
-                    className="grid gap-2 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:grid-cols-[92px_1fr] sm:items-center"
+                    className={clsx(
+                      "grid gap-2 rounded-2xl border p-3 sm:grid-cols-[92px_1fr] sm:items-center",
+                      lightTheme ? "border-amber-700/14 bg-white/55" : "border-ember-200/10 bg-black/15",
+                    )}
                   >
                     <span className="label">Игрок {index + 1}</span>
                     <input
@@ -255,8 +267,8 @@ function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProp
           </section>
 
           <section className="space-y-4">
-            <div className="rounded-2xl border border-ember-200/10 bg-black/15 p-4">
-              <h3 className="font-semibold text-stone-50">Добавить роль</h3>
+            <div className={clsx("rounded-2xl border p-4", lightTheme ? "border-amber-700/14 bg-white/55" : "border-ember-200/10 bg-black/15")}>
+              <h3 className={clsx("font-semibold", lightTheme ? "text-stone-800" : "text-stone-50")}>Добавить роль</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_160px_auto]">
                 <input
                   value={newRoleName}
@@ -282,18 +294,21 @@ function SetupEditorForm({ game, players, onClose, onSave }: SetupEditorFormProp
               </div>
             </div>
 
-            <div className="max-h-[420px] space-y-2 overflow-y-auto rounded-2xl border border-ember-200/10 bg-black/15 p-3">
+            <div className={clsx("max-h-[420px] space-y-2 overflow-y-auto rounded-2xl border p-3", lightTheme ? "border-amber-700/14 bg-white/55" : "border-ember-200/10 bg-black/15")}>
               {scriptRoles.length === 0 ? (
-                <p className="p-4 text-center text-sm text-stone-400">Роли пока не добавлены.</p>
+                <p className={clsx("p-4 text-center text-sm", lightTheme ? "text-stone-500" : "text-stone-400")}>Роли пока не добавлены.</p>
               ) : (
                 scriptRoles.map((role) => (
                   <div
                     key={`${role.type}-${role.id}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-ember-200/10 bg-ink-900/60 px-3 py-2"
+                    className={clsx(
+                      "flex items-center justify-between gap-3 rounded-xl border px-3 py-2",
+                      lightTheme ? "border-amber-700/14 bg-[#eadfce]" : "border-ember-200/10 bg-ink-900/60",
+                    )}
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-stone-100">{getRoleLabel(role.id, scriptRoles)}</p>
-                      <p className="text-xs uppercase tracking-wide text-stone-500">{role.type}</p>
+                      <p className={clsx("truncate font-medium", lightTheme ? "text-stone-800" : "text-stone-100")}>{getRoleLabel(role.id, scriptRoles)}</p>
+                      <p className={clsx("text-xs uppercase tracking-wide", lightTheme ? "text-stone-500" : "text-stone-500")}>{role.type}</p>
                     </div>
                     <button type="button" onClick={() => removeRole(role.id)} className="danger-button px-3">
                       <Trash2 className="h-4 w-4" />
