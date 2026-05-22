@@ -1,7 +1,7 @@
 import { Edit3, Save, Send, Trash2, UserRound, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Note, PersonalTeam, Phase, Player, ScriptRole, TokenTint } from "../types";
-import { sortPhases } from "../utils/dates";
+import { formatDate, formatTime, sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
 import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
 import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, prettifyRoleName } from "../utils/scripts";
@@ -692,13 +692,18 @@ function PlayerDetailForm({
                             ) : (
                               <>
                                 <p className="whitespace-pre-wrap text-sm leading-6 text-stone-200">{note.text}</p>
-                                <div className="mt-3 flex justify-end gap-2">
+                                <div className="mt-3 flex items-center justify-between gap-3">
+                                  <span className="text-xs text-stone-500">
+                                    {formatDate(note.createdAt)} · {formatTime(note.createdAt)}
+                                  </span>
+                                  <div className="flex gap-2">
                                   <button type="button" onClick={() => startEditingNote(note)} className="secondary-button min-h-10 px-3">
                                     <Edit3 className="h-4 w-4" />
                                   </button>
                                   <button type="button" onClick={() => onDeleteNote(note.id)} className="danger-button">
                                     <Trash2 className="h-4 w-4" />
                                   </button>
+                                  </div>
                                 </div>
                               </>
                             )}

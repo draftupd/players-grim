@@ -140,6 +140,13 @@ button {
       0 0 14px rgba(255, 248, 232, 0.42);
   }
 
+  .role-player-selected {
+    background-color: rgb(255 248 232 / 0.14);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 248, 232, 0.32),
+      0 0 10px rgba(255, 248, 232, 0.18);
+  }
+
   .day-phase-theme {
     color: #24171b;
     background:
@@ -229,6 +236,14 @@ button {
     box-shadow:
       0 0 0 1px rgba(56, 49, 43, 0.52),
       0 0 14px rgba(56, 49, 43, 0.22);
+  }
+
+  .day-phase-theme .role-player-selected {
+    background-color: rgb(56 49 43 / 0.12);
+    box-shadow:
+      inset 0 0 0 1px rgba(56, 49, 43, 0.34),
+      0 0 10px rgba(56, 49, 43, 0.12);
+    color: rgb(41 27 31);
   }
 
   .day-phase-theme .player-detail-shell {

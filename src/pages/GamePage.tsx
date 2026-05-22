@@ -1987,7 +1987,7 @@ export default function GamePage() {
                                     </h3>
                                     <p className="mt-0.5 flex items-center gap-1 text-[10px] text-stone-500">
                                       <Clock3 className="h-2.5 w-2.5 text-stone-700" />
-                                      {formatDate(voteRecord.createdAt)}
+                                      {formatDate(voteRecord.createdAt)} · {formatTime(voteRecord.createdAt)}
                                     </p>
                                   </div>
                                 </div>

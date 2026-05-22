@@ -1,7 +1,7 @@
 import { Edit3, Save, Send, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Note, Phase, Player } from "../types";
-import { formatDate } from "../utils/dates";
+import { formatDate, formatTime } from "../utils/dates";
 import { mergeManualAndMentionLinks } from "../utils/mentions";
 import MentionTextarea from "./MentionTextarea";
 
@@ -214,7 +214,7 @@ export default function PhaseNotes({
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <span className="text-xs text-stone-500">
-                        {formatDate(note.createdAt.slice(0, 10))}
+                        {formatDate(note.createdAt)} · {formatTime(note.createdAt)}
                       </span>
                       <div className="flex gap-2">
                         <button type="button" onClick={() => startEditing(note)} className="secondary-button min-h-10 px-3">
