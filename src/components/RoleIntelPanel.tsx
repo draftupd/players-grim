@@ -60,6 +60,27 @@ export default function RoleIntelPanel({
       })),
     [sortedRoles],
   );
+  const roleGroupsByKey = useMemo(
+    () => new Map(roleGroups.map((group) => [group.key, group])),
+    [roleGroups],
+  );
+  const townsfolkRoleGroup = roleGroupsByKey.get("townsfolk");
+  const sideRoleGroups = ["outsider", "minion", "demon"]
+    .map((key) => roleGroupsByKey.get(key))
+    .filter((group): group is NonNullable<typeof group> => Boolean(group));
+  const miscRoleGroups = ["traveller", "fabled", "loric"]
+    .map((key) => roleGroupsByKey.get(key))
+    .filter((group): group is NonNullable<typeof group> => Boolean(group));
+  const miscRoleGroup = useMemo(
+    () =>
+      miscRoleGroups.length > 0
+        ? {
+            key: "misc",
+            roleIds: miscRoleGroups.flatMap((group) => group.roleIds),
+          }
+        : null,
+    [miscRoleGroups],
+  );
   const playersById = useMemo(() => new Map(players.map((player) => [player.id, player])), [players]);
   const isNobleSelected = normalizeRoleId(selectedRoleId) === "noble";
 
@@ -162,19 +183,64 @@ export default function RoleIntelPanel({
       </div>
 
       <div className="space-y-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
-        <div className="rounded-2xl border border-ember-200/10 bg-black/10 p-3">
+        <div className="p-1">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-ember-100/75">
             {selectedRoleId
               ? `Выбрана роль: ${sortedRoles.find((role) => role.id === selectedRoleId)?.name ?? prettifyRoleName(selectedRoleId)}`
               : "Выберите роль"}
           </p>
-          <RoleIconGrid
-            groups={roleGroups}
-            roles={sortedRoles}
-            selectedRoleId={selectedRoleId}
-            onSelect={setSelectedRoleId}
-            columnsClassName="grid-cols-5 sm:grid-cols-6"
-          />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              {townsfolkRoleGroup ? (
+                <RoleIconGrid
+                  groups={[townsfolkRoleGroup]}
+                  roles={sortedRoles}
+                  selectedRoleId={selectedRoleId}
+                  onSelect={setSelectedRoleId}
+                  groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
+                  columnsClassName="grid-cols-5 gap-0.5"
+                  buttonClassName="rounded-sm"
+                  iconClassName="h-6 w-6"
+                  unframed
+                  showGroupLabel={false}
+                />
+              ) : (
+                <div className="rounded-2xl border border-ember-200/10 px-1 py-0.5" />
+              )}
+              {miscRoleGroup ? (
+                <RoleIconGrid
+                  groups={[miscRoleGroup]}
+                  roles={sortedRoles}
+                  selectedRoleId={selectedRoleId}
+                  onSelect={setSelectedRoleId}
+                  groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
+                  columnsClassName="grid-cols-5 gap-0.5"
+                  buttonClassName="rounded-sm"
+                  iconClassName="h-6 w-6"
+                  unframed
+                  showGroupLabel={false}
+                />
+              ) : null}
+            </div>
+
+            <div className="space-y-1.5">
+              {sideRoleGroups.map((group) => (
+                <RoleIconGrid
+                  key={group.key}
+                  groups={[group]}
+                  roles={sortedRoles}
+                  selectedRoleId={selectedRoleId}
+                  onSelect={setSelectedRoleId}
+                  groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
+                  columnsClassName="grid-cols-4 gap-0.5"
+                  buttonClassName="rounded-sm"
+                  iconClassName="h-6 w-6"
+                  unframed
+                  showGroupLabel={false}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
         {isNobleSelected ? (
@@ -200,13 +266,29 @@ export default function RoleIntelPanel({
             ))}
           </div>
         ) : (
-          <MentionTextarea
-            value={genericText}
-            onChange={setGenericText}
-            players={players}
-            minHeightClassName="min-h-11 pr-16 pt-3 pb-3"
-            placeholder="Что известно по этой роли? Можно выбрать игроков кнопками ниже или ввести @ для быстрого выбора."
-          />
+          <label className="block">
+            <div className="relative">
+              <MentionTextarea
+                value={genericText}
+                onChange={setGenericText}
+                players={players}
+                minHeightClassName="min-h-11 pr-16 pt-3 pb-3"
+                placeholder="Что известно по этой роли? Можно выбрать игроков кнопками ниже или ввести @ для быстрого выбора."
+              />
+              <div className="pointer-events-none absolute right-3 top-[22px] -translate-y-1/2">
+                <button
+                  type="button"
+                  onClick={() => void handleAdd()}
+                  disabled={saving}
+                  aria-label="Сохранить ролевую заметку"
+                  title="Сохранить ролевую заметку"
+                  className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border border-ember-200/35 bg-ember-200 text-ink-900 transition hover:bg-ember-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </label>
         )}
 
         {!isNobleSelected ? (
@@ -224,12 +306,20 @@ export default function RoleIntelPanel({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void handleAdd()} disabled={saving} className="primary-button">
-            <Send className="h-4 w-4" />
-            Сохранить ролевую заметку
-          </button>
-        </div>
+        {isNobleSelected ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void handleAdd()}
+              disabled={saving}
+              aria-label="Сохранить ролевую заметку"
+              title="Сохранить ролевую заметку"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-ember-200/35 bg-ember-200 text-ink-900 transition hover:bg-ember-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
 
         {error ? <p className="text-sm text-red-200">{error}</p> : null}
       </div>

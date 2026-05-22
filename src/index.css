@@ -134,6 +134,12 @@ button {
     @apply inline-flex max-w-full items-center rounded-full border border-ember-200/15 bg-black/20 px-3 py-1 text-xs font-medium text-stone-300;
   }
 
+  .role-icon-selected {
+    box-shadow:
+      0 0 0 1px rgba(255, 248, 232, 0.75),
+      0 0 14px rgba(255, 248, 232, 0.42);
+  }
+
   .day-phase-theme {
     color: #24171b;
     background:
@@ -158,6 +164,15 @@ button {
   .day-phase-theme .secondary-button {
     @apply border-amber-900/20 text-stone-900 hover:border-amber-900/35;
     background-color: rgb(255 250 241 / 0.92);
+  }
+
+  .day-phase-theme .primary-button {
+    @apply text-stone-900;
+  }
+
+  .day-phase-theme .primary-button svg,
+  .day-phase-theme .secondary-button svg {
+    color: currentColor;
   }
 
   .day-phase-theme .chip {
@@ -185,6 +200,13 @@ button {
     color: rgb(97 72 58);
   }
 
+  .day-phase-theme .text-ember-100,
+  .day-phase-theme .text-ember-100\/70,
+  .day-phase-theme .text-ember-100\/75,
+  .day-phase-theme .text-ember-100\/80 {
+    color: rgb(126 83 33);
+  }
+
   .day-phase-theme .bg-black\/10,
   .day-phase-theme .bg-black\/15,
   .day-phase-theme .bg-black\/18,
@@ -201,6 +223,12 @@ button {
   .day-phase-theme .border-stone-200\/15,
   .day-phase-theme .border-stone-200\/20 {
     border-color: rgb(120 86 58 / 0.18);
+  }
+
+  .day-phase-theme .role-icon-selected {
+    box-shadow:
+      0 0 0 1px rgba(56, 49, 43, 0.52),
+      0 0 14px rgba(56, 49, 43, 0.22);
   }
 
   .day-phase-theme .player-detail-shell {

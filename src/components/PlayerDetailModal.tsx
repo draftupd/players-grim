@@ -151,6 +151,14 @@ function PlayerDetailForm({
     label: group.label,
     roleIds: group.roles.map((role) => role.id),
   }));
+  const roleIconGroupsByKey = useMemo(
+    () => new Map(roleIconGroups.map((group) => [group.key, group])),
+    [roleIconGroups],
+  );
+  const townsfolkRoleGroup = roleIconGroupsByKey.get("townsfolk");
+  const sideRoleGroups = ["outsider", "minion", "demon"]
+    .map((key) => roleIconGroupsByKey.get(key))
+    .filter((group): group is NonNullable<typeof group> => Boolean(group));
   const currentVisibleRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
   const inferredPersonalTeam = useMemo<PersonalTeam>(() => {
     const roleType = player.isTraveller ? "traveller" : getRoleTypeFromRoles(currentVisibleRoleId, mergedScriptRoles);
@@ -308,8 +316,14 @@ function PlayerDetailForm({
   };
 
   return (
-    <div className="player-detail-modal fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="player-detail-shell flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl">
+    <div
+      className="player-detail-modal fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="player-detail-shell flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="player-detail-header flex items-start justify-between gap-3 border-b border-ember-200/10 bg-ink-850/95 px-4 py-4 backdrop-blur sm:px-6 sm:py-5">
           <div>
             <p className="text-sm text-stone-400">Карточка игрока</p>
@@ -430,10 +444,10 @@ function PlayerDetailForm({
                 ) : null}
               </div>
 
-            <div className="grid grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] gap-3">
-              <label className="player-detail-role-panel block space-y-3 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
-                <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
-                <div className="space-y-3">
+            <div className="player-detail-role-panel space-y-3 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
+              <div className="grid grid-cols-[minmax(0,1fr)_10.5rem] items-start gap-3">
+                <label className="block space-y-3">
+                  <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
                   {player.isTraveller ? (
                     <input
                       value={getRoleLabel(player.travellerRole ?? player.mainRole, scriptRoles)}
@@ -445,9 +459,9 @@ function PlayerDetailForm({
                       <button
                         type="button"
                         onClick={() => setActiveRoleSlot("main")}
-                        className={`flex min-h-[62px] w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                        className={`flex min-h-[52px] w-full items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition ${
                           activeRoleSlot === "main"
-                            ? "border-amber-200/60 bg-black/35 shadow-[0_0_0_2px_rgba(242,204,116,0.14)]"
+                            ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
                             : "border-ember-100/35 bg-black/25"
                         }`}
                       >
@@ -455,23 +469,16 @@ function PlayerDetailForm({
                           <RoleTokenImage
                             roleId={mainRole}
                             roles={roleOptions}
-                            className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                            className="h-7 w-7 shrink-0 overflow-hidden rounded-full border-0 bg-transparent"
                             imageClassName="h-full w-full object-cover"
                           />
                         ) : (
-                          <span className="h-10 w-10 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+                          <span className="h-7 w-7 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
                         )}
                         <span className="text-sm font-semibold text-stone-50">
                           {mainRole ? getRoleLabel(mainRole, roleOptions) : "Основная роль"}
                         </span>
                       </button>
-                      <RoleIconGrid
-                        groups={roleIconGroups}
-                        roles={roleOptions}
-                        selectedRoleId={mainRole}
-                        onSelect={assignRoleToSlot}
-                        columnsClassName="grid-cols-5 sm:grid-cols-6"
-                      />
                     </>
                   ) : (
                     <div className="w-full space-y-2">
@@ -486,19 +493,18 @@ function PlayerDetailForm({
                       </p>
                     </div>
                   )}
-                </div>
-              </label>
+                </label>
 
-              <div className="player-detail-extra-roles space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
-                <p className="text-xs font-medium text-stone-500">Дополнительные роли</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="player-detail-extra-roles space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
+                  <p className="text-xs font-medium text-stone-500">Дополнительные роли</p>
+                  <div className="grid grid-cols-3 gap-2">
                   {[0, 1, 2].map((index) => (
                     roleOptions.length > 0 ? (
                       <button
                         key={index}
                         type="button"
                         onClick={() => setActiveRoleSlot(index as 0 | 1 | 2)}
-                        className={`flex min-h-[62px] items-center justify-center rounded-2xl border px-2 py-2 transition ${
+                        className={`flex min-h-[52px] items-center justify-center rounded-2xl border px-2 py-2 transition ${
                           activeRoleSlot === index
                             ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
                             : "border-stone-200/10 bg-black/20"
@@ -509,11 +515,11 @@ function PlayerDetailForm({
                           <RoleTokenImage
                             roleId={additionalRoles[index]}
                             roles={roleOptions}
-                            className="h-10 w-10 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                            className="h-7 w-7 overflow-hidden rounded-full border-0 bg-transparent"
                             imageClassName="h-full w-full object-cover"
                           />
                         ) : (
-                          <span className="h-10 w-10 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+                          <span className="h-7 w-7 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
                         )}
                       </button>
                     ) : (
@@ -533,17 +539,54 @@ function PlayerDetailForm({
                     </div>
                     )
                   ))}
+                  </div>
+                  {roleOptions.length === 0 ? (
+                    <p className="text-xs leading-4 text-stone-500">
+                      После загрузки сценария дополнительные роли тоже начнут выпадать списком.
+                    </p>
+                  ) : null}
                 </div>
-                {roleOptions.length === 0 ? (
-                  <p className="text-xs leading-4 text-stone-500">
-                    После загрузки сценария дополнительные роли тоже начнут выпадать списком.
-                  </p>
-                ) : (
-                  <p className="text-xs leading-4 text-stone-500">
-                    После выбора основной роли фокус автоматически переходит на доп. роли 1, 2 и 3.
-                  </p>
-                )}
               </div>
+
+              {roleOptions.length > 0 && !player.isTraveller ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {townsfolkRoleGroup ? (
+                    <RoleIconGrid
+                      groups={[townsfolkRoleGroup]}
+                      roles={roleOptions}
+                      selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                      onSelect={assignRoleToSlot}
+                      className="h-full"
+                      groupClassName="h-full rounded-2xl border border-ember-200/10 px-1 py-0.5"
+                      columnsClassName="grid-cols-5 gap-0.5"
+                      buttonClassName="rounded-sm"
+                      iconClassName="h-6 w-6"
+                      unframed
+                      showGroupLabel={false}
+                    />
+                  ) : (
+                    <div className="rounded-2xl border border-ember-200/10 px-1 py-0.5" />
+                  )}
+
+                  <div className="space-y-1.5">
+                    {sideRoleGroups.map((group) => (
+                      <RoleIconGrid
+                        key={group.key}
+                        groups={[group]}
+                        roles={roleOptions}
+                        selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                        onSelect={assignRoleToSlot}
+                        groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
+                        columnsClassName="grid-cols-4 gap-0.5"
+                        buttonClassName="rounded-sm"
+                        iconClassName="h-6 w-6"
+                        unframed
+                        showGroupLabel={false}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {error ? <p className="text-sm text-red-200">{error}</p> : null}

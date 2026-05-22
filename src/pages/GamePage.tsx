@@ -1817,47 +1817,41 @@ export default function GamePage() {
               </div>
             </section>
             <section className="panel p-2 sm:p-3">
-              <div
-                className={`grid gap-2 ${
-                  gameHasStarted && selectedPhase?.type === "day"
-                    ? "grid-cols-5"
-                    : "grid-cols-4"
-                }`}
-              >
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setContentTab("notes")}
-                  className={contentTab === "notes" ? "primary-button w-full" : "secondary-button w-full"}
+                  className={contentTab === "notes" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                 >
                   Заметки
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContentTab("roleIntel")}
+                  className={contentTab === "roleIntel" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                >
+                  По ролям
                 </button>
                 {gameHasStarted && selectedPhase?.type === "day" ? (
                 <button
                   type="button"
                   onClick={() => setContentTab("voting")}
-                  className={contentTab === "voting" ? "primary-button w-full" : "secondary-button w-full"}
+                  className={contentTab === "voting" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                 >
                     Голосования
                   </button>
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setContentTab("roleIntel")}
-                  className={contentTab === "roleIntel" ? "primary-button w-full" : "secondary-button w-full"}
-                >
-                  По ролям
-                </button>
-                <button
-                  type="button"
                   onClick={() => setContentTab("reference")}
-                  className={contentTab === "reference" ? "primary-button w-full" : "secondary-button w-full"}
+                  className={contentTab === "reference" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                 >
                   Роли
                 </button>
                 <button
                   type="button"
                   onClick={() => setContentTab("summary")}
-                  className={contentTab === "summary" ? "primary-button w-full" : "secondary-button w-full"}
+                  className={contentTab === "summary" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                 >
                   Summary
                 </button>
@@ -2129,18 +2123,18 @@ export default function GamePage() {
             ) : null}
             {gameHasStarted && contentTab === "reference" ? (
               <section className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setReferenceTab("roles")}
-                    className={referenceTab === "roles" ? "primary-button w-full" : "secondary-button w-full"}
+                    className={referenceTab === "roles" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                   >
                     Роли
                   </button>
                   <button
                     type="button"
                     onClick={() => setReferenceTab("nightOrder")}
-                    className={referenceTab === "nightOrder" ? "primary-button w-full" : "secondary-button w-full"}
+                    className={referenceTab === "nightOrder" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                   >
                     Ночной порядок
                   </button>
