@@ -119,7 +119,7 @@ function PlayerDetailForm({
   const [noteError, setNoteError] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2>("main");
+  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>(player.mainRole ? "main" : null);
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
   const { data: referenceData } = useReferenceData();
@@ -201,6 +201,10 @@ function PlayerDetailForm({
     .map((key) => roleIconGroupsByKey.get(key))
     .filter((group): group is NonNullable<typeof group> => Boolean(group));
   const currentVisibleRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
+  const mainRoleReference = currentVisibleRoleId
+    ? referenceData?.roleMap.get(normalizeRoleId(currentVisibleRoleId)) ?? null
+    : null;
+  const mainRoleAbilityText = mainRoleReference?.ability?.trim() ?? "";
   const inferredPersonalTeam = useMemo<PersonalTeam>(() => {
     const roleType = player.isTraveller ? "traveller" : getRoleTypeFromRoles(currentVisibleRoleId, mergedScriptRoles);
 
@@ -233,6 +237,10 @@ function PlayerDetailForm({
   const mainRoleNoteRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
 
   const assignRoleToSlot = (roleId: string) => {
+    if (activeRoleSlot === null) {
+      return;
+    }
+
     if (activeRoleSlot === "main") {
       setMainRole(roleId);
       setActiveRoleSlot(0);
@@ -587,6 +595,11 @@ function PlayerDetailForm({
                       </p>
                     </div>
                   )}
+                  {mainRoleAbilityText ? (
+                    <p className="text-[11px] leading-4 text-stone-500">
+                      {mainRoleAbilityText}
+                    </p>
+                  ) : null}
                 </label>
 
                 <div className="player-detail-extra-roles space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
@@ -638,6 +651,10 @@ function PlayerDetailForm({
                     <p className="text-xs leading-4 text-stone-500">
                       После загрузки сценария дополнительные роли тоже начнут выпадать списком.
                     </p>
+                  ) : activeRoleSlot === null ? (
+                    <p className="text-xs leading-4 text-stone-500">
+                      Сначала выберите слот роли сверху, потом нажмите на жетон роли ниже.
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -649,7 +666,7 @@ function PlayerDetailForm({
                       <RoleIconGrid
                         groups={[townsfolkRoleGroup]}
                         roles={roleOptions}
-                        selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                        selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
                         onSelect={assignRoleToSlot}
                         className="h-full"
                         groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
@@ -668,7 +685,7 @@ function PlayerDetailForm({
                     <RoleIconGrid
                       groups={sideRoleGroups}
                       roles={roleOptions}
-                      selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                      selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
                       onSelect={assignRoleToSlot}
                       className="h-full"
                       groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
@@ -686,7 +703,7 @@ function PlayerDetailForm({
                     <RoleIconGrid
                       groups={[travellerRoleGroup]}
                       roles={roleOptions}
-                      selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                      selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
                       onSelect={assignRoleToSlot}
                       groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
                       columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"

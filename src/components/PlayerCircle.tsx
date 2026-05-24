@@ -290,6 +290,7 @@ export default function PlayerCircle({
       ? "border-amber-900/20 bg-[linear-gradient(180deg,rgba(255,250,242,0.99),rgba(245,231,208,0.99))] text-stone-900 shadow-[0_24px_60px_rgba(76,48,22,0.22)]"
       : "border-ember-200/15 bg-ink-850 text-stone-100 shadow-black/40",
   );
+  const travellerSummaryClass = isDayTheme ? "text-amber-700" : "text-amber-100";
   const modalTitleClass = isDayTheme ? "text-stone-900" : "text-stone-50";
   const modalMutedClass = isDayTheme ? "text-stone-600" : "text-stone-400";
   const modalBodyTextClass = isDayTheme ? "text-stone-700" : "text-stone-300";
@@ -371,6 +372,7 @@ export default function PlayerCircle({
             ? 9 / 12
             : 5 / 8
         : 1;
+  const hasTravellerSummaryRow = travellerCount > 0;
   const layout = {
     maxWidth: playerTotal >= 14
       ? "max-w-[360px] sm:max-w-[520px] lg:max-w-[620px]"
@@ -378,7 +380,18 @@ export default function PlayerCircle({
         ? "max-w-[350px] sm:max-w-[500px] lg:max-w-[600px]"
         : "max-w-[390px] sm:max-w-[620px] lg:max-w-[700px]",
     aspectRatio: baseAspectRatio,
-    center: density === "dense" ? "h-[76px] w-[76px] p-2 sm:h-36 sm:w-36 sm:p-3.5" : density === "compact" ? "h-[84px] w-[84px] p-2 sm:h-40 sm:w-40 sm:p-4" : "h-[96px] w-[96px] p-2.5 sm:h-48 sm:w-48 sm:p-5.5",
+    center:
+      density === "dense"
+        ? hasTravellerSummaryRow
+          ? "h-[88px] w-[88px] p-2 sm:h-40 sm:w-40 sm:p-4"
+          : "h-[76px] w-[76px] p-2 sm:h-36 sm:w-36 sm:p-3.5"
+        : density === "compact"
+          ? hasTravellerSummaryRow
+            ? "h-[96px] w-[96px] p-2.5 sm:h-44 sm:w-44 sm:p-4.5"
+            : "h-[84px] w-[84px] p-2 sm:h-40 sm:w-40 sm:p-4"
+          : hasTravellerSummaryRow
+            ? "h-[108px] w-[108px] p-3 sm:h-52 sm:w-52 sm:p-6"
+            : "h-[96px] w-[96px] p-2.5 sm:h-48 sm:w-48 sm:p-5.5",
     xRadius,
     yRadius,
   };
@@ -843,7 +856,7 @@ export default function PlayerCircle({
           </div>
         ) : (
           <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/92 text-center shadow-inner ${layout.center}`}>
-            <div className="w-full max-w-[84%] space-y-2 sm:max-w-[80%]">
+            <div className="w-full max-w-[84%] space-y-1.5 sm:max-w-[80%] sm:space-y-2">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 text-[8px] font-medium leading-tight sm:gap-x-2.5 sm:text-[12px]">
                 <span className="text-left text-blue-700">Горожане</span>
                 <strong className="text-blue-700">{setup.townsfolk}</strong>
@@ -859,8 +872,8 @@ export default function PlayerCircle({
 
                 {travellerCount > 0 ? (
                   <>
-                    <span className="text-left text-amber-100">Travellers</span>
-                    <strong className="text-amber-100">{travellerCount}</strong>
+                    <span className={clsx("text-left", travellerSummaryClass)}>Travellers</span>
+                    <strong className={travellerSummaryClass}>{travellerCount}</strong>
                   </>
                 ) : null}
               </div>
@@ -925,8 +938,10 @@ export default function PlayerCircle({
               key={player.id}
               className={clsx(
                 "absolute -translate-x-1/2 -translate-y-1/2",
-                (isSelectableNominator || isSelectableNominee) && "rounded-full ring-2 ring-amber-200/70 ring-offset-4 ring-offset-transparent",
-                (isSelectedNominator || isSelectedNominee) && "rounded-full ring-4 ring-amber-300/90 ring-offset-4 ring-offset-transparent shadow-[0_0_24px_rgba(242,204,116,0.45)]",
+                isSelectableNominator && "rounded-full ring-2 ring-violet-300/70 ring-offset-4 ring-offset-transparent",
+                isSelectableNominee && "rounded-full ring-2 ring-amber-800/60 ring-offset-4 ring-offset-transparent",
+                isSelectedNominator && "rounded-full ring-4 ring-violet-400/90 ring-offset-4 ring-offset-transparent shadow-[0_0_24px_rgba(167,139,250,0.45)]",
+                isSelectedNominee && "rounded-full ring-4 ring-amber-800/90 ring-offset-4 ring-offset-transparent shadow-[0_0_24px_rgba(146,64,14,0.42)]",
                 (votingStage === "select_voters" && isSelectedVoter) && "rounded-full ring-4 ring-emerald-300/90 ring-offset-4 ring-offset-transparent shadow-[0_0_22px_rgba(74,222,128,0.4)]",
                 canManualArrange ? "cursor-grab active:cursor-grabbing touch-none" : "",
               )}

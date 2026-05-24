@@ -1,21 +1,13 @@
 import {
   ArrowLeft,
-  BookOpen,
   CheckCircle2,
-  Clock3,
-  Crown,
-  Edit3,
   MoonStar,
-  Gavel,
-  Hand,
   Play,
   Save,
   Settings,
   Skull,
   SunMedium,
-  Target,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -320,7 +312,7 @@ export default function GamePage() {
   const [dayDeathSaving, setDayDeathSaving] = useState(false);
   const [pageError, setPageError] = useState("");
   const [contentTab, setContentTab] = useState<
-    "notes" | "roleIntel" | "reference" | "voting" | "summaryDeaths" | "summaryRoles" | null
+    "notes" | "roleIntel" | "reference" | "summaryDeaths" | "summaryRoles" | null
   >(null);
   const [referenceTab, setReferenceTab] = useState<"roles" | "nightOrder">("roles");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -991,13 +983,9 @@ export default function GamePage() {
   };
 
   const openContentModal = (
-    nextTab: "notes" | "roleIntel" | "reference" | "voting" | "summaryDeaths" | "summaryRoles",
+    nextTab: "notes" | "roleIntel" | "reference" | "summaryDeaths" | "summaryRoles",
   ) => {
     if ((nextTab === "notes" || nextTab === "roleIntel") && !gameHasStarted) {
-      return;
-    }
-
-    if (nextTab === "voting" && (!gameHasStarted || selectedPhase?.type !== "day")) {
       return;
     }
 
@@ -2498,9 +2486,7 @@ export default function GamePage() {
         ? "Заметки по ролям"
         : contentTab === "reference"
           ? "Инфо"
-          : contentTab === "voting"
-            ? "Номинации"
-            : contentTab === "summaryDeaths"
+          : contentTab === "summaryDeaths"
               ? "Смерти и казни"
               : contentTab === "summaryRoles"
                 ? "Саммари"
@@ -2628,6 +2614,14 @@ export default function GamePage() {
   const executionPromptNominee = executionPromptVoteRecord
     ? playersById.get(executionPromptVoteRecord.nomineePlayerId)
     : undefined;
+  const selectedPhaseVoteItems = selectedPhaseVoteAnalysesDesc.map((analysis) => ({
+    id: analysis.voteRecord.id,
+    createdAt: analysis.voteRecord.createdAt,
+    kind: "vote" as const,
+    phase: selectedPhase,
+    voteRecord: analysis.voteRecord,
+    analysis,
+  }));
   const renderSummaryItem = (item: SummaryItem) => {
     if (item.kind === "vote") {
       const voteRecord = item.voteRecord;
@@ -2688,7 +2682,7 @@ export default function GamePage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => startEditingVoteRecord(voteRecord)} className="secondary-button min-h-10 px-3">
-                <Edit3 className="h-4 w-4" />
+                <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-5 w-5" />
               </button>
               <button type="button" onClick={() => void deleteVoteRecord(voteRecord)} className="danger-button">
                 <Trash2 className="h-4 w-4" />
@@ -2771,7 +2765,7 @@ export default function GamePage() {
                 <p className="font-medium">{`${nominatorName} -> ${nomineeName}`}</p>
                 <div className="flex min-w-0 items-center gap-2 text-xs sm:text-sm">
                   <span className="font-semibold">{voteRecord.voterPlayerIds.length}</span>
-                  <Hand className="h-4 w-4 shrink-0" />
+                  <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
                   <p className="min-w-0 truncate">
                     {voterNames.length > 0 ? voterNames.join(", ") : "никто"}
                   </p>
@@ -2868,7 +2862,7 @@ export default function GamePage() {
                         onClick={() => startEditingHistoryNote(note)}
                         className="secondary-button min-h-10 px-3"
                       >
-                        <Edit3 className="h-4 w-4" />
+                        <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-5 w-5" />
                       </button>
                       <button type="button" onClick={() => void deleteNote(note.id)} className="danger-button">
                         <Trash2 className="h-4 w-4" />
@@ -2884,9 +2878,9 @@ export default function GamePage() {
                         className="field min-h-28"
                       />
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button">
-                          <Save className="h-4 w-4" />
-                          Сохранить
+                          <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button">
+                            <Save className="h-4 w-4" />
+                            Сохранить
                         </button>
                         <button type="button" onClick={cancelEditingHistoryNote} className="secondary-button">
                           <X className="h-4 w-4" />
@@ -2969,7 +2963,7 @@ export default function GamePage() {
               }}
               className="secondary-button min-h-10 px-3"
             >
-              <Edit3 className="h-4 w-4" />
+              <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-5 w-5" />
             </button>
             <button
               type="button"
@@ -3196,60 +3190,85 @@ export default function GamePage() {
                 <button
                   type="button"
                   onClick={() => openContentModal("roleIntel")}
-                  className={contentTab === "roleIntel" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  className={contentTab === "roleIntel" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
                   title="По ролям"
                   aria-label="По ролям"
                 >
-                  <Edit3 className="h-4 w-4" />
+                  <img src="/button-icons/add.svg" alt="" aria-hidden="true" className="h-5 w-5" />
                 </button>
                 {gameHasStarted && selectedPhase?.type === "day" ? (
-                <button
-                  type="button"
-                  onClick={() => openContentModal("voting")}
-                  className={contentTab === "voting" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
-                  title="Голосования"
-                  aria-label="Голосования"
-                >
-                    <Hand className="h-4 w-4" />
+                  <button
+                    type="button"
+                    onClick={() => beginVoteDraft("execution")}
+                    className={voteDraft?.voteType === "execution" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                  title="Номинация"
+                  aria-label="Номинация"
+                  >
+                    <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+                  </button>
+                ) : null}
+                {gameHasStarted && selectedPhase?.type === "day" && players.some((player) => player.isTraveller) ? (
+                  <button
+                    type="button"
+                    onClick={() => beginVoteDraft("traveller_exile")}
+                    className={voteDraft?.voteType === "traveller_exile" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                  title="Изгнание Traveller"
+                  aria-label="Изгнание Traveller"
+                  >
+                    <img src="/button-icons/door-open.svg" alt="" aria-hidden="true" className="h-6 w-6" />
+                  </button>
+                ) : null}
+                {gameHasStarted && selectedPhase?.type === "day" ? (
+                  <button
+                    type="button"
+                    onClick={() => openExecutionWithoutNominationModal()}
+                    className={executionModalOpen || selectedPhaseExecutionNote ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                  title="Казнь без номинации"
+                  aria-label="Казнь без номинации"
+                  >
+                    <span className="relative inline-flex h-10 w-6 items-center justify-center">
+                      <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-6 w-6" />
+                      <img src="/button-icons/lightning.svg" alt="" aria-hidden="true" className="absolute right-[-4px] top-[-5px] h-11 w-11" />
+                    </span>
                   </button>
                 ) : null}
                 {gameHasStarted && selectedPhase?.type === "day" ? (
                   <button
                     type="button"
                     onClick={() => openDayDeathModal()}
-                    className={dayDeathModalOpen ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
-                    title="Человек умер"
-                    aria-label="Человек умер"
+                    className={dayDeathModalOpen ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                  title="Человек умер"
+                  aria-label="Человек умер"
                   >
-                    <Skull className="h-4 w-4" />
+                    <img src="/button-icons/knife.svg" alt="" aria-hidden="true" className="h-5 w-5" />
                   </button>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => openContentModal("reference")}
-                  className={contentTab === "reference" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  className={contentTab === "reference" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
                   title="Роли"
                   aria-label="Роли"
                 >
-                  <BookOpen className="h-4 w-4" />
+                  <img src="/button-icons/info.svg" alt="" aria-hidden="true" className="h-5 w-5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => openContentModal("summaryDeaths")}
-                  className={contentTab === "summaryDeaths" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  className={contentTab === "summaryDeaths" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
                   title="Смерти и казни"
                   aria-label="Смерти и казни"
                   >
-                    <Skull className="h-4 w-4" />
+                  <img src="/button-icons/skull.svg" alt="" aria-hidden="true" className="h-6 w-6" />
                   </button>
                 <button
                   type="button"
                   onClick={() => openContentModal("summaryRoles")}
-                  className={contentTab === "summaryRoles" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  className={contentTab === "summaryRoles" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
                   title="Сводка ролей"
                   aria-label="Сводка ролей"
                 >
-                  <Users className="h-4 w-4" />
+                  <img src="/button-icons/interaction.svg" alt="" aria-hidden="true" className="h-5 w-5" />
                 </button>
                 </div>
             </section>
@@ -3296,6 +3315,141 @@ export default function GamePage() {
               onCloseTravellerForm={() => setTravellerFormOpen(false)}
               onPlayerClick={(player) => setSelectedPlayerId(player.id)}
             />
+            {gameHasStarted && selectedPhase?.type === "day" ? (
+              <section className="panel p-3 sm:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-stone-50">Сегодняшние номинации</h2>
+                    <p className="text-sm text-stone-400">Новые сверху. Здесь можно править, удалять и отмечать казнь.</p>
+                  </div>
+                  {selectedPhaseExecutionNote ? (
+                    <span className="summary-day-result-badge inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold leading-5">
+                              <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-4 w-4" />
+                      Казнь без номинации отмечена
+                    </span>
+                  ) : null}
+                </div>
+
+                {voteDraft ? (
+                  <div className="mt-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="chip">
+                        {voteDraft.voteType === "traveller_exile" ? "Изгнание Traveller" : "Номинация"}
+                      </span>
+                      {voteDraft.nominatorPlayerId ? (
+                        <span className="chip">Номинировал: {playersById.get(voteDraft.nominatorPlayerId)?.name ?? "?"}</span>
+                      ) : null}
+                      {voteDraft.nomineePlayerId ? (
+                        <span className="chip">Номинирован: {playersById.get(voteDraft.nomineePlayerId)?.name ?? "?"}</span>
+                      ) : null}
+                      {voteDraft.stage === "select_voters" ? (
+                        <span className="chip">Голосов отмечено: {voteDraft.selectedVoterIds.length}</span>
+                      ) : null}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-stone-300">
+                      {voteDraft.stage === "select_nominator"
+                        ? voteDraft.voteType === "traveller_exile"
+                          ? "На круге выберите игрока, который номинировал изгнание Traveller."
+                          : "На круге выберите игрока, который номинировал."
+                        : voteDraft.stage === "select_nominee"
+                          ? voteDraft.voteType === "traveller_exile"
+                            ? "Теперь выберите Traveller, которого изгоняют."
+                            : "Теперь выберите игрока, которого номинировали."
+                          : "На круге отметьте всех, кто голосовал, затем сохраните результат."}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 space-y-3">
+                  {selectedPhaseExecutionNote ? (
+                    <article className="summary-day-card rounded-2xl border border-ember-200/12 bg-black/18 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-semibold text-stone-100">{selectedPhase.title}</h3>
+                            <span className="summary-day-result-badge inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold leading-5">
+                              <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-4 w-4" />
+                              <span>{selectedPhaseExecutionNote.text}</span>
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-500">
+                            {formatDate(selectedPhaseExecutionNote.createdAt)} · {formatTime(selectedPhaseExecutionNote.createdAt)}
+                          </p>
+                        </div>
+                        <button type="button" onClick={() => openExecutionWithoutNominationModal(selectedPhase.id, selectedPhaseExecutionNote)} className="secondary-button min-h-10 px-3">
+                          <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </article>
+                  ) : null}
+
+                  {selectedPhaseVoteItems.length === 0 ? (
+                    !selectedPhaseExecutionNote ? (
+                      <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
+                        Сегодня ещё нет номинаций.
+                      </div>
+                    ) : null
+                  ) : (
+                    selectedPhaseVoteItems.map((item) => {
+                      const nominatorName = playersById.get(item.voteRecord.nominatorPlayerId)?.name ?? "Неизвестно";
+                      const nomineeName = playersById.get(item.voteRecord.nomineePlayerId)?.name ?? "Неизвестно";
+                      const voterNames = item.voteRecord.voterPlayerIds
+                        .map((playerId) => playersById.get(playerId)?.name)
+                        .filter((name): name is string => Boolean(name));
+
+                      return (
+                        <article key={item.id} className="summary-day-card relative rounded-2xl border border-ember-200/12 bg-black/18 p-3">
+                          <div className="pr-32">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-sm font-semibold text-stone-100">
+                                {item.analysis?.voteType === "traveller_exile" ? "Изгнание Traveller" : "Номинация"}
+                              </h3>
+                              {item.analysis ? <span className="chip">{item.analysis.statusLabel}</span> : null}
+                              {item.voteRecord.resultedInExecution ? (
+                                <span className="summary-day-result-badge inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold leading-5">
+                                  <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-4 w-4" />
+                                  <span>{item.voteRecord.executedPlayerDied === false ? "Казнь пережита" : "Казнь отмечена"}</span>
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="text-xs text-stone-500">
+                              {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
+                            </p>
+                          </div>
+                          <div className="absolute right-3 top-3 flex flex-wrap gap-2">
+                            {item.analysis?.voteType !== "traveller_exile" ? (
+                              <button type="button" onClick={() => void promptVoteRecordExecution(item.voteRecord.id)} className={item.voteRecord.resultedInExecution ? "primary-button min-h-10 px-3" : "secondary-button min-h-10 px-3"}>
+                                <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-6 w-6" />
+                              </button>
+                            ) : null}
+                            <button type="button" onClick={() => startEditingVoteRecord(item.voteRecord)} className="secondary-button min-h-10 px-3">
+                              <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+                            </button>
+                            <button type="button" onClick={() => void deleteVoteRecord(item.voteRecord)} className="danger-button">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                          <div className="mt-3 rounded-2xl bg-black/10 px-3 py-2 text-sm text-stone-200">
+                            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                              <p className="font-medium">{`${nominatorName} -> ${nomineeName}`}</p>
+                              <div className="flex min-w-0 items-center gap-2 text-xs sm:text-sm">
+                                <span className="font-semibold">{item.voteRecord.voterPlayerIds.length}</span>
+                                <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
+                                <p className="min-w-0 truncate">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
+                              </div>
+                            </div>
+                            {item.analysis ? (
+                              <p className="mt-2 text-xs text-stone-400">{item.analysis.prognosisLabel}</p>
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+            ) : null}
           </div>
 
           <div className="min-w-0">
@@ -3323,85 +3477,6 @@ export default function GamePage() {
                   </div>
 
                   <div className="max-h-[calc(100dvh-9rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 sm:max-h-[84vh] sm:pr-1">
-            {gameHasStarted && contentTab === "voting" && selectedPhase?.type === "day" ? (
-              <section className="panel min-w-0 p-3 sm:p-5">
-                {voteDraft ? (
-                  <div className="mt-4 space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
-                    <h2 className="text-lg font-semibold text-stone-50">Голосование</h2>
-                    <p className="text-sm leading-6 text-stone-300">
-                      {voteDraft.stage === "select_nominator"
-                        ? voteDraft.voteType === "traveller_exile"
-                          ? "На круге выберите игрока, который номинировал Traveller на изгнание."
-                          : "На круге выберите игрока, который номинировал."
-                        : voteDraft.stage === "select_nominee"
-                          ? voteDraft.voteType === "traveller_exile"
-                            ? "Теперь выберите Traveller, которого номинировали на изгнание."
-                            : "Теперь выберите игрока, которого номинировали."
-                          : "На круге отметьте всех, кто голосовал по этой номинации, затем сохраните результат."}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {voteDraft.nominatorPlayerId ? (
-                        <span className="chip">
-                          Номинировал: {playersById.get(voteDraft.nominatorPlayerId)?.name ?? "?"}
-                        </span>
-                      ) : null}
-                      {voteDraft.nomineePlayerId ? (
-                        <span className="chip">
-                          Номинирован: {playersById.get(voteDraft.nomineePlayerId)?.name ?? "?"}
-                        </span>
-                      ) : null}
-                      {voteDraft.stage === "select_voters" ? (
-                        <span className="chip">Отмечено голосов: {voteDraft.selectedVoterIds.length}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : (
-                    <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        beginVoteDraft("execution");
-                        setContentTab(null);
-                      }}
-                      className="secondary-button w-full sm:w-auto"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                      Номинация
-                    </button>
-                    {players.some((player) => player.isTraveller) ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          beginVoteDraft("traveller_exile");
-                          setContentTab(null);
-                        }}
-                        className="secondary-button w-full sm:w-auto"
-                      >
-                        <Crown className="h-4 w-4" />
-                        Изгнание Traveller
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openExecutionWithoutNominationModal();
-                        setContentTab(null);
-                      }}
-                      className={`secondary-button w-full sm:w-auto ${
-                        selectedPhaseExecutionNote ? "border-amber-700/25 bg-amber-200/20 text-stone-900" : ""
-                      }`}
-                    >
-                      <Crown className="h-4 w-4" />
-                      Казнь без номинации
-                    </button>
-                  </div>
-                )}
-
-                <div className="mt-3 rounded-2xl border border-dashed border-ember-200/20 bg-black/5 p-4 text-center text-sm text-stone-500">
-                  История номинаций и казней перенесена в раздел смертей.
-                </div>
-              </section>
-            ) : null}
             {gameHasStarted && contentTab === "notes" ? (
               <PhaseNotes
                 phase={selectedPhase}
