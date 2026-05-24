@@ -119,7 +119,7 @@ function PlayerDetailForm({
   const [noteError, setNoteError] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>(player.mainRole ? "main" : null);
+  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>(player.isTraveller ? null : "main");
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
   const { data: referenceData } = useReferenceData();

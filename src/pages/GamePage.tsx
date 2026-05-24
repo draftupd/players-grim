@@ -901,8 +901,8 @@ export default function GamePage() {
       return;
     }
 
-    if (!gameResult.game?.myRoleId) {
-      setPageError("Перед началом игры нужно указать мой жетон.");
+    if (!effectiveMyPlayerId && !gameResult.game?.myPlayerId) {
+      setPageError("Перед началом игры нужно отметить мой жетон в модалке игрока.");
       return;
     }
 
@@ -1515,9 +1515,9 @@ export default function GamePage() {
     const currentPlayer = players.find((player) => player.id === playerId);
     const nextMyPlayerId = isMyToken ? playerId : effectiveMyPlayerId === playerId ? undefined : effectiveMyPlayerId;
     const nextMyRoleId = isMyToken
-      ? currentPlayer?.isTraveller
-        ? currentPlayer.travellerRole ?? values.mainRole
-        : values.mainRole
+      ? (currentPlayer?.isTraveller
+          ? currentPlayer.travellerRole ?? values.mainRole
+          : values.mainRole)?.trim() || undefined
       : effectiveMyPlayerId === playerId
         ? undefined
         : gameResult.game?.myRoleId;

@@ -102,6 +102,11 @@ export default function NewGamePage() {
       return;
     }
 
+    if (!scriptName.trim() || scriptRoles.length === 0) {
+      setError("Сначала выберите базовый сценарий или загрузите JSON со сценарием.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -165,6 +170,8 @@ export default function NewGamePage() {
       setSaving(false);
     }
   };
+
+  const canCreateGame = !saving && Boolean(scriptName.trim()) && scriptRoles.length > 0;
 
   return (
     <main className="page-shell">
@@ -299,7 +306,7 @@ export default function NewGamePage() {
 
           {error ? <p className="text-sm text-red-200">{error}</p> : null}
 
-          <button type="submit" disabled={saving} className="primary-button w-full sm:w-auto">
+          <button type="submit" disabled={!canCreateGame} className="primary-button w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60">
             <Save className="h-4 w-4" />
             {saving ? "Создание" : "Создать партию"}
           </button>
