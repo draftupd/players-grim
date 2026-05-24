@@ -1,11 +1,13 @@
 import {
   ArrowLeft,
   BedDouble,
+  BookOpen,
   CheckCircle2,
   Clock3,
   Crown,
   Edit3,
   Gavel,
+  Hand,
   Play,
   Save,
   Settings,
@@ -16,14 +18,16 @@ import {
   X,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import NightOrderPanel from "../components/NightOrderPanel";
 import PhaseNotes from "../components/PhaseNotes";
 import PlayerCircle from "../components/PlayerCircle";
 import PlayerDetailModal from "../components/PlayerDetailModal";
+import RoleIconGrid from "../components/RoleIconGrid";
 import RoleIntelPanel from "../components/RoleIntelPanel";
 import RoleReferencePanel from "../components/RoleReferencePanel";
+import RoleTokenImage from "../components/RoleTokenImage";
 import SetupEditorModal from "../components/SetupEditorModal";
 import { db } from "../db/db";
 import type {
@@ -51,8 +55,10 @@ import {
 } from "../utils/dates";
 import { createId } from "../utils/ids";
 import { mergeManualAndMentionLinks } from "../utils/mentions";
-import { getRoleLabel } from "../utils/scripts";
+import { getRoleLabel, groupRolesByType, normalizeRoleId } from "../utils/scripts";
 import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const findMyPlayerIdByRole = (players: Player[], myRoleId?: string) => {
   if (!myRoleId) {
@@ -157,10 +163,71 @@ type SummaryItem =
       phase?: Phase;
       voteRecord: VoteRecord;
       analysis?: VoteAnalysis;
+    }
+  | {
+      id: string;
+      createdAt: string;
+      kind: "day_result";
+      phase: Phase;
+      text: string;
+      linkedPlayerIds: string[];
+      className: string;
+    }
+  | {
+      id: string;
+      createdAt: string;
+      kind: "role_group";
+      roleId?: string;
+      notes: Note[];
     };
 
 const countVotesLabel = (count: number) =>
   `${count} ${count === 1 ? "голос" : count >= 2 && count <= 4 ? "голоса" : "голосов"}`;
+
+const DAY_DEATH_ROLE_IDS = new Set([
+  "boomdandy",
+  "cerenovus",
+  "daoke",
+  "doomsayer",
+  "gnome",
+  "golem",
+  "gunslinger",
+  "harpy",
+  "mutant",
+  "psychopath",
+  "riot",
+  "scapegoat",
+  "slayer",
+  "tinker",
+  "virgin",
+  "vizier",
+  "witch",
+]);
+
+const EXECUTION_SURVIVAL_ROLE_IDS = new Set([
+  "devilsadvocate",
+  "fool",
+  "jinyiwei",
+  "lleech",
+  "pacifist",
+  "sailor",
+  "tealady",
+  "zombuul",
+]);
+
+const buildDayDeathSummaryText = (playerNames: string[]) =>
+  playerNames.length === 0
+    ? "Дневная смерть"
+    : playerNames.length === 1
+      ? `Умер: ${playerNames[0]}`
+      : `Умерли: ${playerNames.join(", ")}`;
+
+const buildDayDeathNoteText = (playerNames: string[], roleLabel: string) =>
+  playerNames.length === 1
+    ? `Днём умер по роли ${roleLabel}: ${playerNames[0]}.`
+    : `Днём умерли по роли ${roleLabel}: ${playerNames.join(", ")}.`;
+
+const buildExecutionSurvivalSummaryText = (playerName: string) => `Выжил после казни: ${playerName}`;
 
 const buildPhase = (gameId: string, number: number, type: Phase["type"], createdAt: string): Phase => ({
   id: createId(),
@@ -224,8 +291,23 @@ export default function GamePage() {
   const [executionPlayerId, setExecutionPlayerId] = useState("");
   const [executionSaving, setExecutionSaving] = useState(false);
   const [executionPhaseId, setExecutionPhaseId] = useState<string | null>(null);
+  const [executionFinishPromptVoteRecordId, setExecutionFinishPromptVoteRecordId] = useState<string | null>(null);
+  const [executionFinishPromptOutcome, setExecutionFinishPromptOutcome] = useState<"died" | "survived">("died");
+  const [executionFinishPromptProtectionRoleId, setExecutionFinishPromptProtectionRoleId] = useState("");
+  const [executionFinishPromptSaving, setExecutionFinishPromptSaving] = useState(false);
+  const [nightResultModalOpen, setNightResultModalOpen] = useState(false);
+  const [nightDeathPlayerIds, setNightDeathPlayerIds] = useState<string[]>([]);
+  const [nightResultSaving, setNightResultSaving] = useState(false);
+  const [dayDeathModalOpen, setDayDeathModalOpen] = useState(false);
+  const [dayDeathPlayerIds, setDayDeathPlayerIds] = useState<string[]>([]);
+  const [dayDeathRoleId, setDayDeathRoleId] = useState("");
+  const [dayDeathPhaseId, setDayDeathPhaseId] = useState<string | null>(null);
+  const [dayDeathEditingNoteId, setDayDeathEditingNoteId] = useState<string | null>(null);
+  const [dayDeathSaving, setDayDeathSaving] = useState(false);
   const [pageError, setPageError] = useState("");
-  const [contentTab, setContentTab] = useState<"notes" | "roleIntel" | "reference" | "voting" | "summary">("notes");
+  const [contentTab, setContentTab] = useState<
+    "notes" | "roleIntel" | "reference" | "voting" | "summaryDeaths" | "summaryRoles"
+  >("notes");
   const [referenceTab, setReferenceTab] = useState<"roles" | "nightOrder">("roles");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
@@ -308,7 +390,8 @@ export default function GamePage() {
           note.phaseId === effectiveSelectedPhaseId &&
           note.kind !== "vote_history" &&
           note.kind !== "execution" &&
-          note.kind !== "role_intel",
+          note.kind !== "role_intel" &&
+          note.kind !== "day_death",
       ),
     [notes, effectiveSelectedPhaseId],
   );
@@ -316,6 +399,13 @@ export default function GamePage() {
     () =>
       notes
         .filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "role_intel")
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [notes, effectiveSelectedPhaseId],
+  );
+  const selectedPhaseDayDeathNotes = useMemo(
+    () =>
+      notes
+        .filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "day_death")
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [notes, effectiveSelectedPhaseId],
   );
@@ -343,6 +433,65 @@ export default function GamePage() {
       extraRoleIds,
     );
   }, [gameResult.game?.activeFabledIds, gameResult.game?.activeLoricIds, gameResult.game?.scriptRoles, players, referenceData?.roleMap]);
+  const dayDeathRoles = useMemo(() => {
+    const matchingRoles = roleReferenceRoles.filter((role) => DAY_DEATH_ROLE_IDS.has(normalizeRoleId(role.id)));
+
+    if (matchingRoles.length > 0) {
+      return matchingRoles;
+    }
+
+    return (referenceData?.roles ?? []).filter((role) => DAY_DEATH_ROLE_IDS.has(normalizeRoleId(role.id)));
+  }, [referenceData?.roles, roleReferenceRoles]);
+  const executionProtectionRoles = useMemo(() => {
+    const matchingRoles = roleReferenceRoles.filter((role) => EXECUTION_SURVIVAL_ROLE_IDS.has(normalizeRoleId(role.id)));
+
+    if (matchingRoles.length > 0) {
+      return matchingRoles;
+    }
+
+    return (referenceData?.roles ?? []).filter((role) => EXECUTION_SURVIVAL_ROLE_IDS.has(normalizeRoleId(role.id)));
+  }, [referenceData?.roles, roleReferenceRoles]);
+  const dayDeathRoleGroups = useMemo(
+    () =>
+      groupRolesByType(dayDeathRoles).map((group) => ({
+        key: group.type,
+        label: group.label,
+        roleIds: group.roles.map((role) => role.id),
+      })),
+    [dayDeathRoles],
+  );
+  const executionProtectionRoleGroups = useMemo(
+    () =>
+      groupRolesByType(executionProtectionRoles).map((group) => ({
+        key: group.type,
+        label: group.label,
+        roleIds: group.roles.map((role) => role.id),
+      })),
+    [executionProtectionRoles],
+  );
+  const roleMentionEntries = useMemo(() => {
+    const mentions = new Map<string, string>();
+
+    roleReferenceRoles.forEach((role) => {
+      [role.name, getRoleLabel(role.id, roleReferenceRoles)].forEach((label) => {
+        const trimmed = label.trim();
+
+        if (trimmed) {
+          mentions.set(trimmed, role.id);
+        }
+      });
+    });
+
+    return Array.from(mentions.entries()).sort((a, b) => b[0].length - a[0].length);
+  }, [roleReferenceRoles]);
+  const roleMentionMap = useMemo(() => new Map(roleMentionEntries), [roleMentionEntries]);
+  const roleMentionRegex = useMemo(
+    () =>
+      roleMentionEntries.length > 0
+        ? new RegExp(`(${roleMentionEntries.map(([label]) => escapeRegExp(label)).join("|")})`, "g")
+        : null,
+    [roleMentionEntries],
+  );
   const selectedPhaseVoteRecords = useMemo(
     () => voteRecords.filter((voteRecord) => voteRecord.phaseId === effectiveSelectedPhaseId),
     [voteRecords, effectiveSelectedPhaseId],
@@ -505,6 +654,15 @@ export default function GamePage() {
     () => notes.find((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "execution"),
     [notes, effectiveSelectedPhaseId],
   );
+  const dayDeathNoteById = useMemo(
+    () =>
+      new Map(
+        notes
+          .filter((note) => note.kind === "day_death")
+          .map((note) => [note.id, note] as const),
+      ),
+    [notes],
+  );
   const executionNoteByPhaseId = useMemo(
     () =>
       new Map(
@@ -551,6 +709,33 @@ export default function GamePage() {
       setExecutionModalOpen(false);
     }
   }, [executionPhaseId, phasesById, selectedPhase?.id, selectedPhase?.type]);
+
+  useEffect(() => {
+    const modalPhase = phasesById.get(dayDeathPhaseId ?? selectedPhase?.id ?? "");
+
+    if (modalPhase?.type !== "day") {
+      setDayDeathModalOpen(false);
+      setDayDeathPlayerIds([]);
+      setDayDeathRoleId("");
+      setDayDeathPhaseId(null);
+      setDayDeathEditingNoteId(null);
+    }
+  }, [dayDeathPhaseId, phasesById, selectedPhase?.id, selectedPhase?.type]);
+
+  useEffect(() => {
+    if (selectedPhase?.type !== "day") {
+      setExecutionFinishPromptVoteRecordId(null);
+      setExecutionFinishPromptOutcome("died");
+      setExecutionFinishPromptProtectionRoleId("");
+    }
+  }, [selectedPhase?.type]);
+
+  useEffect(() => {
+    if (selectedPhase?.type !== "night") {
+      setNightResultModalOpen(false);
+      setNightDeathPlayerIds([]);
+    }
+  }, [selectedPhase?.type]);
 
   const updateGameTimestamp = async (now = timestamp()) => {
     if (gameId) {
@@ -647,6 +832,252 @@ export default function GamePage() {
       setContentTab(nextType === "day" ? "notes" : "notes");
     } catch {
       setPageError("Не удалось перейти к следующей фазе.");
+    }
+  };
+
+  const openNightResultModal = () => {
+    if (selectedPhase?.type !== "night") {
+      return;
+    }
+
+    setNightDeathPlayerIds([]);
+    setNightResultModalOpen(true);
+    setPageError("");
+  };
+
+  const closeNightResultModal = () => {
+    setNightResultModalOpen(false);
+    setNightDeathPlayerIds([]);
+  };
+
+  const toggleNightDeathPlayer = (playerId: string) => {
+    setNightDeathPlayerIds((current) =>
+      current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId],
+    );
+  };
+
+  const openDayDeathModal = (note?: Note) => {
+    const targetPhaseId = note?.phaseId ?? selectedPhase?.id;
+    const targetPhase = phasesById.get(targetPhaseId ?? "");
+
+    if (!targetPhaseId || targetPhase?.type !== "day") {
+      return;
+    }
+
+    setDayDeathPhaseId(targetPhaseId);
+    setDayDeathEditingNoteId(note?.kind === "day_death" ? note.id : null);
+    setDayDeathPlayerIds(note?.kind === "day_death" ? note.linkedPlayerIds : []);
+    setDayDeathRoleId(note?.kind === "day_death" ? note.roleId ?? "" : "");
+    setDayDeathModalOpen(true);
+    setPageError("");
+  };
+
+  const closeDayDeathModal = () => {
+    setDayDeathModalOpen(false);
+    setDayDeathPlayerIds([]);
+    setDayDeathRoleId("");
+    setDayDeathPhaseId(null);
+    setDayDeathEditingNoteId(null);
+  };
+
+  const toggleDayDeathPlayer = (playerId: string) => {
+    setDayDeathPlayerIds((current) =>
+      current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId],
+    );
+  };
+
+  const saveDayDeathResult = async () => {
+    const targetPhaseId = dayDeathPhaseId ?? selectedPhase?.id;
+    const targetPhase = phasesById.get(targetPhaseId ?? "");
+    const existingNote = dayDeathEditingNoteId ? dayDeathNoteById.get(dayDeathEditingNoteId) : undefined;
+
+    if (!gameId || !targetPhaseId || targetPhase?.type !== "day" || !dayDeathRoleId || dayDeathPlayerIds.length === 0) {
+      return;
+    }
+
+    const affectedPlayers = players.filter(
+      (player) => dayDeathPlayerIds.includes(player.id) && (player.alive || existingNote?.linkedPlayerIds.includes(player.id)),
+    );
+
+    if (affectedPlayers.length === 0) {
+      setPageError("Выберите хотя бы одного игрока, который умер днём.");
+      return;
+    }
+
+    const now = timestamp();
+    const roleLabel = getRoleLabel(dayDeathRoleId, dayDeathRoles);
+    const playerNames = affectedPlayers.map((player) => player.name);
+    const noteText = buildDayDeathNoteText(playerNames, roleLabel);
+    const oldLinkedPlayerIds = existingNote?.linkedPlayerIds ?? [];
+    const restoredPlayerIds = oldLinkedPlayerIds.filter((playerId) => !dayDeathPlayerIds.includes(playerId));
+
+    try {
+      setDayDeathSaving(true);
+
+      await db.transaction("rw", db.notes, db.games, db.players, async () => {
+        if (existingNote) {
+          await db.notes.update(existingNote.id, {
+            roleId: dayDeathRoleId,
+            text: noteText,
+            linkedPlayerIds: affectedPlayers.map((player) => player.id),
+            updatedAt: now,
+          });
+        } else {
+          await db.notes.add({
+            id: createId(),
+            gameId,
+            phaseId: targetPhaseId,
+            kind: "day_death",
+            roleId: dayDeathRoleId,
+            text: noteText,
+            linkedPlayerIds: affectedPlayers.map((player) => player.id),
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+
+        await Promise.all([
+          ...affectedPlayers.map((player) =>
+            db.players.update(player.id, {
+              alive: false,
+              deadVoteAvailable: false,
+              updatedAt: now,
+            }),
+          ),
+          ...restoredPlayerIds.map((playerId) =>
+            db.players.update(playerId, {
+              alive: true,
+              deadVoteAvailable: true,
+              updatedAt: now,
+            }),
+          ),
+        ]);
+
+        await updateGameTimestamp(now);
+      });
+
+      closeDayDeathModal();
+      setPageError("");
+    } catch {
+      setPageError("Не удалось сохранить дневную смерть.");
+    } finally {
+      setDayDeathSaving(false);
+    }
+  };
+
+  const deleteDayDeathNote = async (note: Note) => {
+    if (note.kind !== "day_death") {
+      await deleteNote(note.id);
+      return;
+    }
+
+    const now = timestamp();
+
+    try {
+      await db.transaction("rw", db.notes, db.games, db.players, async () => {
+        await db.notes.delete(note.id);
+        await Promise.all(note.linkedPlayerIds.map(async (playerId) => {
+          const hasOtherDayDeath = notes.some(
+            (currentNote) =>
+              currentNote.id !== note.id &&
+              currentNote.phaseId === note.phaseId &&
+              currentNote.kind === "day_death" &&
+              currentNote.linkedPlayerIds.includes(playerId),
+          );
+          const hasVoteExecution = voteRecords.some(
+            (voteRecord) =>
+              voteRecord.phaseId === note.phaseId &&
+              voteRecord.resultedInExecution &&
+              voteRecord.executedPlayerId === playerId &&
+              voteRecord.executedPlayerDied !== false,
+          );
+          const hasExecutionWithoutNomination = notes.some(
+            (currentNote) =>
+              currentNote.phaseId === note.phaseId &&
+              currentNote.kind === "execution" &&
+              currentNote.executionPlayerId === playerId,
+          );
+
+          if (!hasOtherDayDeath && !hasVoteExecution && !hasExecutionWithoutNomination) {
+            await db.players.update(playerId, {
+              alive: true,
+              deadVoteAvailable: true,
+              updatedAt: now,
+            });
+          }
+        }));
+        await updateGameTimestamp(now);
+      });
+      setPageError("");
+    } catch {
+      setPageError("Не удалось удалить дневную смерть.");
+    }
+  };
+
+  const saveNightResult = async () => {
+    if (!gameId || !selectedPhase || selectedPhase.type !== "night") {
+      return;
+    }
+
+    const now = timestamp();
+    const deadPlayers = players.filter((player) => player.alive && nightDeathPlayerIds.includes(player.id));
+    const deathNotes: Note[] =
+      deadPlayers.length > 0
+        ? deadPlayers.map((player) => ({
+            id: createId(),
+            gameId,
+            phaseId: selectedPhase.id,
+            kind: "general",
+            text: `${player.name} умер ночью.`,
+            linkedPlayerIds: [player.id],
+            createdAt: now,
+            updatedAt: now,
+          }))
+        : [
+            {
+              id: createId(),
+              gameId,
+              phaseId: selectedPhase.id,
+              kind: "general",
+              text: "Этой ночью никто не умер.",
+              linkedPlayerIds: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          ];
+
+    setNightResultSaving(true);
+    setPageError("");
+
+    try {
+      await db.transaction("rw", db.players, db.notes, db.phases, db.games, async () => {
+        if (deadPlayers.length > 0) {
+          await Promise.all(
+            deadPlayers.map((player) =>
+              db.players.update(player.id, {
+                alive: false,
+                deadVoteAvailable: false,
+                updatedAt: now,
+              }),
+            ),
+          );
+          await db.notes.bulkAdd(deathNotes);
+        } else {
+          await db.notes.add(deathNotes[0]);
+        }
+
+        const nextPhase =
+          (await ensurePhaseExists(selectedPhase.number, "day", now)) ??
+          buildPhase(gameId, selectedPhase.number, "day", now);
+        await setCurrentPhase(nextPhase, now);
+      });
+
+      closeNightResultModal();
+      setContentTab("notes");
+    } catch {
+      setPageError("Не удалось сохранить результат ночи.");
+    } finally {
+      setNightResultSaving(false);
     }
   };
 
@@ -1083,7 +1514,7 @@ export default function GamePage() {
             ? selectableTravellerExileNomineeIds.has(player.id)
             : selectableExecutionNomineeIds.has(player.id);
 
-        if (current.nominatorPlayerId === player.id || !canSelect) {
+        if (!canSelect) {
           return current;
         }
 
@@ -1138,19 +1569,23 @@ export default function GamePage() {
     setExecutionPhaseId(null);
   };
 
-  const markVoteRecordAsExecution = async (voteRecordId: string) => {
+  const markVoteRecordAsExecution = async (
+    voteRecordId: string,
+    options?: { finishAfterExecution?: boolean; executedPlayerDied?: boolean; protectionRoleId?: string },
+  ) => {
     if (!gameId || !effectiveSelectedPhaseId || !selectedPhase) {
-      return;
+      return false;
     }
 
     const now = timestamp();
     const currentVoteRecord = selectedPhaseVoteRecords.find((voteRecord) => voteRecord.id === voteRecordId);
 
     if (!currentVoteRecord) {
-      return;
+      return false;
     }
 
     const nextWillExecute = !currentVoteRecord.resultedInExecution;
+    const executedPlayerDied = options?.executedPlayerDied ?? true;
 
     try {
       await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
@@ -1162,17 +1597,45 @@ export default function GamePage() {
                 voteRecord.id === voteRecordId && !voteRecord.resultedInExecution
                   ? voteRecord.nomineePlayerId
                   : undefined,
+              executedPlayerDied:
+                voteRecord.id === voteRecordId && !voteRecord.resultedInExecution
+                  ? executedPlayerDied
+                  : undefined,
+              executionProtectionRoleId:
+                voteRecord.id === voteRecordId && !voteRecord.resultedInExecution && !executedPlayerDied
+                  ? options?.protectionRoleId || undefined
+                  : undefined,
               updatedAt: now,
             }),
           ),
         );
 
-        if (!currentVoteRecord.resultedInExecution) {
+        if (!currentVoteRecord.resultedInExecution && executedPlayerDied) {
           await db.players.update(currentVoteRecord.nomineePlayerId, {
             alive: false,
             deadVoteAvailable: false,
             updatedAt: now,
           });
+        }
+
+        if (currentVoteRecord.resultedInExecution && currentVoteRecord.executedPlayerId) {
+          const hasOtherDayDeath = notes.some(
+            (note) =>
+              note.phaseId === currentVoteRecord.phaseId &&
+              note.kind === "day_death" &&
+              note.linkedPlayerIds.includes(currentVoteRecord.executedPlayerId!),
+          );
+          const hasExecutionWithoutNomination =
+            selectedPhaseExecutionNote?.phaseId === currentVoteRecord.phaseId &&
+            selectedPhaseExecutionNote.executionPlayerId === currentVoteRecord.executedPlayerId;
+
+          if (!hasOtherDayDeath && !hasExecutionWithoutNomination) {
+            await db.players.update(currentVoteRecord.executedPlayerId, {
+              alive: true,
+              deadVoteAvailable: true,
+              updatedAt: now,
+            });
+          }
         }
 
         if (selectedPhaseExecutionNote) {
@@ -1181,12 +1644,72 @@ export default function GamePage() {
 
         await updateGameTimestamp(now);
       });
-      if (nextWillExecute) {
+      if (nextWillExecute && !options?.finishAfterExecution) {
         await advanceToNextPhase("day_to_night");
       }
       setPageError("");
+      return true;
     } catch {
       setPageError("Не удалось отметить результат казни.");
+      return false;
+    }
+  };
+
+  const promptVoteRecordExecution = async (voteRecordId: string) => {
+    const voteRecord = selectedPhaseVoteRecords.find((currentVoteRecord) => currentVoteRecord.id === voteRecordId);
+
+    if (!voteRecord) {
+      return;
+    }
+
+    if (voteRecord.resultedInExecution) {
+      await markVoteRecordAsExecution(voteRecordId);
+      return;
+    }
+
+    setExecutionFinishPromptOutcome("died");
+    setExecutionFinishPromptProtectionRoleId("");
+    setExecutionFinishPromptVoteRecordId(voteRecordId);
+    setPageError("");
+  };
+
+  const closeExecutionFinishPrompt = () => {
+    if (executionFinishPromptSaving) {
+      return;
+    }
+
+    setExecutionFinishPromptVoteRecordId(null);
+    setExecutionFinishPromptOutcome("died");
+    setExecutionFinishPromptProtectionRoleId("");
+  };
+
+  const confirmVoteRecordExecution = async (finishAfterExecution: boolean) => {
+    if (!executionFinishPromptVoteRecordId) {
+      return;
+    }
+
+    setExecutionFinishPromptSaving(true);
+
+    try {
+      const saved = await markVoteRecordAsExecution(executionFinishPromptVoteRecordId, {
+        finishAfterExecution,
+        executedPlayerDied: executionFinishPromptOutcome === "died",
+        protectionRoleId:
+          executionFinishPromptOutcome === "survived" ? executionFinishPromptProtectionRoleId || undefined : undefined,
+      });
+      if (!saved) {
+        return;
+      }
+
+      setExecutionFinishPromptVoteRecordId(null);
+      setExecutionFinishPromptOutcome("died");
+      setExecutionFinishPromptProtectionRoleId("");
+
+      if (finishAfterExecution && executionFinishPromptOutcome === "died") {
+        openFinishForm();
+      }
+    } finally {
+      setExecutionFinishPromptSaving(false);
     }
   };
 
@@ -1220,6 +1743,8 @@ export default function GamePage() {
             db.voteRecords.update(voteRecord.id, {
               resultedInExecution: false,
               executedPlayerId: undefined,
+              executedPlayerDied: undefined,
+              executionProtectionRoleId: undefined,
               updatedAt: now,
             }),
           ),
@@ -1541,6 +2066,8 @@ export default function GamePage() {
           voterPlayerIds: editingVoteDraft.selectedVoterIds,
           deadVoterPlayerIds,
           executedPlayerId: voteRecord.resultedInExecution ? editingVoteDraft.nomineePlayerId : voteRecord.executedPlayerId,
+          executedPlayerDied: voteRecord.executedPlayerDied,
+          executionProtectionRoleId: voteRecord.executionProtectionRoleId,
           updatedAt: now,
         });
 
@@ -1548,11 +2075,13 @@ export default function GamePage() {
           await db.notes.update(historyNote.id, {
             text: noteText,
             linkedPlayerIds: Array.from(
-              new Set([
-                editingVoteDraft.nominatorPlayerId,
-                editingVoteDraft.nomineePlayerId,
-                ...editingVoteDraft.selectedVoterIds,
-              ]),
+              new Set(
+                [
+                  editingVoteDraft.nominatorPlayerId,
+                  editingVoteDraft.nomineePlayerId,
+                  ...editingVoteDraft.selectedVoterIds,
+                ].filter((playerId): playerId is string => Boolean(playerId)),
+              ),
             ),
             updatedAt: now,
           });
@@ -1596,16 +2125,91 @@ export default function GamePage() {
   };
 
   const summaryItems = useMemo<SummaryItem[]>(() => {
+    const roleNoteGroups = new Map<string, Note[]>();
+    notes
+      .filter((note) => note.kind === "role_intel")
+      .forEach((note) => {
+        const key = note.roleId ? normalizeRoleId(note.roleId) : `note:${note.id}`;
+        const current = roleNoteGroups.get(key) ?? [];
+        current.push(note);
+        roleNoteGroups.set(key, current);
+      });
+
+    const completedDayResultItems = phases
+      .filter(
+        (phase) =>
+          phase.type === "day" && (phase.id !== effectiveSelectedPhaseId || gameResult.game?.status === "finished"),
+      )
+      .flatMap((phase) => {
+        const phaseVoteRecords = voteRecords
+          .filter((voteRecord) => voteRecord.phaseId === phase.id)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        const executionNote = executionNoteByPhaseId.get(phase.id);
+
+        if (executionNote) {
+          return [];
+        }
+
+        const executedVoteRecord = phaseVoteRecords.find((voteRecord) => voteRecord.resultedInExecution);
+        const createdAt =
+          executedVoteRecord?.updatedAt ??
+          executedVoteRecord?.createdAt ??
+          phases.find((currentPhase) => currentPhase.number === phase.number + 1 && currentPhase.type === "night")?.createdAt ??
+          phase.createdAt;
+
+        if (executedVoteRecord) {
+          return [];
+        }
+
+        if (phaseVoteRecords.length > 0) {
+          return [];
+        }
+
+        return [
+          {
+            id: `day-result:${phase.id}`,
+            createdAt,
+            kind: "day_result" as const,
+            phase,
+            text: "Никого не казнили",
+            linkedPlayerIds: [],
+            className: "summary-day-result-badge",
+          },
+        ];
+      });
+
     return [
       ...notes
-        .filter((note) => note.kind !== "vote_history")
-        .map((note) => ({
-          id: note.id,
-          createdAt: note.createdAt,
-          kind: note.kind === "execution" ? "execution" : "note",
-          phase: phasesById.get(note.phaseId),
-          note,
-        })),
+        .filter((note) => note.kind !== "vote_history" && note.kind !== "role_intel")
+        .map((note): SummaryItem =>
+          note.kind === "execution"
+            ? {
+                id: note.id,
+                createdAt: note.createdAt,
+                kind: "execution",
+                phase: phasesById.get(note.phaseId),
+                note,
+              }
+            : {
+                id: note.id,
+                createdAt: note.createdAt,
+                kind: "note",
+                phase: phasesById.get(note.phaseId),
+                note,
+              },
+        ),
+      ...Array.from(roleNoteGroups.entries()).map(([groupKey, groupedNotes]) => {
+        const sortedGroupNotes = [...groupedNotes].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+        return {
+          id: `role-group:${groupKey}`,
+          createdAt: sortedGroupNotes[0]?.createdAt ?? "",
+          kind: "role_group" as const,
+          roleId: sortedGroupNotes[0]?.roleId,
+          notes: sortedGroupNotes,
+        };
+      }),
+      ...completedDayResultItems,
       ...voteRecords.map((voteRecord) => ({
         id: voteRecord.id,
         createdAt: voteRecord.createdAt,
@@ -1614,7 +2218,7 @@ export default function GamePage() {
         voteRecord,
       })),
     ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [notes, phasesById, voteRecords]);
+  }, [notes, phases, phasesById, voteRecords, effectiveSelectedPhaseId, gameResult.game?.status, executionNoteByPhaseId, playersById]);
 
   if (gameResult.loading) {
     return (
@@ -1643,16 +2247,531 @@ export default function GamePage() {
 
   const { game } = gameResult;
   const personalResult = personalResultLabel(game.winner, game.myTeam);
+  const hasKnownMyTeam = Boolean(game.myTeam && game.myTeam !== "unknown");
   const personalResultClass =
     game.myTeam === "traveller"
       ? "border-amber-200/45 bg-amber-400/15 text-amber-100"
-      : game.winner && game.myTeam && game.winner === game.myTeam
+      : !hasKnownMyTeam || !game.winner || game.winner === "unknown"
+        ? "border-stone-200/20 bg-stone-100/5 text-stone-200"
+      : game.winner === game.myTeam
         ? "border-emerald-200/45 bg-emerald-400/15 text-emerald-100"
-        : game.status === "finished" && game.winner !== "unknown"
+        : game.status === "finished"
           ? "border-red-200/45 bg-red-400/15 text-red-100"
           : "border-stone-200/20 bg-stone-100/5 text-stone-200";
   const gameHasStarted = game.hasStarted ?? Boolean(game.startedAt || effectiveSelectedPhaseId);
   const isDayPhase = !selectedPhase || selectedPhase.type === "day";
+  const renderSummaryNoteText = (text: string) => {
+    if (!roleMentionRegex) {
+      return <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-100">{text}</p>;
+    }
+
+    const lines = text.split("\n");
+
+    return (
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-100">
+        {lines.map((line, lineIndex) => (
+          <Fragment key={`${lineIndex}-${line}`}>
+            {line.split(roleMentionRegex).map((part, partIndex) => {
+              const roleId = roleMentionMap.get(part);
+
+              if (!roleId) {
+                return <Fragment key={`${lineIndex}-${partIndex}`}>{part}</Fragment>;
+              }
+
+              const roleLabel = getRoleLabel(roleId, roleReferenceRoles);
+
+              return (
+                <span
+                  key={`${lineIndex}-${partIndex}-${normalizeRoleId(roleId)}`}
+                  className="mx-0.5 inline-flex h-8 w-8 align-middle"
+                  title={roleLabel}
+                >
+                  <RoleTokenImage
+                    roleId={roleId}
+                    roles={roleReferenceRoles}
+                    className="h-8 w-8 overflow-hidden rounded-full border border-ember-200/20 bg-white/90 shadow-[0_4px_10px_rgba(0,0,0,0.12)]"
+                    imageClassName="h-full w-full object-cover"
+                    fallback={
+                      <span className="inline-flex items-center rounded-full border border-ember-200/20 bg-black/10 px-2 py-1 text-xs">
+                        {roleLabel}
+                      </span>
+                    }
+                  />
+                </span>
+              );
+            })}
+            {lineIndex < lines.length - 1 ? <br /> : null}
+          </Fragment>
+        ))}
+      </p>
+    );
+  };
+  const isDeathOrExecutionSummaryItem = (item: SummaryItem) => {
+    if (item.kind === "vote" || item.kind === "execution" || item.kind === "day_result") {
+      return true;
+    }
+
+    if (item.kind === "role_group") {
+      return false;
+    }
+
+    if (item.note.kind === "day_death") {
+      return true;
+    }
+
+    const normalizedText = item.note.text.toLocaleLowerCase("ru-RU");
+    return normalizedText.includes("умер") || normalizedText.includes("казн");
+  };
+  const summaryDeathItems = summaryItems.filter((item) => isDeathOrExecutionSummaryItem(item));
+  const summaryInfoItems = summaryItems.filter((item) => !isDeathOrExecutionSummaryItem(item));
+  const summaryRoleItems = summaryInfoItems.filter((item) => item.kind === "role_group");
+  const summaryGeneralInfoItems = summaryInfoItems.filter((item) => item.kind !== "role_group");
+  const getSummaryOutcomeBadge = (item: Extract<SummaryItem, { kind: "note" | "execution" }>) => {
+    const normalizedText = item.note.text.trim().replace(/\.$/u, "");
+    const lowerText = normalizedText.toLocaleLowerCase("ru-RU");
+    const phaseLabel = item.phase
+      ? `Результат ${item.phase.number} ${item.phase.type === "night" ? "ночи" : "дня"}`
+      : "Результат";
+
+    if (item.note.kind === "day_death") {
+      const playerNames = item.note.linkedPlayerIds
+        .map((playerId) => playersById.get(playerId)?.name)
+        .filter((name): name is string => Boolean(name));
+
+      return {
+        label: item.note.roleId ? getRoleLabel(item.note.roleId, dayDeathRoles) : "Дневная смерть",
+        text: buildDayDeathSummaryText(playerNames),
+        className: "border-rose-300/55 bg-rose-200/88 text-rose-950",
+      };
+    }
+
+    if (item.kind === "execution") {
+      return {
+        label: phaseLabel,
+        text: normalizedText.replace(/^Казнь без номинации:\s*/u, "Казнили без номинации: "),
+        className: "summary-day-result-badge",
+      };
+    }
+
+    if (item.phase?.type === "night") {
+      return lowerText.includes("никто не умер")
+        ? {
+            label: phaseLabel,
+            text: "никто не умер",
+            className: "border-stone-300/80 bg-stone-300 text-stone-900",
+          }
+        : {
+            label: phaseLabel,
+            text: normalizedText,
+            className: "border-rose-400/80 bg-rose-500 text-white",
+          };
+    }
+
+    return null;
+  };
+  const dayDeathModalPlayers = players.filter(
+    (player) => player.alive || dayDeathPlayerIds.includes(player.id),
+  );
+  const executionPromptVoteRecord = executionFinishPromptVoteRecordId
+    ? selectedPhaseVoteRecords.find((voteRecord) => voteRecord.id === executionFinishPromptVoteRecordId)
+    : undefined;
+  const executionPromptNominee = executionPromptVoteRecord
+    ? playersById.get(executionPromptVoteRecord.nomineePlayerId)
+    : undefined;
+  const renderSummaryItem = (item: SummaryItem) => {
+    if (item.kind === "vote") {
+      const voteRecord = item.voteRecord;
+      const isEditingVote = editingVoteRecordId === voteRecord.id;
+      const nominatorName = playersById.get(voteRecord.nominatorPlayerId)?.name ?? "Неизвестно";
+      const nomineeName = playersById.get(voteRecord.nomineePlayerId)?.name ?? "Неизвестно";
+      const phaseVoteRecords = voteRecords
+        .filter((currentVoteRecord) => currentVoteRecord.phaseId === voteRecord.phaseId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const voterNames = voteRecord.voterPlayerIds
+        .map((playerId) => playersById.get(playerId)?.name)
+        .filter((name): name is string => Boolean(name));
+      const voteOutcomeText = voteRecord.resultedInExecution
+        ? voteRecord.executedPlayerDied === false
+          ? buildExecutionSurvivalSummaryText(nomineeName)
+          : `${resolveVoteType(voteRecord) === "traveller_exile" ? "Изгнали" : "Казнили"}: ${nomineeName}`
+        : null;
+      const showNoExecutionBadge =
+        !voteOutcomeText &&
+        item.phase?.type === "day" &&
+        (voteRecord.phaseId !== effectiveSelectedPhaseId || game.status === "finished") &&
+        !executionNoteByPhaseId.get(voteRecord.phaseId) &&
+        phaseVoteRecords.length > 0 &&
+        phaseVoteRecords[phaseVoteRecords.length - 1]?.id === voteRecord.id &&
+        !phaseVoteRecords.some((currentVoteRecord) => currentVoteRecord.resultedInExecution);
+      const voteHeaderBadgeText = voteOutcomeText ?? (showNoExecutionBadge ? "Никого не казнили" : null);
+      const voteProtectionRoleLabel =
+        voteRecord.resultedInExecution && voteRecord.executedPlayerDied === false && voteRecord.executionProtectionRoleId
+          ? getRoleLabel(voteRecord.executionProtectionRoleId, executionProtectionRoles)
+          : "";
+      const voteHeaderBadgeClass =
+        voteRecord.resultedInExecution && voteRecord.executedPlayerDied === false
+          ? "border-sky-300/65 bg-sky-200/85 text-sky-950"
+          : "summary-day-result-badge";
+
+      return (
+        <article key={item.id} className="summary-day-card rounded-2xl border border-ember-200/12 bg-black/18 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold text-stone-100">
+                    {item.phase?.title ?? "Дневная фаза"}
+                  </h3>
+                  {voteHeaderBadgeText ? (
+                    <span className={`inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold leading-5 ${voteHeaderBadgeClass}`}>
+                      <span>{voteHeaderBadgeText}</span>
+                    </span>
+                  ) : null}
+                  {voteProtectionRoleLabel ? (
+                    <span className="chip">{voteProtectionRoleLabel}</span>
+                  ) : null}
+                </div>
+                <p className="text-xs text-stone-500">
+                  {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => startEditingVoteRecord(voteRecord)} className="secondary-button min-h-10 px-3">
+                <Edit3 className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => void deleteVoteRecord(voteRecord)} className="danger-button">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {isEditingVote && editingVoteDraft ? (
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <select
+                  value={editingVoteDraft.nominatorPlayerId ?? ""}
+                  onChange={(event) =>
+                    setEditingVoteDraft((current) =>
+                      current ? { ...current, nominatorPlayerId: event.target.value } : current,
+                    )
+                  }
+                  className="field"
+                >
+                  <option value="">Кто номинировал?</option>
+                  {players.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={editingVoteDraft.nomineePlayerId ?? ""}
+                  onChange={(event) =>
+                    setEditingVoteDraft((current) =>
+                      current ? { ...current, nomineePlayerId: event.target.value } : current,
+                    )
+                  }
+                  className="field"
+                >
+                  <option value="">Кого номинировали?</option>
+                  {players.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {players.map((player) => {
+                  const selected = editingVoteDraft.selectedVoterIds.includes(player.id);
+
+                  return (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => toggleEditingVoteRecordVoter(player.id)}
+                      className={`rounded-xl border px-3 py-2 text-sm transition ${
+                        selected
+                          ? "border-emerald-300/35 bg-emerald-300/12 text-emerald-100"
+                          : "border-ember-200/10 bg-black/20 text-stone-200"
+                      }`}
+                    >
+                      {player.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void saveEditedVoteRecord(voteRecord)} className="primary-button">
+                  <Save className="h-4 w-4" />
+                  Сохранить
+                </button>
+                <button type="button" onClick={cancelEditingVoteRecord} className="secondary-button">
+                  <X className="h-4 w-4" />
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-2xl bg-black/10 px-3 py-2 text-sm text-stone-200">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <p className="font-medium">{`${nominatorName} -> ${nomineeName}`}</p>
+                <div className="flex min-w-0 items-center gap-2 text-xs sm:text-sm">
+                  <span className="font-semibold">{voteRecord.voterPlayerIds.length}</span>
+                  <Hand className="h-4 w-4 shrink-0" />
+                  <p className="min-w-0 truncate">
+                    {voterNames.length > 0 ? voterNames.join(", ") : "никто"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </article>
+      );
+    }
+
+    if (item.kind === "day_result") {
+      const linkedPlayers = item.linkedPlayerIds
+        .map((playerId) => playersById.get(playerId))
+        .filter((player): player is Player => Boolean(player));
+
+      return (
+        <article key={item.id} className="summary-day-card rounded-2xl border border-ember-200/12 bg-black/18 p-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-stone-100">{item.phase.title}</h3>
+              <span className={`inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold leading-5 ${item.className}`}>
+                <span>{item.text}</span>
+              </span>
+            </div>
+            <p className="text-xs text-stone-500">
+              {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
+            </p>
+          </div>
+
+          {linkedPlayers.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {linkedPlayers.map((player) => (
+                <span key={player.id} className="chip">
+                  {player.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </article>
+      );
+    }
+
+    if (item.kind === "role_group") {
+      const roleLabel = item.roleId
+        ? getRoleLabel(item.roleId, roleReferenceRoles)
+        : "Роль не указана";
+
+      return (
+        <article key={item.id} className="rounded-2xl border border-ember-200/12 bg-black/18 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {item.roleId ? (
+                <RoleTokenImage
+                  roleId={item.roleId}
+                  roles={roleReferenceRoles}
+                  className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                  imageClassName="h-full w-full object-cover"
+                />
+              ) : null}
+              <div>
+                <h3 className="text-sm font-semibold text-stone-100">{roleLabel}</h3>
+                <p className="text-xs text-stone-500">
+                  {item.notes.length} {item.notes.length === 1 ? "заметка" : item.notes.length >= 2 && item.notes.length <= 4 ? "заметки" : "заметок"} по роли
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-stone-500">
+              {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-3">
+            {item.notes.map((note) => {
+              const linkedPlayers = note.linkedPlayerIds
+                .map((playerId) => playersById.get(playerId))
+                .filter((player): player is Player => Boolean(player));
+              const isEditingNote = editingNoteId === note.id;
+
+              return (
+                <div key={note.id} className="rounded-2xl border border-ember-200/10 bg-black/10 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-stone-100">
+                        {phasesById.get(note.phaseId)?.title ?? "История"}
+                      </h4>
+                      <p className="text-xs text-stone-500">
+                        {formatDate(note.createdAt)} · {formatTime(note.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEditingHistoryNote(note)}
+                        className="secondary-button min-h-10 px-3"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => void deleteNote(note.id)} className="danger-button">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {isEditingNote ? (
+                    <div className="mt-3 space-y-3">
+                      <textarea
+                        value={editingNoteText}
+                        onChange={(event) => setEditingNoteText(event.target.value)}
+                        className="field min-h-28"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button">
+                          <Save className="h-4 w-4" />
+                          Сохранить
+                        </button>
+                        <button type="button" onClick={cancelEditingHistoryNote} className="secondary-button">
+                          <X className="h-4 w-4" />
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {renderSummaryNoteText(note.text)}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {linkedPlayers.length > 0 ? (
+                          linkedPlayers.map((player) => (
+                            <span key={player.id} className="chip">
+                              {player.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-stone-500">Без привязки к игрокам</span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </article>
+      );
+    }
+
+    const note = item.note;
+    const linkedPlayers = note.linkedPlayerIds
+      .map((playerId) => playersById.get(playerId))
+      .filter((player): player is Player => Boolean(player));
+    const isEditingNote = editingNoteId === note.id;
+    const outcomeBadge = getSummaryOutcomeBadge(item);
+    const noteCardClass =
+      item.phase?.type === "night"
+        ? "summary-night-card"
+        : (outcomeBadge || note.kind === "day_death") && item.phase?.type === "day"
+          ? "summary-day-card"
+          : "";
+
+    return (
+      <article key={item.id} className={`rounded-2xl border border-ember-200/12 bg-black/18 p-3 ${noteCardClass}`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-stone-100">
+                {item.kind === "execution" ? "Казнь" : item.phase?.title ?? "История"}
+              </h3>
+              {outcomeBadge ? (
+                <span className={`inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold leading-5 ${outcomeBadge.className}`}>
+                  <span>{outcomeBadge.label}</span>
+                  <span className="opacity-70">•</span>
+                  <span>{outcomeBadge.text}</span>
+                </span>
+              ) : null}
+            </div>
+            <p className="text-xs text-stone-500">
+              {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (note.kind === "day_death") {
+                  openDayDeathModal(note);
+                  return;
+                }
+
+                if (item.kind === "execution") {
+                  openExecutionWithoutNominationModal(note.phaseId, note);
+                  return;
+                }
+
+                startEditingHistoryNote(note);
+              }}
+              className="secondary-button min-h-10 px-3"
+            >
+              <Edit3 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void (note.kind === "day_death" ? deleteDayDeathNote(note) : deleteNote(note.id))}
+              className="danger-button"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {isEditingNote ? (
+          <div className="mt-3 space-y-3">
+            <textarea
+              value={editingNoteText}
+              onChange={(event) => setEditingNoteText(event.target.value)}
+              className="field min-h-28"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button">
+                <Save className="h-4 w-4" />
+                Сохранить
+              </button>
+              <button type="button" onClick={cancelEditingHistoryNote} className="secondary-button">
+                <X className="h-4 w-4" />
+                Отмена
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {outcomeBadge ? null : (
+              renderSummaryNoteText(note.text)
+            )}
+            {linkedPlayers.length > 0 || !outcomeBadge ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {linkedPlayers.length > 0 ? (
+                  linkedPlayers.map((player) => (
+                    <span key={player.id} className="chip">
+                      {player.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-stone-500">Без привязки к игрокам</span>
+                )}
+              </div>
+            ) : null}
+          </>
+        )}
+      </article>
+    );
+  };
 
   return (
     <main className={`page-shell ${isDayPhase ? "day-phase-theme" : ""}`}>
@@ -1679,6 +2798,13 @@ export default function GamePage() {
             </button>
           </div>
 
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={openFinishForm} className="secondary-button w-full sm:w-auto">
+              <CheckCircle2 className="h-4 w-4" />
+              {game.status === "finished" ? "Итог партии" : "Завершить партию"}
+            </button>
+          </div>
+
           {gameInfoOpen ? (
             <div className="mt-4 space-y-4 border-t border-ember-200/10 pt-4">
               <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -1699,7 +2825,11 @@ export default function GamePage() {
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div
+                className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${
+                  game.status === "finished" ? "xl:grid-cols-3" : "xl:grid-cols-2"
+                }`}
+              >
                 <button type="button" onClick={() => setSetupOpen(true)} className="secondary-button w-full">
                   <Settings className="h-4 w-4" />
                   Setup
@@ -1714,10 +2844,6 @@ export default function GamePage() {
                     Сделать активной
                   </button>
                 ) : null}
-                <button type="button" onClick={openFinishForm} className="secondary-button w-full">
-                  <CheckCircle2 className="h-4 w-4" />
-                  {game.status === "finished" ? "Итог партии" : "Завершить партию"}
-                </button>
               </div>
 
               {game.finalNotes ? (
@@ -1799,7 +2925,7 @@ export default function GamePage() {
                       Фаза не найдена
                     </button>
                   ) : selectedPhase?.type === "night" ? (
-                    <button type="button" onClick={() => void advanceToNextPhase("night_to_day")} className="primary-button">
+                    <button type="button" onClick={openNightResultModal} className="primary-button">
                       <CheckCircle2 className="h-4 w-4" />
                       Ночь завершилась
                     </button>
@@ -1822,42 +2948,72 @@ export default function GamePage() {
                   type="button"
                   onClick={() => setContentTab("notes")}
                   className={contentTab === "notes" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  title="Заметки"
+                  aria-label="Заметки"
                 >
-                  Заметки
+                  <Edit3 className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setContentTab("roleIntel")}
                   className={contentTab === "roleIntel" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  title="По ролям"
+                  aria-label="По ролям"
                 >
-                  По ролям
+                  <Target className="h-4 w-4" />
                 </button>
                 {gameHasStarted && selectedPhase?.type === "day" ? (
                 <button
                   type="button"
                   onClick={() => setContentTab("voting")}
                   className={contentTab === "voting" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  title="Голосования"
+                  aria-label="Голосования"
                 >
-                    Голосования
+                    <Hand className="h-4 w-4" />
+                  </button>
+                ) : null}
+                {gameHasStarted && selectedPhase?.type === "day" ? (
+                  <button
+                    type="button"
+                    onClick={() => openDayDeathModal()}
+                    className={dayDeathModalOpen ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                    title="Человек умер"
+                    aria-label="Человек умер"
+                  >
+                    <Skull className="h-4 w-4" />
                   </button>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => setContentTab("reference")}
                   className={contentTab === "reference" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  title="Роли"
+                  aria-label="Роли"
                 >
-                  Роли
+                  <BookOpen className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => setContentTab("summary")}
-                  className={contentTab === "summary" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  onClick={() => setContentTab("summaryDeaths")}
+                  className={contentTab === "summaryDeaths" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  title="Смерти и казни"
+                  aria-label="Смерти и казни"
                 >
-                  Summary
+                  <Skull className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContentTab("summaryRoles")}
+                  className={contentTab === "summaryRoles" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
+                  title="Сводка ролей"
+                  aria-label="Сводка ролей"
+                >
+                  <Users className="h-4 w-4" />
                 </button>
               </div>
             </section>
-            {!gameHasStarted && contentTab !== "summary" ? (
+            {!gameHasStarted && contentTab !== "summaryDeaths" && contentTab !== "summaryRoles" ? (
               <section className="panel p-5 text-center text-stone-500">
                 Игра ещё не началась. Нажмите «Начать игру», чтобы перейти в 1 ночь.
               </section>
@@ -1921,10 +3077,11 @@ export default function GamePage() {
 
                 <div className="mt-4 space-y-3">
                   {selectedPhaseVoteAnalysesDesc.length === 0 &&
+                  selectedPhaseDayDeathNotes.length === 0 &&
                   selectedPhaseVoteNotes.length === 0 &&
                   !selectedPhaseExecutionNote ? (
                     <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
-                      В этой фазе пока нет истории голосований.
+                      В этой фазе пока нет истории дневных событий.
                     </div>
                   ) : (
                     <>
@@ -1949,6 +3106,44 @@ export default function GamePage() {
                         </article>
                       ) : null}
 
+                      {selectedPhaseDayDeathNotes.map((note) => {
+                        const linkedNames = note.linkedPlayerIds
+                          .map((playerId) => playersById.get(playerId)?.name)
+                          .filter((name): name is string => Boolean(name));
+                        const roleLabel = note.roleId ? getRoleLabel(note.roleId, dayDeathRoles) : "Дневная смерть";
+
+                        return (
+                          <article
+                            key={note.id}
+                            className="rounded-[20px] border border-rose-300/30 bg-rose-200/18 p-2.5 shadow-[0_10px_28px_rgba(137,84,95,0.14)]"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-sm font-semibold text-stone-900">
+                                    {linkedNames.length > 0 ? buildDayDeathSummaryText(linkedNames) : "Дневная смерть"}
+                                  </h3>
+                                  <span className="inline-flex items-center rounded-full border border-rose-300/45 bg-rose-200/88 px-3 py-1 text-xs font-semibold text-rose-950">
+                                    {roleLabel}
+                                  </span>
+                                </div>
+                                <p className="mt-0.5 text-xs text-stone-600">
+                                  {formatDate(note.createdAt)} · {formatTime(note.createdAt)}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <button type="button" onClick={() => openDayDeathModal(note)} className="secondary-button min-h-10 px-3">
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                                <button type="button" onClick={() => void deleteDayDeathNote(note)} className="danger-button">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+
                       {selectedPhaseVoteAnalysesDesc.map((analysis, index) => {
                         const { voteRecord } = analysis;
                         const nominatorName = playersById.get(voteRecord.nominatorPlayerId)?.name ?? "Неизвестно";
@@ -1961,6 +3156,15 @@ export default function GamePage() {
                           .filter((name): name is string => Boolean(name));
                         const leadsToExecution = Boolean(voteRecord.resultedInExecution);
                         const isTravellerExile = analysis.voteType === "traveller_exile";
+                        const executionStatusText = leadsToExecution
+                          ? voteRecord.executedPlayerDied === false
+                            ? "Казнили, но выжил"
+                            : "Казнь выбрана"
+                          : analysis.statusLabel;
+                        const executionProtectionLabel =
+                          leadsToExecution && voteRecord.executedPlayerDied === false && voteRecord.executionProtectionRoleId
+                            ? getRoleLabel(voteRecord.executionProtectionRoleId, executionProtectionRoles)
+                            : "";
 
                         return (
                           <article
@@ -1982,9 +3186,14 @@ export default function GamePage() {
                                     {isTravellerExile ? <Crown className="h-3.5 w-3.5" /> : <Gavel className="h-3.5 w-3.5" />}
                                   </span>
                                   <div>
-                                    <h3 className="text-sm font-semibold leading-tight text-stone-100">
-                                      {isTravellerExile ? `Изгнание ${analysis.voteNumber}` : analysis.voteNumber}
-                                    </h3>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h3 className="text-base font-bold leading-tight text-stone-100">
+                                        {isTravellerExile ? `Изгнание ${analysis.voteNumber}` : analysis.voteNumber}
+                                      </h3>
+                                      <span className="inline-flex items-center rounded-full bg-white/78 px-2.5 py-0.5 text-xs font-bold text-stone-900 shadow-sm">
+                                        {analysis.voteCountLabel}
+                                      </span>
+                                    </div>
                                     <p className="mt-0.5 flex items-center gap-1 text-[10px] text-stone-500">
                                       <Clock3 className="h-2.5 w-2.5 text-stone-700" />
                                       {formatDate(voteRecord.createdAt)} · {formatTime(voteRecord.createdAt)}
@@ -1993,12 +3202,11 @@ export default function GamePage() {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center justify-end gap-1.5">
-                                <span className="inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-stone-800">
-                                  {analysis.voteCountLabel}
-                                </span>
                                 <span
                                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                    leadsToExecution
+                                    leadsToExecution && voteRecord.executedPlayerDied === false
+                                      ? "bg-sky-200/88 text-sky-950 ring-1 ring-sky-700/15"
+                                      : leadsToExecution
                                       ? "bg-emerald-500 text-white ring-1 ring-emerald-700/20 shadow-[0_8px_18px_rgba(16,185,129,0.28)]"
                                       : isTravellerExile
                                         ? "bg-sky-300/80 text-sky-950 ring-1 ring-sky-700/15"
@@ -2006,11 +3214,16 @@ export default function GamePage() {
                                         ? "bg-emerald-400/90 text-emerald-950 ring-1 ring-emerald-700/15"
                                         : analysis.removedPreviousFromBlock
                                           ? "bg-amber-300/70 text-amber-950 ring-1 ring-amber-700/15"
-                                          : "bg-stone-200/16 text-stone-700 ring-1 ring-stone-500/12"
+                                        : "bg-stone-200/16 text-stone-700 ring-1 ring-stone-500/12"
                                   }`}
                                 >
-                                  {leadsToExecution ? "Казнь выбрана" : analysis.statusLabel}
+                                  {executionStatusText}
                                 </span>
+                                {executionProtectionLabel ? (
+                                  <span className="inline-flex items-center rounded-full bg-stone-200/75 px-2 py-0.5 text-[10px] font-medium text-stone-900">
+                                    {executionProtectionLabel}
+                                  </span>
+                                ) : null}
                                 {analysis.removedPreviousFromBlock && analysis.isOnTheBlock ? (
                                   <span className="inline-flex items-center rounded-full bg-amber-200/75 px-2 py-0.5 text-[10px] font-medium text-amber-950">
                                     Предыдущего сняли
@@ -2024,7 +3237,7 @@ export default function GamePage() {
                                 {!isTravellerExile ? (
                                   <button
                                     type="button"
-                                    onClick={() => void markVoteRecordAsExecution(voteRecord.id)}
+                                    onClick={() => void promptVoteRecordExecution(voteRecord.id)}
                                     className={`secondary-button min-h-7 w-7 shrink-0 px-0 ${
                                       leadsToExecution
                                         ? "border-emerald-700/20 bg-emerald-300/18 text-emerald-950"
@@ -2155,221 +3368,73 @@ export default function GamePage() {
                 )}
               </section>
             ) : null}
-            {contentTab === "summary" ? (
+            {contentTab === "summaryDeaths" ? (
               <section className="panel min-w-0 p-3 sm:p-5">
                 <div className="mb-4">
-                  <h2 className="text-lg font-semibold text-stone-50">Summary</h2>
-                  <p className="text-sm text-stone-400">
-                    История заметок, номинаций и казней. Новые карточки сверху.
-                  </p>
+                  <h2 className="text-lg font-semibold text-stone-50">Смерти и казни</h2>
                 </div>
 
-                <div className="space-y-3">
-                  {summaryItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
-                      История пока пустая.
+                {summaryItems.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
+                    История пока пустая.
+                  </div>
+                ) : (
+                    <section className="space-y-3">
+                      {summaryDeathItems.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
+                          Пока нет событий казней и смертей.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {summaryDeathItems.map((item) => renderSummaryItem(item))}
+                        </div>
+                      )}
+                    </section>
+                )}
+              </section>
+            ) : null}
+            {contentTab === "summaryRoles" ? (
+              <section className="panel min-w-0 p-3 sm:p-5">
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-stone-50">Сводка ролей</h2>
+                </div>
+
+                {summaryItems.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
+                    История пока пустая.
+                  </div>
+                ) : (
+                  <section className="space-y-4">
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-stone-100">Информация по ролям</h3>
+                        <p className="text-sm text-stone-400">Ролевые заметки, сгруппированные по ролям.</p>
+                      </div>
+
+                      {summaryRoleItems.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
+                          Пока нет ролевой информации.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {summaryRoleItems.map((item) => renderSummaryItem(item))}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    summaryItems.map((item) => {
-                      if (item.kind === "vote") {
-                        const voteRecord = item.voteRecord;
-                        const isEditingVote = editingVoteRecordId === voteRecord.id;
-                        const nominatorName = playersById.get(voteRecord.nominatorPlayerId)?.name ?? "Неизвестно";
-                        const nomineeName = playersById.get(voteRecord.nomineePlayerId)?.name ?? "Неизвестно";
-                        const voterNames = voteRecord.voterPlayerIds
-                          .map((playerId) => playersById.get(playerId)?.name)
-                          .filter((name): name is string => Boolean(name));
 
-                        return (
-                          <article key={item.id} className="rounded-2xl border border-ember-200/12 bg-black/18 p-3">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-amber-300 text-stone-900">
-                                    <Gavel className="h-4 w-4" />
-                                  </span>
-                                  <div>
-                                    <h3 className="text-sm font-semibold text-stone-100">
-                                      {item.phase?.title ?? "Дневная фаза"}
-                                    </h3>
-                                    <p className="text-xs text-stone-500">
-                                      {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <button type="button" onClick={() => startEditingVoteRecord(voteRecord)} className="secondary-button min-h-10 px-3">
-                                  <Edit3 className="h-4 w-4" />
-                                </button>
-                                <button type="button" onClick={() => void deleteVoteRecord(voteRecord)} className="danger-button">
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {isEditingVote && editingVoteDraft ? (
-                              <div className="mt-3 space-y-3">
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                  <select
-                                    value={editingVoteDraft.nominatorPlayerId ?? ""}
-                                    onChange={(event) =>
-                                      setEditingVoteDraft((current) =>
-                                        current ? { ...current, nominatorPlayerId: event.target.value } : current,
-                                      )
-                                    }
-                                    className="field"
-                                  >
-                                    <option value="">Кто номинировал?</option>
-                                    {players.map((player) => (
-                                      <option key={player.id} value={player.id}>
-                                        {player.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    value={editingVoteDraft.nomineePlayerId ?? ""}
-                                    onChange={(event) =>
-                                      setEditingVoteDraft((current) =>
-                                        current ? { ...current, nomineePlayerId: event.target.value } : current,
-                                      )
-                                    }
-                                    className="field"
-                                  >
-                                    <option value="">Кого номинировали?</option>
-                                    {players.map((player) => (
-                                      <option key={player.id} value={player.id}>
-                                        {player.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                  {players.map((player) => {
-                                    const selected = editingVoteDraft.selectedVoterIds.includes(player.id);
-
-                                    return (
-                                      <button
-                                        key={player.id}
-                                        type="button"
-                                        onClick={() => toggleEditingVoteRecordVoter(player.id)}
-                                        className={`rounded-xl border px-3 py-2 text-sm transition ${
-                                          selected
-                                            ? "border-emerald-300/35 bg-emerald-300/12 text-emerald-100"
-                                            : "border-ember-200/10 bg-black/20 text-stone-200"
-                                        }`}
-                                      >
-                                        {player.name}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                  <button type="button" onClick={() => void saveEditedVoteRecord(voteRecord)} className="primary-button">
-                                    <Save className="h-4 w-4" />
-                                    Сохранить
-                                  </button>
-                                  <button type="button" onClick={cancelEditingVoteRecord} className="secondary-button">
-                                    <X className="h-4 w-4" />
-                                    Отмена
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="mt-3 grid gap-2 text-sm text-stone-200 sm:grid-cols-2">
-                                <div className="rounded-2xl bg-black/10 px-3 py-2">
-                                  <p>{nominatorName}</p>
-                                  <p>{nomineeName}</p>
-                                </div>
-                                <div className="rounded-2xl bg-black/10 px-3 py-2">
-                                  <p>{countVotesLabel(voteRecord.voterPlayerIds.length)}</p>
-                                  <p className="line-clamp-2">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
-                                </div>
-                              </div>
-                            )}
-                          </article>
-                        );
-                      }
-
-                      const note = item.note;
-                      const linkedPlayers = note.linkedPlayerIds
-                        .map((playerId) => playersById.get(playerId))
-                        .filter((player): player is Player => Boolean(player));
-                      const isEditingNote = editingNoteId === note.id;
-
-                      return (
-                        <article key={item.id} className="rounded-2xl border border-ember-200/12 bg-black/18 p-3">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <h3 className="text-sm font-semibold text-stone-100">
-                                {item.kind === "execution" ? "Казнь" : item.phase?.title ?? "История"}
-                              </h3>
-                              <p className="text-xs text-stone-500">
-                                {formatDate(item.createdAt)} · {formatTime(item.createdAt)}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (item.kind === "execution") {
-                                    openExecutionWithoutNominationModal(note.phaseId, note);
-                                    return;
-                                  }
-
-                                  startEditingHistoryNote(note);
-                                }}
-                                className="secondary-button min-h-10 px-3"
-                              >
-                                <Edit3 className="h-4 w-4" />
-                              </button>
-                              <button type="button" onClick={() => void deleteNote(note.id)} className="danger-button">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {isEditingNote ? (
-                            <div className="mt-3 space-y-3">
-                              <textarea
-                                value={editingNoteText}
-                                onChange={(event) => setEditingNoteText(event.target.value)}
-                                className="field min-h-28"
-                              />
-                              <div className="flex flex-wrap gap-2">
-                                <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button">
-                                  <Save className="h-4 w-4" />
-                                  Сохранить
-                                </button>
-                                <button type="button" onClick={cancelEditingHistoryNote} className="secondary-button">
-                                  <X className="h-4 w-4" />
-                                  Отмена
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-100">{note.text}</p>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {linkedPlayers.length > 0 ? (
-                                  linkedPlayers.map((player) => (
-                                    <span key={player.id} className="chip">
-                                      {player.name}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-xs text-stone-500">Без привязки к игрокам</span>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </article>
-                      );
-                    })
-                  )}
-                </div>
+                    {summaryGeneralInfoItems.length > 0 ? (
+                      <div className="space-y-3">
+                        <div>
+                          <h3 className="text-base font-semibold text-stone-100">Прочие заметки</h3>
+                          <p className="text-sm text-stone-400">Обычные информационные записи без привязки к роли.</p>
+                        </div>
+                        <div className="space-y-3">
+                          {summaryGeneralInfoItems.map((item) => renderSummaryItem(item))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </section>
+                )}
               </section>
             ) : null}
           </div>
@@ -2381,9 +3446,10 @@ export default function GamePage() {
         isMyToken={Boolean(selectedPlayer && effectiveMyPlayerId === selectedPlayer.id)}
         myTokenLocked={Boolean(selectedPlayer && effectiveMyPlayerId && effectiveMyPlayerId !== selectedPlayer.id)}
         myTeam={selectedPlayer && effectiveMyPlayerId === selectedPlayer.id ? game.myTeam : undefined}
-        notes={notes.filter((note) => note.kind !== "vote_history" && note.kind !== "execution")}
+        notes={notes}
         players={players}
         phases={phases}
+        currentPhase={selectedPhase}
         scriptRoles={game.scriptRoles}
         onClose={() => setSelectedPlayerId(null)}
         onSave={savePlayer}
@@ -2391,6 +3457,334 @@ export default function GamePage() {
         onDeleteNote={deleteNote}
         onUpdateNote={updateNote}
       />
+
+      {nightResultModalOpen && selectedPhase?.type === "night" ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+          <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-2xl sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-stone-50">Результат ночи</h2>
+                <p className="mt-1 text-sm text-stone-200">
+                  Выберите всех игроков, которые умерли этой ночью. Можно никого не выбирать.
+                </p>
+              </div>
+              <button type="button" onClick={closeNightResultModal} className="secondary-button px-3">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-ember-200/12 bg-black/15 p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-medium text-stone-100">
+                  Умерли ночью: {nightDeathPlayerIds.length > 0 ? nightDeathPlayerIds.length : "никто"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setNightDeathPlayerIds([])}
+                  className="secondary-button min-h-9 px-3 text-sm"
+                >
+                  Никто не умер
+                </button>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {players.filter((player) => player.alive).length === 0 ? (
+                  <p className="text-sm text-stone-400">Живых игроков не осталось.</p>
+                ) : (
+                  players
+                    .filter((player) => player.alive)
+                    .map((player) => {
+                      const selected = nightDeathPlayerIds.includes(player.id);
+
+                      return (
+                        <button
+                          key={player.id}
+                          type="button"
+                          onClick={() => toggleNightDeathPlayer(player.id)}
+                          className={
+                            selected
+                              ? "role-player-selected inline-flex min-h-10 items-center rounded-full border px-3 py-2 text-sm font-medium"
+                              : "secondary-button min-h-10 px-3 py-2 text-sm"
+                          }
+                          aria-pressed={selected}
+                        >
+                          {player.name}
+                        </button>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            {pageError ? <p className="mt-3 text-sm text-rose-300">{pageError}</p> : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={closeNightResultModal} className="secondary-button px-4">
+                Отмена
+              </button>
+              <button type="button" onClick={() => void saveNightResult()} className="primary-button" disabled={nightResultSaving}>
+                <CheckCircle2 className="h-4 w-4" />
+                {nightResultSaving ? "Сохраняем..." : "Сохранить и перейти в день"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {dayDeathModalOpen && phasesById.get(dayDeathPhaseId ?? selectedPhase?.id ?? "")?.type === "day" ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+          <section className="day-death-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-4xl sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-stone-50">
+                  {dayDeathEditingNoteId ? "Изменить дневную смерть" : "Человек умер"}
+                </h2>
+                <p className="mt-1 text-sm text-stone-200">
+                  Выберите всех игроков, которые умерли днём, и роль, по которой это могло произойти.
+                </p>
+              </div>
+              <button type="button" onClick={closeDayDeathModal} className="secondary-button px-3">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div className="rounded-2xl border border-ember-200/12 bg-black/15 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-stone-100">
+                    Умерли днём: {dayDeathPlayerIds.length > 0 ? dayDeathPlayerIds.length : "никто не выбран"}
+                  </p>
+                  {dayDeathPlayerIds.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setDayDeathPlayerIds([])}
+                      className="secondary-button min-h-9 px-3 text-sm"
+                    >
+                      Сбросить выбор
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {dayDeathModalPlayers.length === 0 ? (
+                    <p className="text-sm text-stone-400">Нет доступных игроков для выбора.</p>
+                  ) : (
+                    dayDeathModalPlayers.map((player) => {
+                      const selected = dayDeathPlayerIds.includes(player.id);
+
+                      return (
+                        <button
+                          key={player.id}
+                          type="button"
+                          onClick={() => toggleDayDeathPlayer(player.id)}
+                          className={
+                            selected
+                              ? "role-player-selected inline-flex min-h-10 items-center rounded-full border px-3 py-2 text-sm font-medium"
+                              : "secondary-button min-h-10 px-3 py-2 text-sm"
+                          }
+                          aria-pressed={selected}
+                        >
+                          {player.name}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-ember-200/12 bg-black/15 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-stone-100">По какой роли это могло произойти?</p>
+                  {dayDeathRoleId ? (
+                    <span className="chip">{getRoleLabel(dayDeathRoleId, dayDeathRoles)}</span>
+                  ) : null}
+                </div>
+
+                {dayDeathRoleGroups.length === 0 ? (
+                  <p className="mt-3 text-sm text-stone-400">
+                    В текущем сценарии не найдено ролей со смертью днём.
+                  </p>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {dayDeathRoles.map((role) => {
+                      const selected = dayDeathRoleId === role.id;
+                      const roleLabel = getRoleLabel(role.id, dayDeathRoles);
+
+                      return (
+                        <button
+                          key={role.id}
+                          type="button"
+                          onClick={() => setDayDeathRoleId((current) => (current === role.id ? "" : role.id))}
+                          title={roleLabel}
+                          className={
+                            selected
+                              ? "role-icon-selected inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/5"
+                              : "inline-flex h-11 w-11 items-center justify-center rounded-full bg-transparent hover:bg-black/5"
+                          }
+                          aria-pressed={selected}
+                        >
+                          <RoleTokenImage
+                            roleId={role.id}
+                            roles={dayDeathRoles}
+                            className="h-9 w-9 overflow-hidden rounded-full border-0 bg-transparent shadow-none"
+                            imageClassName="h-full w-full object-cover"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {pageError ? <p className="mt-3 text-sm text-rose-300">{pageError}</p> : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={closeDayDeathModal} className="secondary-button px-4">
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveDayDeathResult()}
+                className="primary-button"
+                disabled={dayDeathSaving || dayDeathPlayerIds.length === 0 || !dayDeathRoleId}
+              >
+                <Save className="h-4 w-4" />
+                {dayDeathSaving ? "Сохраняем..." : "Сохранить"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {executionFinishPromptVoteRecordId && selectedPhase?.type === "day" ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+          <section className="execution-finish-prompt-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-stone-50">Результат казни</h2>
+                <p className="mt-1 text-sm text-stone-200">
+                  Выберите, умер ли игрок по казни, или казнь состоялась, но он остался жить.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeExecutionFinishPrompt}
+                className="secondary-button px-3"
+                disabled={executionFinishPromptSaving}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {executionPromptNominee ? (
+              <div className="mt-4 rounded-2xl border border-ember-200/12 bg-black/15 px-4 py-3 text-sm text-stone-100">
+                Номинирован: <span className="font-semibold">{executionPromptNominee.name}</span>
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setExecutionFinishPromptOutcome("died")}
+                className={
+                  executionFinishPromptOutcome === "died"
+                    ? "primary-button min-h-10 px-4"
+                    : "secondary-button min-h-10 px-4"
+                }
+                disabled={executionFinishPromptSaving}
+              >
+                <Skull className="h-4 w-4" />
+                Умер по казни
+              </button>
+              <button
+                type="button"
+                onClick={() => setExecutionFinishPromptOutcome("survived")}
+                className={
+                  executionFinishPromptOutcome === "survived"
+                    ? "primary-button min-h-10 px-4"
+                    : "secondary-button min-h-10 px-4"
+                }
+                disabled={executionFinishPromptSaving}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Остался жить
+              </button>
+            </div>
+
+            {executionFinishPromptOutcome === "survived" ? (
+              <div className="mt-4 rounded-2xl border border-ember-200/12 bg-black/15 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-stone-100">Почему игрок пережил казнь?</p>
+                  {executionFinishPromptProtectionRoleId ? (
+                    <span className="chip">{getRoleLabel(executionFinishPromptProtectionRoleId, executionProtectionRoles)}</span>
+                  ) : null}
+                </div>
+                {executionProtectionRoleGroups.length === 0 ? (
+                  <p className="mt-3 text-sm text-stone-400">В текущем сценарии не найдено ролей, которые могут спасти от казни.</p>
+                ) : (
+                  <RoleIconGrid
+                    groups={executionProtectionRoleGroups}
+                    roles={executionProtectionRoles}
+                    selectedRoleId={executionFinishPromptProtectionRoleId}
+                    onSelect={(roleId) =>
+                      setExecutionFinishPromptProtectionRoleId((current) => (current === roleId ? "" : roleId))
+                    }
+                    className="mt-3 space-y-2"
+                    groupClassName="rounded-2xl border border-ember-200/10 bg-black/10 p-2.5"
+                    columnsClassName="grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-6"
+                    buttonClassName="rounded-xl p-1"
+                    iconClassName="h-10 w-10 sm:h-10 sm:w-10"
+                    showGroupLabel={false}
+                  />
+                )}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeExecutionFinishPrompt}
+                className="secondary-button px-4"
+                disabled={executionFinishPromptSaving}
+              >
+                Отмена
+              </button>
+              {executionFinishPromptOutcome === "died" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void confirmVoteRecordExecution(false)}
+                    className="secondary-button px-4"
+                    disabled={executionFinishPromptSaving}
+                  >
+                    Сохранить и в ночь
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void confirmVoteRecordExecution(true)}
+                    className="primary-button"
+                    disabled={executionFinishPromptSaving}
+                  >
+                    <Skull className="h-4 w-4" />
+                    {executionFinishPromptSaving ? "Сохраняем..." : "Сохранить и завершить"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void confirmVoteRecordExecution(false)}
+                  className="primary-button"
+                  disabled={executionFinishPromptSaving}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {executionFinishPromptSaving ? "Сохраняем..." : "Сохранить и в ночь"}
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {executionModalOpen && phasesById.get(executionPhaseId ?? selectedPhase?.id ?? "")?.type === "day" ? (
         <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">

@@ -98,7 +98,7 @@ export type Note = {
   id: string;
   gameId: string;
   phaseId: string;
-  kind?: "general" | "vote_history" | "execution" | "role_intel";
+  kind?: "general" | "vote_history" | "execution" | "role_intel" | "day_death";
   roleId?: string;
   text: string;
   linkedPlayerIds: string[];
@@ -119,6 +119,8 @@ export type VoteRecord = {
   deadVoterPlayerIds: string[];
   resultedInExecution?: boolean;
   executedPlayerId?: string;
+  executedPlayerDied?: boolean;
+  executionProtectionRoleId?: string;
   createdAt: string;
   updatedAt: string;
 };

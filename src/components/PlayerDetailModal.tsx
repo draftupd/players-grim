@@ -1,11 +1,11 @@
-import { Edit3, Save, Send, Trash2, UserRound, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import type { Note, PersonalTeam, Phase, Player, ScriptRole, TokenTint } from "../types";
+import { Edit3, Save, Trash2, UserRound, X } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import type { Note, PersonalTeam, Phase, Player, RoleType, ScriptRole, TokenTint } from "../types";
 import { formatDate, formatTime, sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
 import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
-import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, prettifyRoleName } from "../utils/scripts";
-import MentionTextarea from "./MentionTextarea";
+import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, normalizeRoleId, prettifyRoleName } from "../utils/scripts";
+import RoleIntelPanel from "./RoleIntelPanel";
 import RoleIconGrid from "./RoleIconGrid";
 import RoleTokenImage from "./RoleTokenImage";
 
@@ -17,6 +17,7 @@ type PlayerDetailModalProps = {
   notes: Note[];
   players: Player[];
   phases: Phase[];
+  currentPhase?: Phase;
   scriptRoles?: ScriptRole[];
   onClose: () => void;
   onSave: (
@@ -25,10 +26,17 @@ type PlayerDetailModalProps = {
     isMyToken: boolean,
     myTeam: PersonalTeam | undefined,
   ) => Promise<void>;
-  onAddNote: (phaseId: string, text: string, linkedPlayerIds: string[]) => Promise<void>;
+  onAddNote: (
+    phaseId: string,
+    text: string,
+    linkedPlayerIds: string[],
+    options?: { kind?: Note["kind"]; roleId?: string },
+  ) => Promise<void>;
   onDeleteNote: (noteId: string) => Promise<void>;
   onUpdateNote: (noteId: string, text: string, linkedPlayerIds: string[]) => Promise<void>;
 };
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export default function PlayerDetailModal({
   player,
@@ -38,6 +46,7 @@ export default function PlayerDetailModal({
   notes,
   players,
   phases,
+  currentPhase,
   scriptRoles = [],
   onClose,
   onSave,
@@ -59,6 +68,7 @@ export default function PlayerDetailModal({
       notes={notes}
       players={players}
       phases={phases}
+      currentPhase={currentPhase}
       scriptRoles={scriptRoles}
       onClose={onClose}
       onSave={onSave}
@@ -81,6 +91,7 @@ function PlayerDetailForm({
   notes,
   players,
   phases,
+  currentPhase,
   scriptRoles = [],
   onClose,
   onSave,
@@ -101,10 +112,7 @@ function PlayerDetailForm({
   ]);
   const [myTokenHint, setMyTokenHint] = useState("");
   const [error, setError] = useState("");
-  const [noteText, setNoteText] = useState("");
-  const [notePhaseId, setNotePhaseId] = useState(sortPhases(phases)[0]?.id ?? "");
   const [noteError, setNoteError] = useState("");
-  const [noteSaving, setNoteSaving] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2>("main");
@@ -112,14 +120,21 @@ function PlayerDetailForm({
   const sortedPhases = sortPhases(phases);
   const { data: referenceData } = useReferenceData();
   const linkedPlayerNotes = useMemo(
-    () => notes.filter((note) => note.linkedPlayerIds.includes(player.id)),
+    () =>
+      notes.filter(
+        (note) =>
+          note.linkedPlayerIds.includes(player.id) &&
+          note.kind === "role_intel",
+      ),
     [notes, player.id],
   );
 
   const notesByPhase = useMemo(() => {
     return sortedPhases.map((phase) => ({
       phase,
-      notes: linkedPlayerNotes.filter((note) => note.phaseId === phase.id),
+      notes: linkedPlayerNotes
+        .filter((note) => note.phaseId === phase.id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     }));
   }, [linkedPlayerNotes, sortedPhases]);
 
@@ -137,6 +152,29 @@ function PlayerDetailForm({
         scriptRoles.map((role) => role.id),
       ),
     [referenceData?.roleMap, scriptRoles],
+  );
+  const roleMentionEntries = useMemo(() => {
+    const mentions = new Map<string, string>();
+
+    mergedScriptRoles.forEach((role) => {
+      [role.name, getRoleLabel(role.id, mergedScriptRoles)].forEach((label) => {
+        const trimmed = label.trim();
+
+        if (trimmed) {
+          mentions.set(trimmed, role.id);
+        }
+      });
+    });
+
+    return Array.from(mentions.entries()).sort((a, b) => b[0].length - a[0].length);
+  }, [mergedScriptRoles]);
+  const roleMentionMap = useMemo(() => new Map(roleMentionEntries), [roleMentionEntries]);
+  const roleMentionRegex = useMemo(
+    () =>
+      roleMentionEntries.length > 0
+        ? new RegExp(`(${roleMentionEntries.map(([label]) => escapeRegExp(label)).join("|")})`, "g")
+        : null,
+    [roleMentionEntries],
   );
   const roleOptions = useMemo(
     () =>
@@ -156,7 +194,7 @@ function PlayerDetailForm({
     [roleIconGroups],
   );
   const townsfolkRoleGroup = roleIconGroupsByKey.get("townsfolk");
-  const sideRoleGroups = ["outsider", "minion", "demon"]
+  const sideRoleGroups = (["outsider", "minion", "demon"] satisfies RoleType[])
     .map((key) => roleIconGroupsByKey.get(key))
     .filter((group): group is NonNullable<typeof group> => Boolean(group));
   const currentVisibleRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
@@ -189,6 +227,7 @@ function PlayerDetailForm({
     return inferredPersonalTeam;
   }, [inferredPersonalTeam, tokenTint]);
   const linkedNoteCount = linkedPlayerNotes.length;
+  const mainRoleNoteRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
 
   const assignRoleToSlot = (roleId: string) => {
     if (activeRoleSlot === "main") {
@@ -203,52 +242,6 @@ function PlayerDetailForm({
     setActiveRoleSlot((current) => (current === 0 ? 1 : current === 1 ? 2 : "main"));
   };
 
-  const appendMention = (
-    currentText: string,
-    setText: (value: string) => void,
-    playerName: string,
-  ) => {
-    const mention = `@${playerName}`;
-    const trimmedEnd = currentText.replace(/\s+$/u, "");
-
-    if (trimmedEnd.includes(mention)) {
-      return;
-    }
-
-    const separator = trimmedEnd.length > 0 ? " " : "";
-    setText(`${trimmedEnd}${separator}${mention} `);
-  };
-
-  const handleAddPlayerNote = async () => {
-    const trimmed = noteText.trim();
-
-    if (!trimmed) {
-      setNoteError("Заполни текст заметки.");
-      return;
-    }
-
-    if (!notePhaseId) {
-      setNoteError("Выбери фазу для заметки.");
-      return;
-    }
-
-    setNoteSaving(true);
-    setNoteError("");
-
-    try {
-      await onAddNote(
-        notePhaseId,
-        trimmed,
-        mergeManualAndMentionLinks(trimmed, players, uniqueIds([player.id])),
-      );
-      setNoteText("");
-    } catch {
-      setNoteError("Не удалось сохранить заметку.");
-    } finally {
-      setNoteSaving(false);
-    }
-  };
-
   const startEditingNote = (note: Note) => {
     setEditingNoteId(note.id);
     setEditingText(note.text);
@@ -259,7 +252,7 @@ function PlayerDetailForm({
     setEditingText("");
   };
 
-  const saveEditingNote = async (noteId: string) => {
+  const saveEditingNote = async (note: Note) => {
     const trimmed = editingText.trim();
 
     if (!trimmed) {
@@ -268,12 +261,76 @@ function PlayerDetailForm({
     }
 
     try {
-      await onUpdateNote(noteId, trimmed, mergeManualAndMentionLinks(trimmed, players, [player.id]));
+      await onUpdateNote(
+        note.id,
+        trimmed,
+        mergeManualAndMentionLinks(trimmed, players, uniqueIds([player.id, ...note.linkedPlayerIds])),
+      );
       cancelEditingNote();
       setNoteError("");
     } catch {
       setNoteError("Не удалось обновить заметку.");
     }
+  };
+
+  const addPlayerRoleIntelNote = async (roleId: string, text: string, linkedPlayerIds: string[]) => {
+    if (!currentPhase) {
+      setNoteError("Сейчас нет активной фазы для заметки.");
+      throw new Error("phase_required");
+    }
+
+    await onAddNote(currentPhase.id, text, uniqueIds([player.id, ...linkedPlayerIds]), {
+      kind: "role_intel",
+      roleId,
+    });
+    setNoteError("");
+  };
+
+  const renderPlayerNoteText = (text: string) => {
+    if (!roleMentionRegex) {
+      return <p className="whitespace-pre-wrap text-sm leading-6 text-stone-200">{text}</p>;
+    }
+
+    const lines = text.split("\n");
+
+    return (
+      <p className="whitespace-pre-wrap text-sm leading-6 text-stone-200">
+        {lines.map((line, lineIndex) => (
+          <Fragment key={`${lineIndex}-${line}`}>
+            {line.split(roleMentionRegex).map((part, partIndex) => {
+              const roleId = roleMentionMap.get(part);
+
+              if (!roleId) {
+                return <Fragment key={`${lineIndex}-${partIndex}`}>{part}</Fragment>;
+              }
+
+              const roleLabel = getRoleLabel(roleId, mergedScriptRoles);
+
+              return (
+                <span
+                  key={`${lineIndex}-${partIndex}-${normalizeRoleId(roleId)}`}
+                  className="mx-0.5 inline-flex h-8 w-8 align-middle"
+                  title={roleLabel}
+                >
+                  <RoleTokenImage
+                    roleId={roleId}
+                    roles={mergedScriptRoles}
+                    className="h-8 w-8 overflow-hidden rounded-full border border-ember-200/20 bg-white/90 shadow-[0_4px_10px_rgba(0,0,0,0.12)]"
+                    imageClassName="h-full w-full object-cover"
+                    fallback={
+                      <span className="inline-flex items-center rounded-full border border-ember-200/20 bg-black/10 px-2 py-1 text-xs">
+                        {roleLabel}
+                      </span>
+                    }
+                  />
+                </span>
+              );
+            })}
+            {lineIndex < lines.length - 1 ? <br /> : null}
+          </Fragment>
+        ))}
+      </p>
+    );
   };
 
   const handleToggleMyToken = () => {
@@ -598,56 +655,38 @@ function PlayerDetailForm({
               <p className="text-sm text-stone-400">{linkedNoteCount} записей</p>
             </div>
 
-            <div className="player-detail-note-composer space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3">
-              <div className="space-y-2">
-                <label className="block space-y-2">
-                  <span className="label">
-                    Новая заметка <span className="text-stone-500">(@имя игрока)</span>
-                  </span>
-                  <div className="relative">
-                    <MentionTextarea
-                      value={noteText}
-                      onChange={setNoteText}
-                      players={players}
-                      minHeightClassName="min-h-11 pr-16 pt-3 pb-3"
-                      placeholder="Что хотите записать?"
-                    />
-                    <div className="pointer-events-none absolute right-3 top-[22px] -translate-y-1/2">
-                      <button
-                        type="button"
-                        onClick={handleAddPlayerNote}
-                        disabled={noteSaving}
-                        aria-label="Добавить заметку"
-                        title="Добавить заметку"
-                        className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border border-ember-200/35 bg-ember-200 text-ink-900 transition hover:bg-ember-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <Send className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </label>
+            {mainRoleNoteRoleId && currentPhase ? (
+              <div className="space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-stone-100">Спец. заметка по основной роли</h4>
+                  <p className="text-sm text-stone-400">
+                    Можно добавлять только ролевую информацию по основной роли этого игрока.
+                  </p>
+                </div>
+                <RoleIntelPanel
+                  phase={currentPhase}
+                  notes={[]}
+                  players={players}
+                  roles={mergedScriptRoles}
+                  onAddNote={addPlayerRoleIntelNote}
+                  onDeleteNote={onDeleteNote}
+                  onUpdateNote={onUpdateNote}
+                  availableRoleIds={[mainRoleNoteRoleId]}
+                  selectedRoleIdOverride={mainRoleNoteRoleId}
+                  fixedLinkedPlayerIds={[player.id]}
+                  showSourcePlayerPicker={false}
+                  hideHistory
+                  hideHeader
+                  embedded
+                />
+                {noteError ? <p className="text-sm text-red-200">{noteError}</p> : null}
               </div>
-
-              <div className="flex flex-wrap gap-2">
-                {players.map((linkedPlayer) => (
-                  <button
-                    key={linkedPlayer.id}
-                    type="button"
-                    onClick={() => appendMention(noteText, setNoteText, linkedPlayer.name)}
-                    className="rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200 transition hover:border-ember-200/25 hover:bg-ember-200/8 hover:text-stone-50"
-                  >
-                    {linkedPlayer.name}
-                  </button>
-                ))}
-              </div>
-
-              {noteError ? <p className="text-sm text-red-200">{noteError}</p> : null}
-            </div>
+            ) : null}
 
             <div className="space-y-3">
               {notesByPhase.every((group) => group.notes.length === 0) ? (
                 <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
-                  Для этого игрока пока нет связанных заметок.
+                  Для этого игрока пока нет ролевой информации.
                 </div>
               ) : (
                 notesByPhase
@@ -660,26 +699,13 @@ function PlayerDetailForm({
                           <article key={note.id} className="rounded-xl border border-ember-200/10 bg-black/15 p-3">
                             {editingNoteId === note.id ? (
                               <div className="space-y-3">
-                                <MentionTextarea
+                                <textarea
                                   value={editingText}
-                                  onChange={setEditingText}
-                                  players={players}
-                                  minHeightClassName="min-h-24"
+                                  onChange={(event) => setEditingText(event.target.value)}
+                                  className="field min-h-24"
                                 />
                                 <div className="flex flex-wrap gap-2">
-                                  {players.map((linkedPlayer) => (
-                                    <button
-                                      key={linkedPlayer.id}
-                                      type="button"
-                                      onClick={() => appendMention(editingText, setEditingText, linkedPlayer.name)}
-                                      className="rounded-xl border border-ember-200/10 bg-black/20 px-3 py-2 text-sm text-stone-200 transition hover:border-ember-200/25 hover:bg-ember-200/8 hover:text-stone-50"
-                                    >
-                                      {linkedPlayer.name}
-                                    </button>
-                                  ))}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <button type="button" onClick={() => saveEditingNote(note.id)} className="primary-button">
+                                  <button type="button" onClick={() => saveEditingNote(note)} className="primary-button">
                                     <Save className="h-4 w-4" />
                                     Сохранить
                                   </button>
@@ -691,7 +717,23 @@ function PlayerDetailForm({
                               </div>
                             ) : (
                               <>
-                                <p className="whitespace-pre-wrap text-sm leading-6 text-stone-200">{note.text}</p>
+                                {note.kind === "role_intel" && note.roleId ? (
+                                  <div className="mb-3 flex items-center gap-2">
+                                    <RoleTokenImage
+                                      roleId={note.roleId}
+                                      roles={mergedScriptRoles}
+                                      className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                                      imageClassName="h-full w-full object-cover"
+                                    />
+                                    <div>
+                                      <p className="text-xs uppercase tracking-[0.22em] text-ember-100/70">Ролевая информация</p>
+                                      <p className="text-sm font-semibold text-stone-100">
+                                        {getRoleLabel(note.roleId, mergedScriptRoles)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : null}
+                                {renderPlayerNoteText(note.text)}
                                 <div className="mt-3 flex items-center justify-between gap-3">
                                   <span className="text-xs text-stone-500">
                                     {formatDate(note.createdAt)} · {formatTime(note.createdAt)}

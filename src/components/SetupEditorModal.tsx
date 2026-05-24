@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { FileJson, Plus, Save, Trash2, X } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import type { Game, Player, RoleType, ScriptRole } from "../types";
+import { baseScriptPresets } from "../utils/baseScripts";
 import { readImportedScript } from "../utils/importErrors";
 import { getRoleLabel, mergeScriptRoles, prettifyRoleName } from "../utils/scripts";
 
@@ -127,6 +128,19 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
     setScriptRoles((current) => current.filter((role) => role.id !== roleId));
   };
 
+  const applyBaseScript = (presetId: (typeof baseScriptPresets)[number]["id"]) => {
+    const preset = baseScriptPresets.find((item) => item.id === presetId);
+
+    if (!preset) {
+      return;
+    }
+
+    setScriptName(preset.name);
+    setScriptAuthor(preset.author);
+    setScriptRoles(preset.roles);
+    setError("");
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       setError("Название партии обязательно.");
@@ -221,6 +235,19 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
                   Загрузить JSON
                   <input type="file" accept=".json,application/json" onChange={handleScriptFile} className="hidden" />
                 </label>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {baseScriptPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyBaseScript(preset.id)}
+                    className={scriptName === preset.name ? "primary-button min-h-10 px-3" : "secondary-button min-h-10 px-3"}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">

@@ -156,8 +156,12 @@ export const personalTeamLabel = (team?: PersonalTeam) => {
 };
 
 export const personalResultLabel = (winner?: Winner, team?: PersonalTeam) => {
-  if (!winner || winner === "unknown" || !team || team === "unknown") {
-    return "Итог не ясен";
+  if (!winner || winner === "unknown") {
+    return "Победитель не указан";
+  }
+
+  if (!team || team === "unknown") {
+    return "Моя команда не указана";
   }
 
   if (team === "traveller") {

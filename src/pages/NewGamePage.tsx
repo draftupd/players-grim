@@ -3,6 +3,7 @@ import { ChangeEvent, FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "../db/db";
 import type { Game, Phase, Player, ScriptRole } from "../types";
+import { baseScriptPresets } from "../utils/baseScripts";
 import { formatDate, phaseTitle, timestamp, todayInputValue } from "../utils/dates";
 import { createId } from "../utils/ids";
 import { readImportedScript } from "../utils/importErrors";
@@ -71,6 +72,19 @@ export default function NewGamePage() {
     setScriptName("");
     setScriptAuthor("");
     setScriptRoles([]);
+  };
+
+  const applyBaseScript = (presetId: (typeof baseScriptPresets)[number]["id"]) => {
+    const preset = baseScriptPresets.find((item) => item.id === presetId);
+
+    if (!preset) {
+      return;
+    }
+
+    setScriptName(preset.name);
+    setScriptAuthor(preset.author);
+    setScriptRoles(preset.roles);
+    setError("");
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -222,13 +236,26 @@ export default function NewGamePage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">Сценарий</h2>
-                <p className="text-sm text-stone-400">Загрузите JSON из Script Tool.</p>
+                <p className="text-sm text-stone-400">Выберите базовый сценарий или загрузите JSON из Script Tool.</p>
               </div>
               <label className="secondary-button cursor-pointer">
                 <FileJson className="h-4 w-4" />
                 Загрузить JSON
                 <input type="file" accept=".json,application/json" onChange={handleScriptFile} className="hidden" />
               </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {baseScriptPresets.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyBaseScript(preset.id)}
+                  className={scriptName === preset.name ? "primary-button min-h-10 px-3" : "secondary-button min-h-10 px-3"}
+                >
+                  {preset.name}
+                </button>
+              ))}
             </div>
 
             {scriptRoles.length > 0 ? (

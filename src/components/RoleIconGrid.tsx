@@ -13,6 +13,7 @@ type RoleIconGridProps = {
   groups: RoleIconGridGroup[];
   roles: ScriptRole[];
   selectedRoleId?: string;
+  selectedRoleIds?: string[];
   onSelect: (roleId: string) => void;
   className?: string;
   groupClassName?: string;
@@ -29,6 +30,7 @@ export default function RoleIconGrid({
   groups,
   roles,
   selectedRoleId,
+  selectedRoleIds,
   onSelect,
   className,
   groupClassName,
@@ -66,7 +68,7 @@ export default function RoleIconGrid({
             )}
           >
             {group.roleIds.map((roleId) => {
-              const selected = selectedRoleId === roleId;
+              const selected = selectedRoleId === roleId || selectedRoleIds?.includes(roleId);
 
               return (
                 <button
