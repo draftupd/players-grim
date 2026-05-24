@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Check, Square } from "lucide-react";
+import { Check, Skull, Square } from "lucide-react";
 import type { Player, PlayerVoteAvailability, ScriptRole } from "../types";
 import { getRoleLabel, getRoleTypeFromRoles } from "../utils/scripts";
 import RoleTokenImage from "./RoleTokenImage";
@@ -15,6 +15,7 @@ type PlayerTokenProps = {
   extraTokenScale?: number;
   nameScale?: number;
   voteAvailability?: PlayerVoteAvailability;
+  isOnBlock?: boolean;
   onClick: (player: Player) => void;
 };
 
@@ -45,6 +46,7 @@ export default function PlayerToken({
   extraTokenScale = 1,
   nameScale = 1,
   voteAvailability,
+  isOnBlock = false,
   onClick,
 }: PlayerTokenProps) {
   const visibleRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
@@ -141,6 +143,11 @@ export default function PlayerToken({
             <Square className="h-[72%] w-[72%]" strokeWidth={2.2} />
             {hasDeadVote ? <Check className="absolute h-[58%] w-[58%]" strokeWidth={3} /> : <span className="player-token-shroud__slash" />}
           </span>
+        </span>
+      ) : null}
+      {isOnBlock ? (
+        <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <Skull className="h-[56%] w-[56%] text-black/42 drop-shadow-[0_3px_8px_rgba(255,255,255,0.24)]" strokeWidth={2.5} />
         </span>
       ) : null}
       <span

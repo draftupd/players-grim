@@ -87,17 +87,17 @@ export default function NightOrderPanel({
             return (
               <li
                 key={`${item}-${index}`}
-                className="rounded-2xl border border-ember-200/10 bg-black/15 px-3 py-2.5"
+                className="rounded-2xl border border-ember-200/10 bg-black/15 px-3 py-2"
               >
-                <div className="flex items-start gap-2">
-                  <div className="w-12 shrink-0">
+                <div className="flex items-start gap-3">
+                  <div className="flex w-16 shrink-0 flex-col items-center pt-0.5">
                     <RoleTokenImage
                       roleId={item}
                       roles={roles}
-                      className="mx-auto h-10 w-10 overflow-hidden rounded-full border border-ember-200/20 bg-black/20 sm:h-11 sm:w-11"
+                      className="h-10 w-10 overflow-hidden rounded-full border border-ember-200/20 bg-black/20 sm:h-10 sm:w-10"
                       imageClassName="h-full w-full object-cover"
                     />
-                    <p className="mt-0.5 text-center text-[9px] font-medium leading-[0.7rem] text-stone-100 sm:text-[10px] sm:leading-3">
+                    <p className="mt-1 text-center text-[9px] font-medium leading-[0.7rem] text-stone-100 sm:text-[10px] sm:leading-3">
                       {reference?.name ?? item}
                     </p>
                   </div>

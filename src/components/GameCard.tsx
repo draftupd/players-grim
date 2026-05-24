@@ -49,22 +49,6 @@ export default function GameCard({
         ? "border-red-300/55 bg-[linear-gradient(135deg,rgba(248,113,113,0.16),rgba(30,19,24,0.72))] shadow-[0_16px_34px_rgba(248,113,113,0.14)]"
         : "border-amber-200/45 bg-[linear-gradient(135deg,rgba(251,191,36,0.14),rgba(36,28,18,0.68))] shadow-[0_16px_34px_rgba(251,191,36,0.12)]";
   const finalNotes = game.finalNotes?.trim();
-  const resultSummary = (() => {
-    if (game.myTeam === "good") {
-      return game.winner === "good" ? "Мой выигрыш за команду Синих." : "Мой проигрыш команде Красных.";
-    }
-
-    if (game.myTeam === "evil") {
-      return game.winner === "evil" ? "Мой выигрыш за команду Красных." : "Мой проигрыш команде Синих.";
-    }
-
-    if (game.myTeam === "traveller") {
-      return "Мой итог за Traveller.";
-    }
-
-    return "";
-  })();
-
   return (
     <Link
       to={`/games/${game.id}`}
@@ -176,10 +160,8 @@ export default function GameCard({
             Победитель: {winnerLabel(game.winner)}
           </span>
           <div className="mt-2 text-sm leading-5 text-stone-100">
-            {resultSummary ? <p>{resultSummary}</p> : null}
             {game.myRoleId ? (
               <p className="mt-1 inline-flex flex-wrap items-center gap-1.5">
-                <span>Мой жетон:</span>
                 <RoleTokenImage
                   roleId={game.myRoleId}
                   roles={game.scriptRoles}
@@ -190,7 +172,7 @@ export default function GameCard({
               </p>
             ) : null}
             {finalNotes ? <p className="mt-1">{finalNotes}</p> : null}
-            {!resultSummary && !game.myRoleId && !finalNotes ? <p>Без пояснения по итогу</p> : null}
+            {!game.myRoleId && !finalNotes ? <p>Без пояснения по итогу</p> : null}
           </div>
         </div>
       ) : null}

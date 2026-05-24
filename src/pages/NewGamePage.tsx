@@ -97,6 +97,11 @@ export default function NewGamePage() {
       return;
     }
 
+    if (!storyteller.trim()) {
+      setError("Имя ведущего обязательно.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -107,7 +112,7 @@ export default function NewGamePage() {
       id: gameId,
       title: trimmedTitle,
       date,
-      storyteller: storyteller.trim() || undefined,
+      storyteller: storyteller.trim(),
       scriptName: scriptName.trim() || undefined,
       scriptAuthor: scriptAuthor.trim() || undefined,
       scriptRoles,

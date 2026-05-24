@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { ChevronDown, Lock, LockOpen, Plus, Save, Settings2, X } from "lucide-react";
+import { ChevronDown, Lock, LockOpen, Plus, Save, Settings2, Skull, Users, X } from "lucide-react";
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import type {
@@ -31,6 +31,13 @@ type PlayerCircleProps = {
   voteDraft?: VoteDraft | null;
   showVoteMarkers?: boolean;
   voteAvailabilityByPlayerId?: ReadonlyMap<string, PlayerVoteAvailability>;
+  voteRequirementSummary?: {
+    headline: string;
+    aliveVotes: number;
+    deadVotes: number;
+    totalVotes: number;
+  } | null;
+  currentBlockPlayerId?: string | null;
   selectableNominatorIds?: ReadonlySet<string>;
   selectableNomineeIds?: ReadonlySet<string>;
   onToggleVoteVoter?: (playerId: string) => void;
@@ -156,6 +163,8 @@ export default function PlayerCircle({
   voteDraft = null,
   showVoteMarkers = false,
   voteAvailabilityByPlayerId,
+  voteRequirementSummary = null,
+  currentBlockPlayerId = null,
   selectableNominatorIds,
   selectableNomineeIds,
   onToggleVoteVoter,
@@ -758,6 +767,30 @@ export default function PlayerCircle({
           </div>
         ) : null}
 
+        {votingStage && voteRequirementSummary ? (
+          <div className="absolute left-1/2 top-1/2 z-20 w-[220px] max-w-[82%] -translate-x-1/2 -translate-y-[160%] rounded-[22px] border border-ember-100/30 px-3 py-2.5 text-center shadow-[0_18px_40px_rgba(0,0,0,0.32)] backdrop-blur-sm sm:w-[280px] sm:max-w-[70%] sm:px-4"
+            style={{ backgroundColor: "rgba(53, 53, 57, 0.72)" }}
+          >
+            <p className="text-[11px] font-semibold leading-snug text-white sm:text-[13px]">
+              {voteRequirementSummary.headline}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-[10px] text-stone-100 sm:text-xs">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1">
+                <Users className="h-3.5 w-3.5 text-emerald-200" />
+                <span className="text-white">{voteRequirementSummary.aliveVotes}</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1">
+                <Skull className="h-3.5 w-3.5 text-rose-200" />
+                <span className="text-white">{voteRequirementSummary.deadVotes}</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1">
+                <Plus className="h-3.5 w-3.5 text-amber-200" />
+                <span className="text-white">{voteRequirementSummary.totalVotes}</span>
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         {votingStage ? (
           <div
             className="absolute left-1/2 top-1/2 z-20 flex w-[138px] max-w-[74%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2.5 rounded-[24px] border border-ember-100/30 px-3 py-3 text-center shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:w-[196px] sm:max-w-[68%] sm:px-4 sm:py-4"
@@ -956,6 +989,7 @@ export default function PlayerCircle({
                 extraTokenScale={currentStyle.extraTokenScale}
                 nameScale={currentStyle.nameScale}
                 voteAvailability={voteAvailability}
+                isOnBlock={currentBlockPlayerId === player.id}
                 onClick={handleTokenClick}
               />
             </div>

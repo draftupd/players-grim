@@ -32,6 +32,7 @@ type PlayerDetailModalProps = {
     linkedPlayerIds: string[],
     options?: { kind?: Note["kind"]; roleId?: string },
   ) => Promise<void>;
+  onDeleteTraveller?: (playerId: string) => Promise<void>;
   onDeleteNote: (noteId: string) => Promise<void>;
   onUpdateNote: (noteId: string, text: string, linkedPlayerIds: string[]) => Promise<void>;
 };
@@ -51,6 +52,7 @@ export default function PlayerDetailModal({
   onClose,
   onSave,
   onAddNote,
+  onDeleteTraveller,
   onDeleteNote,
   onUpdateNote,
 }: PlayerDetailModalProps) {
@@ -73,6 +75,7 @@ export default function PlayerDetailModal({
       onClose={onClose}
       onSave={onSave}
       onAddNote={onAddNote}
+      onDeleteTraveller={onDeleteTraveller}
       onDeleteNote={onDeleteNote}
       onUpdateNote={onUpdateNote}
     />
@@ -96,6 +99,7 @@ function PlayerDetailForm({
   onClose,
   onSave,
   onAddNote,
+  onDeleteTraveller,
   onDeleteNote,
   onUpdateNote,
 }: PlayerDetailFormProps) {
@@ -371,6 +375,28 @@ function PlayerDetailForm({
     }
   };
 
+  const handleDeleteTraveller = async () => {
+    if (!player.isTraveller || !onDeleteTraveller) {
+      return;
+    }
+
+    if (!window.confirm(`Удалить Traveller ${player.name}?`)) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await onDeleteTraveller(player.id);
+      onClose();
+    } catch {
+      setError("Не удалось удалить Traveller.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div
       className="player-detail-modal fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6"
@@ -386,6 +412,18 @@ function PlayerDetailForm({
             <h2 className="text-2xl font-bold text-stone-50">{player.name}</h2>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {player.isTraveller ? (
+              <button
+                type="button"
+                onClick={() => void handleDeleteTraveller()}
+                disabled={saving}
+                aria-label="Удалить Traveller"
+                title="Удалить Traveller"
+                className="danger-button min-h-12 px-4"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={handleSave}

@@ -230,6 +230,10 @@ const buildDayDeathNoteText = (playerNames: string[], roleLabel: string) =>
     : `Днём умерли по роли ${roleLabel}: ${playerNames.join(", ")}.`;
 
 const buildExecutionSurvivalSummaryText = (playerName: string) => `Выжил после казни: ${playerName}`;
+const NIGHT_RESULT_EMPTY_TEXT = "Этой ночью никто не умер.";
+const buildNightDeathNoteText = (playerName: string) => `${playerName} умер ночью.`;
+const isNightResultNote = (note: Note) =>
+  note.kind === "general" && (note.text === NIGHT_RESULT_EMPTY_TEXT || note.text.endsWith(" умер ночью."));
 
 const buildPhase = (gameId: string, number: number, type: Phase["type"], createdAt: string): Phase => ({
   id: createId(),
@@ -303,6 +307,11 @@ export default function GamePage() {
   const [nightResultModalOpen, setNightResultModalOpen] = useState(false);
   const [nightDeathPlayerIds, setNightDeathPlayerIds] = useState<string[]>([]);
   const [nightResultSaving, setNightResultSaving] = useState(false);
+  const [nightResultCandidatePlayerIds, setNightResultCandidatePlayerIds] = useState<string[]>([]);
+  const [nightResultSnapshot, setNightResultSnapshot] = useState<{
+    phaseId: string;
+    playerStates: Array<{ id: string; alive: boolean; deadVoteAvailable?: boolean }>;
+  } | null>(null);
   const [dayDeathModalOpen, setDayDeathModalOpen] = useState(false);
   const [dayDeathPlayerIds, setDayDeathPlayerIds] = useState<string[]>([]);
   const [dayDeathRoleId, setDayDeathRoleId] = useState("");
@@ -438,15 +447,23 @@ export default function GamePage() {
       extraRoleIds,
     );
   }, [gameResult.game?.activeFabledIds, gameResult.game?.activeLoricIds, gameResult.game?.scriptRoles, players, referenceData?.roleMap]);
+  const scenarioReferenceRoles = useMemo(
+    () =>
+      mergeReferenceRoles(
+        gameResult.game?.scriptRoles ?? [],
+        referenceData?.roleMap ?? new Map(),
+      ),
+    [gameResult.game?.scriptRoles, referenceData?.roleMap],
+  );
   const dayDeathRoles = useMemo(() => {
-    const matchingRoles = roleReferenceRoles.filter((role) => DAY_DEATH_ROLE_IDS.has(normalizeRoleId(role.id)));
+    const matchingRoles = scenarioReferenceRoles.filter((role) => DAY_DEATH_ROLE_IDS.has(normalizeRoleId(role.id)));
 
     if (matchingRoles.length > 0) {
       return matchingRoles;
     }
 
     return (referenceData?.roles ?? []).filter((role) => DAY_DEATH_ROLE_IDS.has(normalizeRoleId(role.id)));
-  }, [referenceData?.roles, roleReferenceRoles]);
+  }, [referenceData?.roles, scenarioReferenceRoles]);
   const executionProtectionRoles = useMemo(() => {
     const matchingRoles = roleReferenceRoles.filter((role) => EXECUTION_SURVIVAL_ROLE_IDS.has(normalizeRoleId(role.id)));
 
@@ -489,6 +506,17 @@ export default function GamePage() {
 
     return Array.from(mentions.entries()).sort((a, b) => b[0].length - a[0].length);
   }, [roleReferenceRoles]);
+  const nightResultModalPlayers = useMemo(() => {
+    if (nightResultCandidatePlayerIds.length === 0) {
+      return [];
+    }
+
+    const candidateIds = new Set(nightResultCandidatePlayerIds);
+
+    return [...players]
+      .filter((player) => candidateIds.has(player.id))
+      .sort((a, b) => a.seatIndex - b.seatIndex);
+  }, [nightResultCandidatePlayerIds, players]);
   const roleMentionMap = useMemo(() => new Map(roleMentionEntries), [roleMentionEntries]);
   const roleMentionRegex = useMemo(
     () =>
@@ -655,6 +683,26 @@ export default function GamePage() {
     () => [...selectedPhaseVoteAnalysesAsc].reverse(),
     [selectedPhaseVoteAnalysesAsc],
   );
+  const currentBlockPlayerId = useMemo(() => {
+    let current: string | null = null;
+
+    selectedPhaseVoteAnalysesAsc.forEach((analysis) => {
+      if (analysis.voteType !== "execution") {
+        return;
+      }
+
+      if (analysis.removedPreviousFromBlock && !analysis.isOnTheBlock) {
+        current = null;
+        return;
+      }
+
+      if (analysis.isOnTheBlock) {
+        current = analysis.voteRecord.nomineePlayerId;
+      }
+    });
+
+    return current;
+  }, [selectedPhaseVoteAnalysesAsc]);
   const selectedPhaseExecutionNote = useMemo(
     () => notes.find((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "execution"),
     [notes, effectiveSelectedPhaseId],
@@ -695,6 +743,62 @@ export default function GamePage() {
       ),
     [deadVoteSpentPlayerIds, players],
   );
+  const voteRequirementSummary = useMemo(() => {
+    if (!voteDraft || !selectedPhase || selectedPhase.type !== "day") {
+      return null;
+    }
+
+    const aliveVotes = players.filter((player) => player.alive).length;
+    const deadVotes = players.filter((player) => !player.alive && voteAvailabilityByPlayerId.get(player.id) === "dead_available").length;
+    const totalVotes = aliveVotes + deadVotes;
+
+    if ((voteDraft.voteType ?? "execution") === "traveller_exile") {
+      const threshold = getTravellerExileThreshold(players.length);
+
+      return {
+        headline: `Нужно ${threshold} голосов, чтобы изгнать Traveller`,
+        aliveVotes,
+        deadVotes,
+        totalVotes,
+      };
+    }
+
+    const threshold = getExecutionThreshold(aliveVotes);
+    let highestVotes = 0;
+
+    [...selectedPhaseVoteRecords]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .forEach((voteRecord) => {
+        if (resolveVoteType(voteRecord) !== "execution") {
+          return;
+        }
+
+        const voteCount = voteRecord.voterPlayerIds.length;
+
+        if (voteCount < threshold) {
+          return;
+        }
+
+        if (voteCount > highestVotes) {
+          highestVotes = voteCount;
+          return;
+        }
+
+        if (voteCount === highestVotes) {
+          highestVotes = voteCount;
+        }
+      });
+
+    return {
+      headline:
+        highestVotes === 0
+          ? `Нужно ${threshold} голосов, чтобы номинировать`
+          : `Нужно ${highestVotes} голосов, чтобы сровнять, и ${highestVotes + 1} — чтобы номинировать`,
+      aliveVotes,
+      deadVotes,
+      totalVotes,
+    };
+  }, [players, selectedPhase, selectedPhaseVoteRecords, voteAvailabilityByPlayerId, voteDraft]);
 
   useEffect(() => {
     if (!voteDraft) {
@@ -739,6 +843,8 @@ export default function GamePage() {
     if (selectedPhase?.type !== "night") {
       setNightResultModalOpen(false);
       setNightDeathPlayerIds([]);
+      setNightResultCandidatePlayerIds([]);
+      setNightResultSnapshot(null);
     }
   }, [selectedPhase?.type]);
 
@@ -850,7 +956,29 @@ export default function GamePage() {
       return;
     }
 
-    setNightDeathPlayerIds([]);
+    const existingNightResultNotes = notes.filter(
+      (note) => note.phaseId === selectedPhase.id && isNightResultNote(note),
+    );
+    const existingSelectedPlayerIds = existingNightResultNotes.flatMap((note) => note.linkedPlayerIds);
+    const candidatePlayerIds = Array.from(
+      new Set([
+        ...players.filter((player) => player.alive).map((player) => player.id),
+        ...existingSelectedPlayerIds,
+      ]),
+    );
+
+    setNightResultSnapshot({
+      phaseId: selectedPhase.id,
+      playerStates: players
+        .filter((player) => candidatePlayerIds.includes(player.id))
+        .map((player) => ({
+          id: player.id,
+          alive: player.alive,
+          deadVoteAvailable: player.deadVoteAvailable,
+        })),
+    });
+    setNightResultCandidatePlayerIds(candidatePlayerIds);
+    setNightDeathPlayerIds(existingSelectedPlayerIds);
     setNightResultModalOpen(true);
     setPageError("");
   };
@@ -858,6 +986,8 @@ export default function GamePage() {
   const closeNightResultModal = () => {
     setNightResultModalOpen(false);
     setNightDeathPlayerIds([]);
+    setNightResultCandidatePlayerIds([]);
+    setNightResultSnapshot(null);
   };
 
   const openContentModal = (
@@ -879,9 +1009,97 @@ export default function GamePage() {
   };
 
   const toggleNightDeathPlayer = (playerId: string) => {
+    if (nightResultSaving) {
+      return;
+    }
+
     setNightDeathPlayerIds((current) =>
       current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId],
     );
+  };
+
+  const saveNightResult = async () => {
+    if (!gameId || !selectedPhase || selectedPhase.type !== "night") {
+      return;
+    }
+
+    const now = timestamp();
+    const selectedIdSet = new Set(nightDeathPlayerIds);
+    const candidatePlayers = nightResultModalPlayers;
+    const deathNotes: Note[] =
+      nightDeathPlayerIds.length > 0
+        ? candidatePlayers
+            .filter((player) => selectedIdSet.has(player.id))
+            .map((player) => ({
+              id: createId(),
+              gameId,
+              phaseId: selectedPhase.id,
+              kind: "general" as const,
+              text: buildNightDeathNoteText(player.name),
+              linkedPlayerIds: [player.id],
+              createdAt: now,
+              updatedAt: now,
+            }))
+        : [
+            {
+              id: createId(),
+              gameId,
+              phaseId: selectedPhase.id,
+              kind: "general" as const,
+              text: NIGHT_RESULT_EMPTY_TEXT,
+              linkedPlayerIds: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          ];
+
+    setNightResultSaving(true);
+    setPageError("");
+
+    try {
+      await db.transaction("rw", db.players, db.notes, db.phases, db.games, async () => {
+        const existingPhaseNotes = await db.notes
+          .where("[gameId+createdAt]")
+          .between([gameId, ""], [gameId, "\uffff"])
+          .toArray();
+        const existingNightNotes = existingPhaseNotes.filter(
+          (note) => note.phaseId === selectedPhase.id && isNightResultNote(note),
+        );
+
+        if (existingNightNotes.length > 0) {
+          await db.notes.bulkDelete(existingNightNotes.map((note) => note.id));
+        }
+
+        await db.notes.bulkAdd(deathNotes);
+
+        const snapshotStates = new Map((nightResultSnapshot?.playerStates ?? []).map((player) => [player.id, player]));
+
+        await Promise.all(
+          candidatePlayers.map((player) => {
+            const originalState = snapshotStates.get(player.id);
+            const isSelected = selectedIdSet.has(player.id);
+
+            return db.players.update(player.id, {
+              alive: isSelected ? false : originalState?.alive ?? true,
+              deadVoteAvailable: isSelected ? false : originalState?.deadVoteAvailable ?? true,
+              updatedAt: now,
+            });
+          }),
+        );
+
+        const nextPhase =
+          (await ensurePhaseExists(selectedPhase.number, "day", now)) ??
+          buildPhase(gameId, selectedPhase.number, "day", now);
+        await setCurrentPhase(nextPhase, now);
+      });
+
+      closeNightResultModal();
+      setContentTab(null);
+    } catch {
+      setPageError("Не удалось сохранить результат ночи.");
+    } finally {
+      setNightResultSaving(false);
+    }
   };
 
   const openDayDeathModal = (note?: Note) => {
@@ -1042,73 +1260,6 @@ export default function GamePage() {
     }
   };
 
-  const saveNightResult = async () => {
-    if (!gameId || !selectedPhase || selectedPhase.type !== "night") {
-      return;
-    }
-
-    const now = timestamp();
-    const deadPlayers = players.filter((player) => player.alive && nightDeathPlayerIds.includes(player.id));
-    const deathNotes: Note[] =
-      deadPlayers.length > 0
-        ? deadPlayers.map((player) => ({
-            id: createId(),
-            gameId,
-            phaseId: selectedPhase.id,
-            kind: "general",
-            text: `${player.name} умер ночью.`,
-            linkedPlayerIds: [player.id],
-            createdAt: now,
-            updatedAt: now,
-          }))
-        : [
-            {
-              id: createId(),
-              gameId,
-              phaseId: selectedPhase.id,
-              kind: "general",
-              text: "Этой ночью никто не умер.",
-              linkedPlayerIds: [],
-              createdAt: now,
-              updatedAt: now,
-            },
-          ];
-
-    setNightResultSaving(true);
-    setPageError("");
-
-    try {
-      await db.transaction("rw", db.players, db.notes, db.phases, db.games, async () => {
-        if (deadPlayers.length > 0) {
-          await Promise.all(
-            deadPlayers.map((player) =>
-              db.players.update(player.id, {
-                alive: false,
-                deadVoteAvailable: false,
-                updatedAt: now,
-              }),
-            ),
-          );
-          await db.notes.bulkAdd(deathNotes);
-        } else {
-          await db.notes.add(deathNotes[0]);
-        }
-
-        const nextPhase =
-          (await ensurePhaseExists(selectedPhase.number, "day", now)) ??
-          buildPhase(gameId, selectedPhase.number, "day", now);
-        await setCurrentPhase(nextPhase, now);
-      });
-
-      closeNightResultModal();
-      setContentTab(null);
-    } catch {
-      setPageError("Не удалось сохранить результат ночи.");
-    } finally {
-      setNightResultSaving(false);
-    }
-  };
-
   const updateTokenPosition = async (playerId: string, position: { x: number; y: number }) => {
     if (!gameId || !gameResult.game) {
       return;
@@ -1190,6 +1341,39 @@ export default function GamePage() {
       });
       await updateGameTimestamp(now);
     });
+  };
+
+  const deleteTraveller = async (playerId: string) => {
+    if (!gameId) {
+      return;
+    }
+
+    const now = timestamp();
+    const traveller = players.find((player) => player.id === playerId);
+
+    await db.transaction("rw", db.players, db.games, async () => {
+      await db.players.delete(playerId);
+
+      if (effectiveMyPlayerId === playerId) {
+        await db.games.update(gameId, {
+          myPlayerId: undefined,
+          myRoleId: undefined,
+          myTeam: undefined,
+          updatedAt: now,
+        });
+        setLocalMyPlayerId(null);
+      } else {
+        await updateGameTimestamp(now);
+      }
+    });
+
+    if (selectedPlayerId === playerId) {
+      setSelectedPlayerId(null);
+    }
+
+    if (traveller?.isTraveller && travellerFormOpen) {
+      setTravellerFormOpen(false);
+    }
   };
 
   const duplicateSetup = async () => {
@@ -2912,6 +3096,44 @@ export default function GamePage() {
                 ) : null}
               </div>
 
+              <div className="rounded-2xl border border-ember-200/10 bg-black/10 p-3">
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTravellerFormOpen(true)}
+                    className="secondary-button min-h-12 min-w-12 px-3"
+                    aria-label="Добавить Traveller"
+                    title="Добавить Traveller"
+                  >
+                    <img src="/token-images/Travellers.png" alt="" className="h-9 w-9 object-contain" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpecialFormRoleType("fabled");
+                      setSpecialFormOpen(true);
+                    }}
+                    className="secondary-button min-h-12 min-w-12 px-3"
+                    aria-label="Добавить Fabled"
+                    title="Добавить Fabled"
+                  >
+                    <img src="/token-images/Fabled.png" alt="" className="h-9 w-9 object-contain" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpecialFormRoleType("loric");
+                      setSpecialFormOpen(true);
+                    }}
+                    className="secondary-button min-h-12 min-w-12 px-3"
+                    aria-label="Добавить Loric"
+                    title="Добавить Loric"
+                  >
+                    <img src="/token-images/Loric.png" alt="" className="h-9 w-9 object-contain" />
+                  </button>
+                </div>
+              </div>
+
               {game.finalNotes ? (
                 <p className="rounded-2xl border border-ember-200/10 bg-black/18 p-4 text-sm leading-6 text-stone-300">
                   {game.finalNotes}
@@ -2945,8 +3167,8 @@ export default function GamePage() {
                     type="button"
                     onClick={openNightResultModal}
                     className="primary-button min-h-10 w-12 shrink-0 px-0"
-                    aria-label={`Перейти в ${selectedPhase.number} день`}
-                    title={`${selectedPhase.number} день`}
+                    aria-label={`Открыть результат ${selectedPhase.number} ночи`}
+                    title={`Результат ${selectedPhase.number} ночи`}
                   >
                     <span className="relative inline-flex h-6 w-6 items-center justify-center">
                       <SunMedium className="h-5 w-5" />
@@ -3046,6 +3268,8 @@ export default function GamePage() {
               voteDraft={voteDraft}
               showVoteMarkers={voteDraft?.stage === "select_voters"}
               voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
+              voteRequirementSummary={voteRequirementSummary}
+              currentBlockPlayerId={currentBlockPlayerId}
               selectableNominatorIds={
                 (voteDraft?.voteType ?? "execution") === "traveller_exile"
                   ? selectableTravellerExileNominatorIds
@@ -3173,241 +3397,8 @@ export default function GamePage() {
                   </div>
                 )}
 
-                <div className="mt-4 space-y-3">
-                  {selectedPhaseVoteAnalysesDesc.length === 0 &&
-                  selectedPhaseDayDeathNotes.length === 0 &&
-                  selectedPhaseVoteNotes.length === 0 &&
-                  !selectedPhaseExecutionNote ? (
-                    <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
-                      В этой фазе пока нет истории дневных событий.
-                    </div>
-                  ) : (
-                    <>
-                      {selectedPhaseExecutionNote ? (
-                        <article className="rounded-[20px] border border-amber-700/20 bg-amber-200/18 p-2.5 shadow-[0_6px_20px_rgba(165,120,35,0.12)]">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-amber-300 text-stone-900 shadow-lg shadow-amber-950/10">
-                                <Crown className="h-4 w-4" />
-                              </span>
-                              <div>
-                                <h3 className="text-sm font-semibold text-stone-50">Казнь без номинации</h3>
-                                <p className="text-xs text-stone-100">
-                                  Казнён: {playersById.get(selectedPhaseExecutionNote.executionPlayerId ?? "")?.name ?? "Неизвестно"}
-                                </p>
-                              </div>
-                            </div>
-                            <button type="button" onClick={clearExecutionWithoutNomination} className="secondary-button min-h-8 px-2.5 text-stone-900">
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </article>
-                      ) : null}
-
-                      {selectedPhaseDayDeathNotes.map((note) => {
-                        const linkedNames = note.linkedPlayerIds
-                          .map((playerId) => playersById.get(playerId)?.name)
-                          .filter((name): name is string => Boolean(name));
-                        const roleLabel = note.roleId ? getRoleLabel(note.roleId, dayDeathRoles) : "Дневная смерть";
-
-                        return (
-                          <article
-                            key={note.id}
-                            className="rounded-[20px] border border-rose-300/30 bg-rose-200/18 p-2.5 shadow-[0_10px_28px_rgba(137,84,95,0.14)]"
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="text-sm font-semibold text-stone-900">
-                                    {linkedNames.length > 0 ? buildDayDeathSummaryText(linkedNames) : "Дневная смерть"}
-                                  </h3>
-                                  <span className="inline-flex items-center rounded-full border border-rose-300/45 bg-rose-200/88 px-3 py-1 text-xs font-semibold text-rose-950">
-                                    {roleLabel}
-                                  </span>
-                                </div>
-                                <p className="mt-0.5 text-xs text-stone-600">
-                                  {formatDate(note.createdAt)} · {formatTime(note.createdAt)}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <button type="button" onClick={() => openDayDeathModal(note)} className="secondary-button min-h-10 px-3">
-                                  <Edit3 className="h-4 w-4" />
-                                </button>
-                                <button type="button" onClick={() => void deleteDayDeathNote(note)} className="danger-button">
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                          </article>
-                        );
-                      })}
-
-                      {selectedPhaseVoteAnalysesDesc.map((analysis, index) => {
-                        const { voteRecord } = analysis;
-                        const nominatorName = playersById.get(voteRecord.nominatorPlayerId)?.name ?? "Неизвестно";
-                        const nomineeName = playersById.get(voteRecord.nomineePlayerId)?.name ?? "Неизвестно";
-                        const voterNames = voteRecord.voterPlayerIds
-                          .map((playerId) => playersById.get(playerId)?.name)
-                          .filter((name): name is string => Boolean(name));
-                        const deadVoterNames = voteRecord.deadVoterPlayerIds
-                          .map((playerId) => playersById.get(playerId)?.name)
-                          .filter((name): name is string => Boolean(name));
-                        const leadsToExecution = Boolean(voteRecord.resultedInExecution);
-                        const isTravellerExile = analysis.voteType === "traveller_exile";
-                        const executionStatusText = leadsToExecution
-                          ? voteRecord.executedPlayerDied === false
-                            ? "Казнили, но выжил"
-                            : "Казнь выбрана"
-                          : analysis.statusLabel;
-                        const executionProtectionLabel =
-                          leadsToExecution && voteRecord.executedPlayerDied === false && voteRecord.executionProtectionRoleId
-                            ? getRoleLabel(voteRecord.executionProtectionRoleId, executionProtectionRoles)
-                            : "";
-
-                        return (
-                          <article
-                            key={voteRecord.id}
-                            className={`rounded-[20px] border p-2.5 shadow-[0_6px_20px_rgba(0,0,0,0.09)] ${
-                              index === 0
-                                ? "border-amber-500/45 bg-amber-200/28 shadow-[0_0_0_2px_rgba(245,158,11,0.18),0_0_0_8px_rgba(51,51,56,0.16),0_18px_34px_rgba(32,28,24,0.24)]"
-                                : isTravellerExile
-                                  ? "border-sky-600/25 bg-sky-200/18 shadow-[0_8px_22px_rgba(59,130,246,0.12)]"
-                                : leadsToExecution
-                                  ? "border-emerald-700/20 bg-emerald-200/14"
-                                  : "border-ember-200/15 bg-black/18"
-                            }`}
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-1.5">
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-amber-300 text-stone-900 shadow-lg shadow-amber-950/10">
-                                    {isTravellerExile ? <Crown className="h-3.5 w-3.5" /> : <Gavel className="h-3.5 w-3.5" />}
-                                  </span>
-                                  <div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <h3 className="text-base font-bold leading-tight text-stone-100">
-                                        {isTravellerExile ? `Изгнание ${analysis.voteNumber}` : analysis.voteNumber}
-                                      </h3>
-                                      <span className="inline-flex items-center rounded-full bg-white/78 px-2.5 py-0.5 text-xs font-bold text-stone-900 shadow-sm">
-                                        {analysis.voteCountLabel}
-                                      </span>
-                                    </div>
-                                    <p className="mt-0.5 flex items-center gap-1 text-[10px] text-stone-500">
-                                      <Clock3 className="h-2.5 w-2.5 text-stone-700" />
-                                      {formatDate(voteRecord.createdAt)} · {formatTime(voteRecord.createdAt)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                                <span
-                                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                    leadsToExecution && voteRecord.executedPlayerDied === false
-                                      ? "bg-sky-200/88 text-sky-950 ring-1 ring-sky-700/15"
-                                      : leadsToExecution
-                                      ? "bg-emerald-500 text-white ring-1 ring-emerald-700/20 shadow-[0_8px_18px_rgba(16,185,129,0.28)]"
-                                      : isTravellerExile
-                                        ? "bg-sky-300/80 text-sky-950 ring-1 ring-sky-700/15"
-                                      : analysis.isOnTheBlock
-                                        ? "bg-emerald-400/90 text-emerald-950 ring-1 ring-emerald-700/15"
-                                        : analysis.removedPreviousFromBlock
-                                          ? "bg-amber-300/70 text-amber-950 ring-1 ring-amber-700/15"
-                                        : "bg-stone-200/16 text-stone-700 ring-1 ring-stone-500/12"
-                                  }`}
-                                >
-                                  {executionStatusText}
-                                </span>
-                                {executionProtectionLabel ? (
-                                  <span className="inline-flex items-center rounded-full bg-stone-200/75 px-2 py-0.5 text-[10px] font-medium text-stone-900">
-                                    {executionProtectionLabel}
-                                  </span>
-                                ) : null}
-                                {analysis.removedPreviousFromBlock && analysis.isOnTheBlock ? (
-                                  <span className="inline-flex items-center rounded-full bg-amber-200/75 px-2 py-0.5 text-[10px] font-medium text-amber-950">
-                                    Предыдущего сняли
-                                  </span>
-                                ) : null}
-                                {analysis.removedPreviousFromBlock && !analysis.isOnTheBlock ? (
-                                  <span className="inline-flex items-center rounded-full bg-stone-200/70 px-2 py-0.5 text-[10px] font-medium text-stone-800">
-                                    Никто не номинирован
-                                  </span>
-                                ) : null}
-                                {!isTravellerExile ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void promptVoteRecordExecution(voteRecord.id)}
-                                    className={`secondary-button min-h-7 w-7 shrink-0 px-0 ${
-                                      leadsToExecution
-                                        ? "border-emerald-700/20 bg-emerald-300/18 text-emerald-950"
-                                        : "text-stone-900"
-                                    }`}
-                                    aria-label={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
-                                    title={leadsToExecution ? "Снять казнь" : "Казнь состоялась"}
-                                  >
-                                    <Skull className="h-3.5 w-3.5" />
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
-
-                            <div className="mt-2.5 grid gap-1.5 text-[12px] leading-4 text-stone-200">
-                              <div className="grid gap-1.5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,2.2fr)_minmax(0,1fr)]">
-                                <div className="flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5">
-                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-amber-200/85 text-amber-900">
-                                    <Target className="h-3 w-3" />
-                                  </span>
-                                  <div className="space-y-0.5">
-                                    <p>{nominatorName}</p>
-                                    <p>{nomineeName}</p>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5">
-                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-sky-200/85 text-sky-900">
-                                    <Users className="h-3 w-3" />
-                                  </span>
-                                  <p className="line-clamp-2">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
-                                </div>
-
-                                <div className="rounded-2xl bg-black/10 px-2 py-1.5 text-[11px] leading-4">
-                                  <p>Живых: {analysis.remainingAliveVotes}</p>
-                                  <p>Мёртвых: {analysis.remainingDeadVotes}</p>
-                                </div>
-                              </div>
-
-                              <div className="grid gap-1.5 sm:grid-cols-[minmax(0,1fr)_auto]">
-                                <div className="flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5">
-                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-rose-200/85 text-rose-900">
-                                    <Skull className="h-3 w-3" />
-                                  </span>
-                                  <p>{deadVoterNames.length > 0 ? deadVoterNames.join(", ") : "нет"}</p>
-                                </div>
-
-                                <div className="ml-auto flex items-start gap-1.5 rounded-2xl bg-black/10 px-2 py-1.5 sm:justify-self-end">
-                                  <span className="mt-0.5 inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-lg bg-yellow-200/85 text-yellow-900">
-                                    <CheckCircle2 className="h-3 w-3" />
-                                  </span>
-                                  <p>{analysis.thresholdLabel}</p>
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl bg-black/10 px-2 py-1.5 text-[11px] leading-4 text-stone-600">
-                                {analysis.prognosisLabel}
-                              </div>
-                            </div>
-                          </article>
-                        );
-                      })}
-
-                      {selectedPhaseVoteAnalysesDesc.length === 0
-                        ? selectedPhaseVoteNotes.map((note) => (
-                            <article key={note.id} className="rounded-2xl border border-ember-200/10 bg-black/18 p-3 sm:p-4">
-                              <p className="whitespace-pre-wrap text-sm leading-6 text-stone-100">{note.text}</p>
-                            </article>
-                          ))
-                        : null}
-                    </>
-                  )}
+                <div className="mt-3 rounded-2xl border border-dashed border-ember-200/20 bg-black/5 p-4 text-center text-sm text-stone-500">
+                  История номинаций и казней перенесена в раздел смертей.
                 </div>
               </section>
             ) : null}
@@ -3556,6 +3547,7 @@ export default function GamePage() {
         onClose={() => setSelectedPlayerId(null)}
         onSave={savePlayer}
         onAddNote={addNoteToPhase}
+        onDeleteTraveller={deleteTraveller}
         onDeleteNote={deleteNote}
         onUpdateNote={updateNote}
       />
@@ -3570,7 +3562,7 @@ export default function GamePage() {
                   Выберите всех игроков, которые умерли этой ночью. Можно никого не выбирать.
                 </p>
               </div>
-              <button type="button" onClick={closeNightResultModal} className="secondary-button px-3">
+              <button type="button" onClick={closeNightResultModal} className="secondary-button px-3" disabled={nightResultSaving}>
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -3584,6 +3576,7 @@ export default function GamePage() {
                   type="button"
                   onClick={() => setNightDeathPlayerIds([])}
                   className="secondary-button min-h-9 px-3 text-sm"
+                  disabled={nightResultSaving}
                 >
                   Никто не умер
                 </button>
@@ -3593,9 +3586,7 @@ export default function GamePage() {
                 {players.filter((player) => player.alive).length === 0 ? (
                   <p className="text-sm text-stone-400">Живых игроков не осталось.</p>
                 ) : (
-                  players
-                    .filter((player) => player.alive)
-                    .map((player) => {
+                  nightResultModalPlayers.map((player) => {
                       const selected = nightDeathPlayerIds.includes(player.id);
 
                       return (
@@ -3609,6 +3600,7 @@ export default function GamePage() {
                               : "secondary-button min-h-10 px-3 py-2 text-sm"
                           }
                           aria-pressed={selected}
+                          disabled={nightResultSaving}
                         >
                           {player.name}
                         </button>
@@ -3621,12 +3613,12 @@ export default function GamePage() {
             {pageError ? <p className="mt-3 text-sm text-rose-300">{pageError}</p> : null}
 
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={closeNightResultModal} className="secondary-button px-4">
+              <button type="button" onClick={closeNightResultModal} className="secondary-button px-4" disabled={nightResultSaving}>
                 Отмена
               </button>
               <button type="button" onClick={() => void saveNightResult()} className="primary-button" disabled={nightResultSaving}>
                 <CheckCircle2 className="h-4 w-4" />
-                {nightResultSaving ? "Сохраняем..." : "Сохранить и перейти в день"}
+                {nightResultSaving ? "Сохраняем..." : "Перейти в день"}
               </button>
             </div>
           </section>
