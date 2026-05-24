@@ -613,7 +613,7 @@ export default function GamePage() {
       const canBeat = remainingPotentialVotes >= neededToBeat;
       const isOnTheBlock = voteType === "traveller_exile" ? enoughVotes : currentBlockVoteRecordId === voteRecord.id;
 
-      let statusLabel = voteType === "traveller_exile" ? "Голосов не хватило" : "Ниже порога";
+      let statusLabel = voteType === "traveller_exile" ? "Голосов не хватило" : "Не хватило";
 
       if (voteType === "traveller_exile") {
         statusLabel = enoughVotes ? "Изгнание проходит" : "Голосов не хватило";
@@ -2761,12 +2761,12 @@ export default function GamePage() {
             </div>
           ) : (
             <div className="mt-3 rounded-2xl bg-black/10 px-3 py-2 text-sm text-stone-200">
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                 <p className="font-medium">{`${nominatorName} -> ${nomineeName}`}</p>
-                <div className="flex min-w-0 items-center gap-2 text-xs sm:text-sm">
+                <div className="flex min-w-0 max-w-full items-start gap-2 text-xs sm:text-sm">
                   <span className="font-semibold">{voteRecord.voterPlayerIds.length}</span>
                   <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
-                  <p className="min-w-0 truncate">
+                  <p className="min-w-0 break-words whitespace-normal">
                     {voterNames.length > 0 ? voterNames.join(", ") : "никто"}
                   </p>
                 </div>
@@ -3320,8 +3320,7 @@ export default function GamePage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-semibold text-stone-50">Сегодняшние номинации</h2>
-                    <p className="text-sm text-stone-400">Новые сверху. Здесь можно править, удалять и отмечать казнь.</p>
-                  </div>
+              </div>
                   {selectedPhaseExecutionNote ? (
                     <span className="summary-day-result-badge inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold leading-5">
                               <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-4 w-4" />
@@ -3401,9 +3400,9 @@ export default function GamePage() {
                         <article key={item.id} className="summary-day-card relative rounded-2xl border border-ember-200/12 bg-black/18 p-3">
                           <div className="pr-32">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-sm font-semibold text-stone-100">
-                                {item.analysis?.voteType === "traveller_exile" ? "Изгнание Traveller" : "Номинация"}
-                              </h3>
+                              {item.analysis?.voteType === "traveller_exile" ? (
+                                <h3 className="text-sm font-semibold text-stone-100">Изгнание Traveller</h3>
+                              ) : null}
                               {item.analysis ? <span className="chip">{item.analysis.statusLabel}</span> : null}
                               {item.voteRecord.resultedInExecution ? (
                                 <span className="summary-day-result-badge inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold leading-5">
@@ -3431,12 +3430,12 @@ export default function GamePage() {
                           </div>
 
                           <div className="mt-3 rounded-2xl bg-black/10 px-3 py-2 text-sm text-stone-200">
-                            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                               <p className="font-medium">{`${nominatorName} -> ${nomineeName}`}</p>
-                              <div className="flex min-w-0 items-center gap-2 text-xs sm:text-sm">
+                              <div className="flex min-w-0 max-w-full items-start gap-2 text-xs sm:text-sm">
                                 <span className="font-semibold">{item.voteRecord.voterPlayerIds.length}</span>
                                 <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
-                                <p className="min-w-0 truncate">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
+                                <p className="min-w-0 break-words whitespace-normal">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
                               </div>
                             </div>
                             {item.analysis ? (
