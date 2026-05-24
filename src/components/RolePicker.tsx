@@ -27,6 +27,7 @@ type RolePickerProps = {
   buttonClassName?: string;
   dropdownClassName?: string;
   iconGridClassName?: string;
+  theme?: "light" | "dark";
 };
 
 export default function RolePicker({
@@ -40,6 +41,7 @@ export default function RolePicker({
   buttonClassName,
   dropdownClassName,
   iconGridClassName,
+  theme = "dark",
 }: RolePickerProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -61,6 +63,8 @@ export default function RolePicker({
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
+  const isLightTheme = theme === "light";
+
   return (
     <div ref={rootRef} className={clsx("relative", className)}>
       <button
@@ -69,6 +73,7 @@ export default function RolePicker({
         className={clsx(
           "field flex min-h-11 items-center justify-between gap-3 text-left",
           iconOnly && "justify-center gap-2 px-3",
+          isLightTheme && "border-amber-900/15 bg-white/90 text-stone-900",
           buttonClassName,
         )}
         title={selectedLabel ?? placeholder}
@@ -78,19 +83,34 @@ export default function RolePicker({
             <RoleTokenImage
               roleId={selectedOption.id}
               roles={roles}
-              className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-black/20"
+              className={clsx(
+                "h-8 w-8 shrink-0 overflow-hidden rounded-full border bg-black/20",
+                isLightTheme ? "border-amber-900/15 bg-stone-100" : "border-ember-200/20",
+              )}
               imageClassName="h-full w-full object-cover"
               fallback={
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-ember-200/20 bg-black/20 text-[10px] font-bold text-stone-300">
+                <span
+                  className={clsx(
+                    "flex h-8 w-8 items-center justify-center rounded-full border text-[10px] font-bold",
+                    isLightTheme
+                      ? "border-amber-900/15 bg-stone-100 text-stone-700"
+                      : "border-ember-200/20 bg-black/20 text-stone-300",
+                  )}
+                >
                   {getRoleLabel(selectedOption.id, roles).slice(0, 2)}
                 </span>
               }
             />
           ) : (
-            <span className="h-8 w-8 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+            <span
+              className={clsx(
+                "h-8 w-8 shrink-0 rounded-full border border-dashed",
+                isLightTheme ? "border-amber-900/15 bg-stone-100" : "border-ember-200/20 bg-black/10",
+              )}
+            />
           )}
           {!iconOnly ? (
-            <span className={clsx("truncate", !selectedOption && "text-stone-400")}>
+            <span className={clsx("truncate", !selectedOption && (isLightTheme ? "text-stone-500" : "text-stone-400"))}>
               {selectedLabel ?? placeholder}
             </span>
           ) : null}
@@ -99,7 +119,15 @@ export default function RolePicker({
       </button>
 
       {open ? (
-        <div className={clsx("absolute z-50 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-ember-200/15 bg-ink-850 p-2 shadow-2xl shadow-black/40", dropdownClassName)}>
+        <div
+          className={clsx(
+            "absolute z-50 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border p-2 shadow-2xl",
+            isLightTheme
+              ? "border-amber-900/15 bg-[rgba(255,251,242,0.98)] text-stone-900 shadow-[0_18px_42px_rgba(120,86,58,0.2)]"
+              : "border-ember-200/15 bg-ink-850 text-stone-100 shadow-black/40",
+            dropdownClassName,
+          )}
+        >
           <button
             type="button"
             onClick={() => {
@@ -107,19 +135,30 @@ export default function RolePicker({
               setOpen(false);
             }}
             className={clsx(
-              "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-stone-300 transition hover:bg-black/20",
+              "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition",
+              isLightTheme ? "text-stone-700 hover:bg-stone-900/5" : "text-stone-300 hover:bg-black/20",
               iconOnly && "justify-center",
             )}
             title={placeholder}
           >
-            <span className="h-8 w-8 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+            <span
+              className={clsx(
+                "h-8 w-8 shrink-0 rounded-full border border-dashed",
+                isLightTheme ? "border-amber-900/15 bg-stone-100" : "border-ember-200/20 bg-black/10",
+              )}
+            />
             {!iconOnly ? <span className="truncate">{placeholder}</span> : null}
           </button>
 
           {groups.map((group) => (
             <div key={group.key} className="mt-2">
               {group.label ? (
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-ember-100/80">
+                <div
+                  className={clsx(
+                    "px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em]",
+                    isLightTheme ? "text-amber-900/80" : "text-ember-100/80",
+                  )}
+                >
                   {group.label}
                 </div>
               ) : null}
@@ -136,19 +175,31 @@ export default function RolePicker({
                       setOpen(false);
                     }}
                     className={clsx(
-                      "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-black/20",
+                      "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition",
+                      isLightTheme ? "hover:bg-stone-900/5" : "hover:bg-black/20",
                       iconOnly && "justify-center px-2",
-                      option.id === value && "bg-ember-200/10 text-ember-50",
+                      option.id === value &&
+                        (isLightTheme ? "bg-amber-900/10 text-stone-900" : "bg-ember-200/10 text-ember-50"),
                     )}
                     title={optionLabel}
                   >
                     <RoleTokenImage
                       roleId={option.id}
                       roles={roles}
-                      className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-black/20"
+                      className={clsx(
+                        "h-8 w-8 shrink-0 overflow-hidden rounded-full border bg-black/20",
+                        isLightTheme ? "border-amber-900/15 bg-stone-100" : "border-ember-200/20",
+                      )}
                       imageClassName="h-full w-full object-cover"
                       fallback={
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-ember-200/20 bg-black/20 text-[10px] font-bold text-stone-300">
+                        <span
+                          className={clsx(
+                            "flex h-8 w-8 items-center justify-center rounded-full border text-[10px] font-bold",
+                            isLightTheme
+                              ? "border-amber-900/15 bg-stone-100 text-stone-700"
+                              : "border-ember-200/20 bg-black/20 text-stone-300",
+                          )}
+                        >
                           {getRoleLabel(option.id, roles).slice(0, 2)}
                         </span>
                       }

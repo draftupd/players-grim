@@ -178,9 +178,7 @@ function PlayerDetailForm({
   );
   const roleOptions = useMemo(
     () =>
-      mergedScriptRoles.filter(
-        (role) => role.type !== "traveller" && role.type !== "fabled" && role.type !== "loric",
-      ),
+      mergedScriptRoles.filter((role) => role.type !== "fabled" && role.type !== "loric"),
     [mergedScriptRoles],
   );
   const roleGroups = groupRolesByType(roleOptions);
@@ -194,6 +192,7 @@ function PlayerDetailForm({
     [roleIconGroups],
   );
   const townsfolkRoleGroup = roleIconGroupsByKey.get("townsfolk");
+  const travellerRoleGroup = roleIconGroupsByKey.get("traveller");
   const sideRoleGroups = (["outsider", "minion", "demon"] satisfies RoleType[])
     .map((key) => roleIconGroupsByKey.get(key))
     .filter((group): group is NonNullable<typeof group> => Boolean(group));
@@ -606,42 +605,61 @@ function PlayerDetailForm({
               </div>
 
               {roleOptions.length > 0 && !player.isTraveller ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {townsfolkRoleGroup ? (
+                <div className="space-y-0.5">
+                  <div className="grid grid-cols-2 gap-1">
+                    {townsfolkRoleGroup ? (
+                      <RoleIconGrid
+                        groups={[townsfolkRoleGroup]}
+                        roles={roleOptions}
+                        selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                        onSelect={assignRoleToSlot}
+                        className="h-full"
+                        groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                        columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
+                        buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
+                        iconClassName="h-8 w-8 sm:h-10 sm:w-10"
+                        roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+                        compact
+                        unframed
+                        showGroupLabel={false}
+                      />
+                    ) : (
+                      <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+                    )}
+
                     <RoleIconGrid
-                      groups={[townsfolkRoleGroup]}
+                      groups={sideRoleGroups}
                       roles={roleOptions}
                       selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
                       onSelect={assignRoleToSlot}
                       className="h-full"
-                      groupClassName="h-full rounded-2xl border border-ember-200/10 px-1 py-0.5"
-                      columnsClassName="grid-cols-5 gap-0.5"
-                      buttonClassName="rounded-sm"
-                      iconClassName="h-6 w-6"
+                      groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                      columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
+                      buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
+                      iconClassName="h-8 w-8 sm:h-10 sm:w-10"
+                      roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+                      compact
                       unframed
                       showGroupLabel={false}
                     />
-                  ) : (
-                    <div className="rounded-2xl border border-ember-200/10 px-1 py-0.5" />
-                  )}
-
-                  <div className="space-y-1.5">
-                    {sideRoleGroups.map((group) => (
-                      <RoleIconGrid
-                        key={group.key}
-                        groups={[group]}
-                        roles={roleOptions}
-                        selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
-                        onSelect={assignRoleToSlot}
-                        groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
-                        columnsClassName="grid-cols-4 gap-0.5"
-                        buttonClassName="rounded-sm"
-                        iconClassName="h-6 w-6"
-                        unframed
-                        showGroupLabel={false}
-                      />
-                    ))}
                   </div>
+
+                  {travellerRoleGroup ? (
+                    <RoleIconGrid
+                      groups={[travellerRoleGroup]}
+                      roles={roleOptions}
+                      selectedRoleId={activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                      onSelect={assignRoleToSlot}
+                      groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                      columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
+                      buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
+                      iconClassName="h-8 w-8 sm:h-10 sm:w-10"
+                      roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+                      compact
+                      unframed
+                      showGroupLabel={false}
+                    />
+                  ) : null}
                 </div>
               ) : null}
             </div>

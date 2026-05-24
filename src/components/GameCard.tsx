@@ -1,8 +1,9 @@
 import { BookOpen, Clock, Copy, Pin, PinOff, RotateCcw, Trash2, Trophy, UserRound, UsersRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Game } from "../types";
-import { formatDate, formatDuration, formatTime, personalTeamLabel, winnerLabel } from "../utils/dates";
+import { formatDate, formatDuration, formatTime, winnerLabel } from "../utils/dates";
 import { getRoleLabel } from "../utils/scripts";
+import RoleTokenImage from "./RoleTokenImage";
 
 type GameCardProps = {
   game: Game;
@@ -10,6 +11,7 @@ type GameCardProps = {
   onMoveToTrash: (game: Game) => void;
   onRestoreFromTrash: (game: Game) => void;
   onDuplicateSetup?: (game: Game) => void;
+  conclusionText?: string;
   trashMode?: boolean;
 };
 
@@ -19,8 +21,10 @@ export default function GameCard({
   onMoveToTrash,
   onRestoreFromTrash,
   onDuplicateSetup,
+  conclusionText,
   trashMode = false,
 }: GameCardProps) {
+  const roleLabel = game.myRoleId ? getRoleLabel(game.myRoleId, game.scriptRoles) : "";
   const isFinished = game.status === "finished";
   const startedAt = game.startedAt ?? game.createdAt;
   const duration = formatDuration(startedAt, game.finishedAt);
@@ -31,7 +35,7 @@ export default function GameCard({
       : game.title?.trim() && game.title.trim() !== compactTitle
         ? game.title.trim()
         : "";
-  const resultNotes = game.finalNotes?.trim();
+  const resultNotes = conclusionText?.trim() || game.finalNotes?.trim();
   const winnerChipClass =
     game.winner === "good"
       ? "border-sky-100/90 bg-sky-400/40 text-white ring-1 ring-sky-200/45 shadow-[0_0_0_1px_rgba(186,230,253,0.16),0_12px_28px_rgba(56,189,248,0.34)]"
@@ -44,6 +48,22 @@ export default function GameCard({
       : game.winner === "evil"
         ? "border-red-300/55 bg-[linear-gradient(135deg,rgba(248,113,113,0.16),rgba(30,19,24,0.72))] shadow-[0_16px_34px_rgba(248,113,113,0.14)]"
         : "border-amber-200/45 bg-[linear-gradient(135deg,rgba(251,191,36,0.14),rgba(36,28,18,0.68))] shadow-[0_16px_34px_rgba(251,191,36,0.12)]";
+  const finalNotes = game.finalNotes?.trim();
+  const resultSummary = (() => {
+    if (game.myTeam === "good") {
+      return game.winner === "good" ? "Мой выигрыш за команду Синих." : "Мой проигрыш команде Красных.";
+    }
+
+    if (game.myTeam === "evil") {
+      return game.winner === "evil" ? "Мой выигрыш за команду Красных." : "Мой проигрыш команде Синих.";
+    }
+
+    if (game.myTeam === "traveller") {
+      return "Мой итог за Traveller.";
+    }
+
+    return "";
+  })();
 
   return (
     <Link
@@ -149,22 +169,29 @@ export default function GameCard({
         ) : null}
       </div>
 
-      {game.myRoleId || game.myTeam ? (
-        <div className="mt-3 flex flex-wrap gap-1.5 text-sm">
-          {game.myRoleId ? <span className="chip px-2.5 py-1 text-xs">Мой жетон: {getRoleLabel(game.myRoleId, game.scriptRoles)}</span> : null}
-          {game.myTeam ? <span className="chip px-2.5 py-1 text-xs">Моя команда: {personalTeamLabel(game.myTeam)}</span> : null}
-        </div>
-      ) : null}
-
       {isFinished ? (
         <div className={`mt-4 rounded-2xl border p-3 ${winnerPanelClass}`}>
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold ${winnerChipClass}`}>
             <Trophy className="h-4 w-4" />
             Победитель: {winnerLabel(game.winner)}
           </span>
-          <p className="mt-2 text-sm leading-5 text-stone-100">
-            {resultNotes || "Без пояснения по итогу"}
-          </p>
+          <div className="mt-2 text-sm leading-5 text-stone-100">
+            {resultSummary ? <p>{resultSummary}</p> : null}
+            {game.myRoleId ? (
+              <p className="mt-1 inline-flex flex-wrap items-center gap-1.5">
+                <span>Мой жетон:</span>
+                <RoleTokenImage
+                  roleId={game.myRoleId}
+                  roles={game.scriptRoles}
+                  className="h-6 w-6 overflow-hidden rounded-full border border-white/20 bg-white/90 align-middle"
+                  imageClassName="h-full w-full object-cover"
+                />
+                <span>{roleLabel}</span>
+              </p>
+            ) : null}
+            {finalNotes ? <p className="mt-1">{finalNotes}</p> : null}
+            {!resultSummary && !game.myRoleId && !finalNotes ? <p>Без пояснения по итогу</p> : null}
+          </div>
         </div>
       ) : null}
     </Link>

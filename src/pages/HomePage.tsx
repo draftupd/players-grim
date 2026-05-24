@@ -5,8 +5,9 @@ import { Link } from "react-router-dom";
 import GameCard from "../components/GameCard";
 import { db } from "../db/db";
 import type { Game, Note, Phase, Player } from "../types";
-import { formatMinutesAsDuration, timestamp } from "../utils/dates";
+import { formatMinutesAsDuration, timestamp, todayInputValue } from "../utils/dates";
 import { makeArchiveBundle, remapArchiveBundle } from "../utils/archive";
+import { buildFinishedGameConclusion } from "../utils/gameConclusion";
 import { createId } from "../utils/ids";
 import { readImportedArchive } from "../utils/importErrors";
 import { calculateLibraryStats } from "../utils/stats";
@@ -48,6 +49,41 @@ export default function HomePage() {
   );
   const pinnedCount = visibleGames.filter((game) => game.pinnedAt).length;
   const stats = useMemo(() => calculateLibraryStats(games, players, notes), [games, players, notes]);
+  const gameConclusionById = useMemo(() => {
+    const playersByGameId = new Map<string, Player[]>();
+    const notesByGameId = new Map<string, Note[]>();
+    const phasesByGameId = new Map<string, Phase[]>();
+
+    players.forEach((player) => {
+      const current = playersByGameId.get(player.gameId) ?? [];
+      current.push(player);
+      playersByGameId.set(player.gameId, current);
+    });
+
+    notes.forEach((note) => {
+      const current = notesByGameId.get(note.gameId) ?? [];
+      current.push(note);
+      notesByGameId.set(note.gameId, current);
+    });
+
+    phases.forEach((phase) => {
+      const current = phasesByGameId.get(phase.gameId) ?? [];
+      current.push(phase);
+      phasesByGameId.set(phase.gameId, current);
+    });
+
+    return new Map(
+      games.map((game) => [
+        game.id,
+        buildFinishedGameConclusion(
+          game,
+          playersByGameId.get(game.id) ?? [],
+          notesByGameId.get(game.id) ?? [],
+          phasesByGameId.get(game.id) ?? [],
+        ),
+      ]),
+    );
+  }, [games, notes, phases, players]);
 
   const togglePin = async (game: Game) => {
     if (!game.pinnedAt && pinnedCount >= 10) {
@@ -110,40 +146,57 @@ export default function HomePage() {
       .sort((a, b) => a.seatIndex - b.seatIndex);
     const now = timestamp();
     const newGameId = createId();
-    const playerIdMap = new Map(gamePlayers.map((player) => [player.id, createId()]));
+    const baseTitle = game.scriptName?.trim() || game.title.trim() || "Новая партия";
 
     const duplicatedGame: Game = {
-      ...game,
       id: newGameId,
-      title: `${game.scriptName?.trim() || game.title} — копия setup`,
+      title: baseTitle,
+      date: todayInputValue(),
+      storyteller: game.storyteller,
+      scriptName: game.scriptName,
+      scriptAuthor: game.scriptAuthor,
+      scriptRoles: game.scriptRoles,
+      playerCount: game.playerCount,
       status: "active",
+      activeFabledIds: undefined,
+      activeLoricIds: undefined,
+      myPlayerId: undefined,
+      myRoleId: undefined,
+      myTeam: undefined,
       winner: undefined,
       finalNotes: undefined,
-      startedAt: now,
+      hasStarted: false,
+      currentPhaseId: undefined,
+      startedAt: undefined,
       finishedAt: undefined,
       pinnedAt: undefined,
       trashedAt: undefined,
-      myPlayerId: game.myPlayerId ? playerIdMap.get(game.myPlayerId) : undefined,
+      customTokenPositions: undefined,
+      grimoireStyle: undefined,
       createdAt: now,
       updatedAt: now,
     };
 
     const duplicatedPlayers: Player[] = gamePlayers.map((player) => ({
-      ...player,
-      id: playerIdMap.get(player.id) ?? createId(),
+      id: createId(),
       gameId: newGameId,
+      name: player.name,
+      seatIndex: player.seatIndex,
       alive: true,
       deadVoteAvailable: true,
+      tokenTint: "default",
+      mainRole: undefined,
+      additionalRoles: ["", "", ""],
+      isTraveller: undefined,
+      travellerRole: undefined,
+      travellerTeam: undefined,
+      joinedPhaseId: undefined,
+      leftPhaseId: undefined,
       createdAt: now,
       updatedAt: now,
     }));
 
-    const duplicatedPhases: Phase[] = [
-      { id: createId(), gameId: newGameId, number: 1, type: "night", title: "1 ночь", createdAt: now },
-      { id: createId(), gameId: newGameId, number: 1, type: "day", title: "1 день", createdAt: now },
-      { id: createId(), gameId: newGameId, number: 2, type: "night", title: "2 ночь", createdAt: now },
-      { id: createId(), gameId: newGameId, number: 2, type: "day", title: "2 день", createdAt: now },
-    ];
+    const duplicatedPhases: Phase[] = [{ id: createId(), gameId: newGameId, number: 1, type: "night", title: "1 ночь", createdAt: now }];
 
     await db.transaction("rw", db.games, db.players, db.phases, async () => {
       await db.games.add(duplicatedGame);
@@ -194,7 +247,7 @@ export default function HomePage() {
       setImportError(
         error instanceof Error
           ? error.message
-          : "Не удалось импортировать архив. Проверьте файл и попробуйте снова.",
+          : "Не удалось импортировать историю. Проверьте файл и попробуйте снова.",
       );
     } finally {
       setImporting(false);
@@ -228,11 +281,11 @@ export default function HomePage() {
               <div className="grid grid-cols-1 gap-2 sm:flex">
                 <button type="button" onClick={exportArchive} className="secondary-button w-full sm:w-auto">
                   <Download className="h-4 w-4" />
-                  Выгрузить архив
+                  Выгрузить историю
                 </button>
                 <label className="secondary-button w-full cursor-pointer sm:w-auto">
                   <Upload className="h-4 w-4" />
-                  {importing ? "Загрузка..." : "Загрузить архив"}
+                  {importing ? "Загрузка..." : "Загрузить историю"}
                   <input type="file" accept=".json,application/json" onChange={importArchive} className="hidden" />
                 </label>
               </div>
@@ -361,6 +414,7 @@ export default function HomePage() {
                     onMoveToTrash={moveToTrash}
                     onRestoreFromTrash={restoreFromTrash}
                     onDuplicateSetup={duplicateSetup}
+                    conclusionText={gameConclusionById.get(game.id)}
                     trashMode
                   />
                 ))}
@@ -376,7 +430,7 @@ export default function HomePage() {
             <div className="mt-5 grid w-full max-w-sm gap-2">
               <label className="secondary-button w-full cursor-pointer">
                 <FileJson className="h-4 w-4" />
-                {importing ? "Загрузка..." : "Загрузить архив"}
+                {importing ? "Загрузка..." : "Загрузить историю"}
                 <input type="file" accept=".json,application/json" onChange={importArchive} className="hidden" />
               </label>
               <Link to="/games/new" className="primary-button">
@@ -395,6 +449,7 @@ export default function HomePage() {
                 onMoveToTrash={moveToTrash}
                 onRestoreFromTrash={restoreFromTrash}
                 onDuplicateSetup={duplicateSetup}
+                conclusionText={gameConclusionById.get(game.id)}
               />
             ))}
           </section>

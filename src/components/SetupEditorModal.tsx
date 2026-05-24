@@ -147,6 +147,11 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
       return;
     }
 
+    if (!storyteller.trim()) {
+      setError("Имя ведущего обязательно.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -167,7 +172,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
         {
           title: title.trim(),
           date,
-          storyteller: storyteller.trim() || undefined,
+          storyteller: storyteller.trim(),
           scriptName: scriptName.trim() || undefined,
           scriptAuthor: scriptAuthor.trim() || undefined,
           scriptRoles,
@@ -184,7 +189,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={onClose}>
       <div
         className={clsx(
           "max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-5xl sm:rounded-3xl sm:p-6",
@@ -192,6 +197,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
             ? "border-amber-700/18 bg-[#f7eddc] text-stone-800 shadow-[0_22px_60px_rgba(60,44,20,0.18)]"
             : "border-ember-200/15 bg-ink-850",
         )}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>

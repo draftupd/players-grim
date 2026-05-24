@@ -1,17 +1,18 @@
 import {
   ArrowLeft,
-  BedDouble,
   BookOpen,
   CheckCircle2,
   Clock3,
   Crown,
   Edit3,
+  MoonStar,
   Gavel,
   Hand,
   Play,
   Save,
   Settings,
   Skull,
+  SunMedium,
   Target,
   Trash2,
   Users,
@@ -51,6 +52,7 @@ import {
   timestamp,
   timeInputValue,
   combineDateAndTime,
+  todayInputValue,
   winnerLabel,
 } from "../utils/dates";
 import { createId } from "../utils/ids";
@@ -284,6 +286,9 @@ export default function GamePage() {
   const [finishWinner, setFinishWinner] = useState<Winner>("unknown");
   const [finishNotes, setFinishNotes] = useState("");
   const [finishTime, setFinishTime] = useState("");
+  const [specialFormOpen, setSpecialFormOpen] = useState(false);
+  const [specialFormRoleType, setSpecialFormRoleType] = useState<"fabled" | "loric">("fabled");
+  const [travellerFormOpen, setTravellerFormOpen] = useState(false);
   const [localMyPlayerId, setLocalMyPlayerId] = useState<string | null | undefined>();
   const [voteDraft, setVoteDraft] = useState<VoteDraft | null>(null);
   const [voteSaving, setVoteSaving] = useState(false);
@@ -306,8 +311,8 @@ export default function GamePage() {
   const [dayDeathSaving, setDayDeathSaving] = useState(false);
   const [pageError, setPageError] = useState("");
   const [contentTab, setContentTab] = useState<
-    "notes" | "roleIntel" | "reference" | "voting" | "summaryDeaths" | "summaryRoles"
-  >("notes");
+    "notes" | "roleIntel" | "reference" | "voting" | "summaryDeaths" | "summaryRoles" | null
+  >(null);
   const [referenceTab, setReferenceTab] = useState<"roles" | "nightOrder">("roles");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
@@ -398,9 +403,9 @@ export default function GamePage() {
   const selectedPhaseRoleIntelNotes = useMemo(
     () =>
       notes
-        .filter((note) => note.phaseId === effectiveSelectedPhaseId && note.kind === "role_intel")
+        .filter((note) => note.kind === "role_intel")
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [notes, effectiveSelectedPhaseId],
+    [notes],
   );
   const selectedPhaseDayDeathNotes = useMemo(
     () =>
@@ -798,6 +803,11 @@ export default function GamePage() {
       return;
     }
 
+    if (!gameResult.game?.myRoleId) {
+      setPageError("Перед началом игры нужно указать мой жетон.");
+      return;
+    }
+
     const now = timestamp();
 
     try {
@@ -806,7 +816,7 @@ export default function GamePage() {
         await setCurrentPhase(firstNight, now, { startGame: true });
       });
       setPageError("");
-      setContentTab("notes");
+      setContentTab(null);
     } catch {
       setPageError("Не удалось начать игру.");
     }
@@ -829,7 +839,7 @@ export default function GamePage() {
         await setCurrentPhase(nextPhase, now);
       });
       setPageError("");
-      setContentTab(nextType === "day" ? "notes" : "notes");
+      setContentTab(null);
     } catch {
       setPageError("Не удалось перейти к следующей фазе.");
     }
@@ -848,6 +858,24 @@ export default function GamePage() {
   const closeNightResultModal = () => {
     setNightResultModalOpen(false);
     setNightDeathPlayerIds([]);
+  };
+
+  const openContentModal = (
+    nextTab: "notes" | "roleIntel" | "reference" | "voting" | "summaryDeaths" | "summaryRoles",
+  ) => {
+    if ((nextTab === "notes" || nextTab === "roleIntel") && !gameHasStarted) {
+      return;
+    }
+
+    if (nextTab === "voting" && (!gameHasStarted || selectedPhase?.type !== "day")) {
+      return;
+    }
+
+    setContentTab(nextTab);
+  };
+
+  const closeContentModal = () => {
+    setContentTab(null);
   };
 
   const toggleNightDeathPlayer = (playerId: string) => {
@@ -1073,7 +1101,7 @@ export default function GamePage() {
       });
 
       closeNightResultModal();
-      setContentTab("notes");
+      setContentTab(null);
     } catch {
       setPageError("Не удалось сохранить результат ночи.");
     } finally {
@@ -1172,32 +1200,52 @@ export default function GamePage() {
     const sourceGame = gameResult.game;
     const now = timestamp();
     const newGameId = createId();
-    const playerIdMap = new Map(players.map((player) => [player.id, createId()]));
+    const baseTitle = sourceGame.scriptName?.trim() || sourceGame.title.trim() || "Новая партия";
 
     const duplicatedGame: Game = {
-      ...sourceGame,
       id: newGameId,
-      title: `${sourceGame.scriptName?.trim() || sourceGame.title} — копия setup`,
+      title: baseTitle,
+      date: todayInputValue(),
+      storyteller: sourceGame.storyteller,
+      scriptName: sourceGame.scriptName,
+      scriptAuthor: sourceGame.scriptAuthor,
+      scriptRoles: sourceGame.scriptRoles,
+      playerCount: sourceGame.playerCount,
       status: "active",
+      activeFabledIds: undefined,
+      activeLoricIds: undefined,
       hasStarted: false,
       currentPhaseId: undefined,
+      myPlayerId: undefined,
+      myRoleId: undefined,
+      myTeam: undefined,
       winner: undefined,
       finalNotes: undefined,
       startedAt: undefined,
       finishedAt: undefined,
       pinnedAt: undefined,
       trashedAt: undefined,
-      myPlayerId: sourceGame.myPlayerId ? playerIdMap.get(sourceGame.myPlayerId) : undefined,
+      customTokenPositions: undefined,
+      grimoireStyle: undefined,
       createdAt: now,
       updatedAt: now,
     };
 
     const duplicatedPlayers: Player[] = players.map((player) => ({
-      ...player,
-      id: playerIdMap.get(player.id) ?? createId(),
+      id: createId(),
       gameId: newGameId,
+      name: player.name,
+      seatIndex: player.seatIndex,
       alive: true,
       deadVoteAvailable: true,
+      tokenTint: "default",
+      mainRole: undefined,
+      additionalRoles: ["", "", ""],
+      isTraveller: undefined,
+      travellerRole: undefined,
+      travellerTeam: undefined,
+      joinedPhaseId: undefined,
+      leftPhaseId: undefined,
       createdAt: now,
       updatedAt: now,
     }));
@@ -2259,7 +2307,25 @@ export default function GamePage() {
           ? "border-red-200/45 bg-red-400/15 text-red-100"
           : "border-stone-200/20 bg-stone-100/5 text-stone-200";
   const gameHasStarted = game.hasStarted ?? Boolean(game.startedAt || effectiveSelectedPhaseId);
+  const contentModalTitle =
+    contentTab === "notes"
+      ? "Заметки"
+      : contentTab === "roleIntel"
+        ? "Заметки по ролям"
+        : contentTab === "reference"
+          ? "Инфо"
+          : contentTab === "voting"
+            ? "Номинации"
+            : contentTab === "summaryDeaths"
+              ? "Смерти и казни"
+              : contentTab === "summaryRoles"
+                ? "Саммари"
+                : "";
   const isDayPhase = !selectedPhase || selectedPhase.type === "day";
+  const contentModalIsBottomSheet = contentTab === "summaryDeaths" || contentTab === "summaryRoles";
+  const contentModalShellClass = isDayPhase
+    ? "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 shadow-[0_24px_60px_rgba(76,48,22,0.2)] sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6"
+    : "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6";
   const renderSummaryNoteText = (text: string) => {
     if (!roleMentionRegex) {
       return <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-100">{text}</p>;
@@ -2862,110 +2928,62 @@ export default function GamePage() {
         ) : null}
 
         <div className="grid min-w-0 gap-4 xl:grid-cols-[0.95fr_minmax(0,1.05fr)] xl:gap-5">
-          <PlayerCircle
-            players={players}
-            notes={notes}
-            phases={phases}
-            currentPhase={selectedPhase}
-            scriptRoles={game.scriptRoles}
-            myPlayerId={effectiveMyPlayerId}
-            myRoleId={game.myRoleId}
-            customTokenPositions={game.customTokenPositions}
-            grimoireStyle={game.grimoireStyle}
-            activeFabledIds={game.activeFabledIds}
-            activeLoricIds={game.activeLoricIds}
-            voteDraft={voteDraft}
-            showVoteMarkers={voteDraft?.stage === "select_voters"}
-            voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
-            selectableNominatorIds={
-              (voteDraft?.voteType ?? "execution") === "traveller_exile"
-                ? selectableTravellerExileNominatorIds
-                : selectableExecutionNominatorIds
-            }
-            selectableNomineeIds={
-              (voteDraft?.voteType ?? "execution") === "traveller_exile"
-                ? selectableTravellerExileNomineeIds
-                : selectableExecutionNomineeIds
-            }
-            onToggleVoteVoter={voteDraft ? toggleVoteDraftVoter : undefined}
-            onSelectVotingPlayer={voteDraft ? selectVoteDraftPlayer : undefined}
-            onSaveVoteDraft={voteDraft?.stage === "select_voters" ? saveVoteDraft : undefined}
-            onCancelVoteDraft={voteDraft ? cancelVoteDraft : undefined}
-            voteSaving={voteSaving}
-            onUpdateTokenPosition={updateTokenPosition}
-            onUpdateGrimoireStyle={updateGrimoireStyle}
-            onUpdateSpecialRoles={updateSpecialRoles}
-            onAddTraveller={addTraveller}
-            onPlayerClick={(player) => setSelectedPlayerId(player.id)}
-          />
-
           <div className="min-w-0 space-y-4 sm:space-y-5">
-            <section className="panel space-y-3 p-3 sm:p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-stone-50">
-                    {gameHasStarted && selectedPhase ? selectedPhase.title : "Игра ещё не началась"}
-                  </h2>
-                  <p className="mt-1 text-sm text-stone-400">
-                    {gameHasStarted && selectedPhase
-                      ? selectedPhase.type === "night"
-                        ? "Ночная фаза в процессе."
-                        : "Дневная фаза в процессе."
-                      : "До старта интерфейс остаётся светлым, а заметки и голосования начнутся после кнопки «Начать игру»."}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {!gameHasStarted ? (
-                    <button type="button" onClick={startGame} className="primary-button">
-                      <Play className="h-4 w-4" />
-                      Начать игру
-                    </button>
-                  ) : !selectedPhase ? (
-                    <button type="button" disabled className="secondary-button opacity-60">
-                      Фаза не найдена
-                    </button>
-                  ) : selectedPhase?.type === "night" ? (
-                    <button type="button" onClick={openNightResultModal} className="primary-button">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Ночь завершилась
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void advanceToNextPhase("day_to_night")}
-                      className="secondary-button"
-                    >
-                      <BedDouble className="h-4 w-4" />
-                      Ушли спать без казни
-                    </button>
-                  )}
-                </div>
-              </div>
-            </section>
             <section className="panel p-2 sm:p-3">
               <div className="flex flex-wrap gap-2">
+                {!gameHasStarted ? (
+                  <button type="button" onClick={startGame} className="primary-button min-h-10 px-3 whitespace-nowrap">
+                    <Play className="h-4 w-4" />
+                    Начать игру
+                  </button>
+                ) : !selectedPhase ? (
+                  <button type="button" disabled className="secondary-button min-h-10 px-3 whitespace-nowrap opacity-60">
+                    Фаза не найдена
+                  </button>
+                ) : selectedPhase.type === "night" ? (
+                  <button
+                    type="button"
+                    onClick={openNightResultModal}
+                    className="primary-button min-h-10 w-12 shrink-0 px-0"
+                    aria-label={`Перейти в ${selectedPhase.number} день`}
+                    title={`${selectedPhase.number} день`}
+                  >
+                    <span className="relative inline-flex h-6 w-6 items-center justify-center">
+                      <SunMedium className="h-5 w-5" />
+                      <span className="absolute right-[-4px] top-[-4px] inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-ink-900 px-[2px] text-[9px] font-bold leading-none text-amber-50">
+                        {selectedPhase.number}
+                      </span>
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void advanceToNextPhase("day_to_night")}
+                    className="secondary-button min-h-10 w-12 shrink-0 px-0"
+                    aria-label={`Перейти в ${selectedPhase.number + 1} ночь`}
+                    title={`${selectedPhase.number + 1} ночь`}
+                  >
+                    <span className="relative inline-flex h-6 w-6 items-center justify-center">
+                      <MoonStar className="h-5 w-5" />
+                      <span className="absolute right-[-4px] top-[-4px] inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-ink-900 px-[2px] text-[9px] font-bold leading-none text-amber-50">
+                        {selectedPhase.number + 1}
+                      </span>
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setContentTab("notes")}
-                  className={contentTab === "notes" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
-                  title="Заметки"
-                  aria-label="Заметки"
-                >
-                  <Edit3 className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setContentTab("roleIntel")}
+                  onClick={() => openContentModal("roleIntel")}
                   className={contentTab === "roleIntel" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                   title="По ролям"
                   aria-label="По ролям"
                 >
-                  <Target className="h-4 w-4" />
+                  <Edit3 className="h-4 w-4" />
                 </button>
                 {gameHasStarted && selectedPhase?.type === "day" ? (
                 <button
                   type="button"
-                  onClick={() => setContentTab("voting")}
+                  onClick={() => openContentModal("voting")}
                   className={contentTab === "voting" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                   title="Голосования"
                   aria-label="Голосования"
@@ -2986,7 +3004,7 @@ export default function GamePage() {
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setContentTab("reference")}
+                  onClick={() => openContentModal("reference")}
                   className={contentTab === "reference" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                   title="Роли"
                   aria-label="Роли"
@@ -2995,29 +3013,92 @@ export default function GamePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setContentTab("summaryDeaths")}
+                  onClick={() => openContentModal("summaryDeaths")}
                   className={contentTab === "summaryDeaths" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                   title="Смерти и казни"
                   aria-label="Смерти и казни"
-                >
-                  <Skull className="h-4 w-4" />
-                </button>
+                  >
+                    <Skull className="h-4 w-4" />
+                  </button>
                 <button
                   type="button"
-                  onClick={() => setContentTab("summaryRoles")}
+                  onClick={() => openContentModal("summaryRoles")}
                   className={contentTab === "summaryRoles" ? "primary-button min-h-10 px-3 whitespace-nowrap" : "secondary-button min-h-10 px-3 whitespace-nowrap"}
                   title="Сводка ролей"
                   aria-label="Сводка ролей"
                 >
                   <Users className="h-4 w-4" />
                 </button>
-              </div>
+                </div>
             </section>
-            {!gameHasStarted && contentTab !== "summaryDeaths" && contentTab !== "summaryRoles" ? (
-              <section className="panel p-5 text-center text-stone-500">
-                Игра ещё не началась. Нажмите «Начать игру», чтобы перейти в 1 ночь.
-              </section>
-            ) : null}
+            <PlayerCircle
+              players={players}
+              notes={notes}
+              phases={phases}
+              currentPhase={selectedPhase}
+              scriptRoles={game.scriptRoles}
+              myPlayerId={effectiveMyPlayerId}
+              myRoleId={game.myRoleId}
+              customTokenPositions={game.customTokenPositions}
+              grimoireStyle={game.grimoireStyle}
+              activeFabledIds={game.activeFabledIds}
+              activeLoricIds={game.activeLoricIds}
+              voteDraft={voteDraft}
+              showVoteMarkers={voteDraft?.stage === "select_voters"}
+              voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
+              selectableNominatorIds={
+                (voteDraft?.voteType ?? "execution") === "traveller_exile"
+                  ? selectableTravellerExileNominatorIds
+                  : selectableExecutionNominatorIds
+              }
+              selectableNomineeIds={
+                (voteDraft?.voteType ?? "execution") === "traveller_exile"
+                  ? selectableTravellerExileNomineeIds
+                  : selectableExecutionNomineeIds
+              }
+              onToggleVoteVoter={voteDraft ? toggleVoteDraftVoter : undefined}
+              onSelectVotingPlayer={voteDraft ? selectVoteDraftPlayer : undefined}
+              onSaveVoteDraft={voteDraft?.stage === "select_voters" ? saveVoteDraft : undefined}
+              onCancelVoteDraft={voteDraft ? cancelVoteDraft : undefined}
+              voteSaving={voteSaving}
+              onUpdateTokenPosition={updateTokenPosition}
+              onUpdateGrimoireStyle={updateGrimoireStyle}
+              onUpdateSpecialRoles={updateSpecialRoles}
+              onAddTraveller={addTraveller}
+              specialFormOpen={specialFormOpen}
+              specialFormRoleType={specialFormRoleType}
+              onCloseSpecialForm={() => setSpecialFormOpen(false)}
+              travellerFormOpen={travellerFormOpen}
+              onCloseTravellerForm={() => setTravellerFormOpen(false)}
+              onPlayerClick={(player) => setSelectedPlayerId(player.id)}
+            />
+          </div>
+
+          <div className="min-w-0">
+            {contentTab ? (
+              <div
+                className={`fixed inset-0 z-[60] flex overflow-y-auto bg-black/45 p-0 backdrop-blur-sm sm:items-center sm:p-6 ${
+                  contentModalIsBottomSheet
+                    ? "items-end pt-[calc(0.75rem+env(safe-area-inset-top))] pb-0"
+                    : "items-start pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom)]"
+                }`}
+                onClick={closeContentModal}
+              >
+                <section
+                  className={contentModalShellClass}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-stone-400">{selectedPhase?.title ?? "Партия"}</p>
+                      <h2 className="text-2xl font-bold text-stone-50">{contentModalTitle}</h2>
+                    </div>
+                    <button type="button" onClick={closeContentModal} className="secondary-button px-3">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="max-h-[calc(100dvh-9rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 sm:max-h-[84vh] sm:pr-1">
             {gameHasStarted && contentTab === "voting" && selectedPhase?.type === "day" ? (
               <section className="panel min-w-0 p-3 sm:p-5">
                 {voteDraft ? (
@@ -3052,19 +3133,36 @@ export default function GamePage() {
                   </div>
                 ) : (
                     <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => beginVoteDraft("execution")} className="secondary-button w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        beginVoteDraft("execution");
+                        setContentTab(null);
+                      }}
+                      className="secondary-button w-full sm:w-auto"
+                    >
                       <CheckCircle2 className="h-4 w-4" />
                       Номинация
                     </button>
                     {players.some((player) => player.isTraveller) ? (
-                      <button type="button" onClick={() => beginVoteDraft("traveller_exile")} className="secondary-button w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          beginVoteDraft("traveller_exile");
+                          setContentTab(null);
+                        }}
+                        className="secondary-button w-full sm:w-auto"
+                      >
                         <Crown className="h-4 w-4" />
                         Изгнание Traveller
                       </button>
                     ) : null}
                     <button
                       type="button"
-                      onClick={() => openExecutionWithoutNominationModal()}
+                      onClick={() => {
+                        openExecutionWithoutNominationModal();
+                        setContentTab(null);
+                      }}
                       className={`secondary-button w-full sm:w-auto ${
                         selectedPhaseExecutionNote ? "border-amber-700/25 bg-amber-200/20 text-stone-900" : ""
                       }`}
@@ -3334,7 +3432,7 @@ export default function GamePage() {
                 onUpdateNote={updateNote}
               />
             ) : null}
-            {gameHasStarted && contentTab === "reference" ? (
+            {contentTab === "reference" ? (
               <section className="space-y-3">
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -3437,6 +3535,10 @@ export default function GamePage() {
                 )}
               </section>
             ) : null}
+                  </div>
+                </section>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -3459,8 +3561,8 @@ export default function GamePage() {
       />
 
       {nightResultModalOpen && selectedPhase?.type === "night" ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-          <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-2xl sm:rounded-3xl sm:p-6">
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={closeNightResultModal}>
+          <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-2xl sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">Результат ночи</h2>
@@ -3532,8 +3634,8 @@ export default function GamePage() {
       ) : null}
 
       {dayDeathModalOpen && phasesById.get(dayDeathPhaseId ?? selectedPhase?.id ?? "")?.type === "day" ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-          <section className="day-death-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-4xl sm:rounded-3xl sm:p-6">
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={closeDayDeathModal}>
+          <section className="day-death-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-4xl sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">
@@ -3658,8 +3760,8 @@ export default function GamePage() {
       ) : null}
 
       {executionFinishPromptVoteRecordId && selectedPhase?.type === "day" ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-          <section className="execution-finish-prompt-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl sm:p-6">
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={closeExecutionFinishPrompt}>
+          <section className="execution-finish-prompt-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">Результат казни</h2>
@@ -3787,12 +3889,15 @@ export default function GamePage() {
       ) : null}
 
       {executionModalOpen && phasesById.get(executionPhaseId ?? selectedPhase?.id ?? "")?.type === "day" ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
-          <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-md sm:rounded-3xl sm:p-6">
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={closeExecutionWithoutNominationModal}>
+          <section
+            className="w-full rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 text-stone-900 shadow-[0_24px_60px_rgba(76,48,22,0.2)] sm:mx-auto sm:max-w-md sm:rounded-3xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-stone-50">Казнь без номинации</h2>
-                <p className="mt-1 text-sm text-stone-200">Выберите, кто был казнён в этой дневной фазе.</p>
+                <h2 className="text-lg font-semibold text-stone-900">Казнь без номинации</h2>
+                <p className="mt-1 text-sm text-stone-600">Выберите, кто был казнён в этой дневной фазе.</p>
               </div>
               <button type="button" onClick={closeExecutionWithoutNominationModal} className="secondary-button px-3">
                 <X className="h-4 w-4" />
@@ -3847,13 +3952,14 @@ export default function GamePage() {
       />
 
       {finishOpen ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6">
+        <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setFinishOpen(false)}>
           <section
             className={`w-full rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-xl sm:rounded-3xl sm:p-6 ${
               isDayPhase || !gameHasStarted
                 ? "border-amber-700/16 bg-[#f7eddc] shadow-[0_22px_60px_rgba(60,44,20,0.18)]"
                 : "border-ember-200/15 bg-ink-850"
             }`}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>

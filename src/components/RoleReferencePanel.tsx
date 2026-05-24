@@ -13,12 +13,12 @@ export default function RoleReferencePanel({ roles, referenceMap }: RoleReferenc
   const roleGroups = groupRolesByType(roles);
 
   return (
-    <section className="panel p-4 sm:p-5">
-      <div className="mb-4 flex items-center gap-2">
+    <section className="panel p-3 sm:p-4">
+      <div className="mb-3 flex items-center gap-2">
         <BookOpen className="role-reference-icon h-5 w-5 text-ember-100" />
         <div>
-          <h2 className="text-lg font-semibold text-stone-50">Роли и способности</h2>
-          <p className="text-sm text-stone-400">Справочник по ролям текущего сценария.</p>
+          <h2 className="text-base font-semibold text-stone-50 sm:text-lg">Роли и способности</h2>
+          <p className="text-xs text-stone-400 sm:text-sm">Справочник по ролям текущего сценария.</p>
         </div>
       </div>
 
@@ -27,34 +27,38 @@ export default function RoleReferencePanel({ roles, referenceMap }: RoleReferenc
           Загрузите JSON сценария, чтобы увидеть роли и их способности.
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {roleGroups.map((group) => (
-            <section key={group.type} className="space-y-3">
-              <h3 className="role-reference-group-label text-sm font-semibold uppercase tracking-[0.18em] text-ember-100">
+            <section key={group.type} className="space-y-2.5">
+              <h3 className="role-reference-group-label text-xs font-semibold uppercase tracking-[0.18em] text-ember-100 sm:text-sm">
                 {group.label}
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {group.roles.map((role) => {
                   const reference = referenceMap.get(normalizeRoleId(role.id));
 
                   return (
                     <article
                       key={role.id}
-                      className="rounded-2xl border border-ember-200/10 bg-black/15 p-4"
+                      className="rounded-2xl border border-ember-200/10 bg-black/15 px-3 py-2.5"
                     >
-                      <div className="flex items-start gap-3">
-                        <RoleTokenImage
-                          roleId={role.id}
-                          roles={roles}
-                          className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-black/20"
-                          imageClassName="h-full w-full object-cover"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-base font-semibold text-stone-50">{reference?.name ?? role.name}</p>
+                      <div className="flex items-start gap-2">
+                        <div className="w-12 shrink-0">
+                          <RoleTokenImage
+                            roleId={role.id}
+                            roles={roles}
+                            className="mx-auto h-10 w-10 overflow-hidden rounded-full border border-ember-200/20 bg-black/20 sm:h-11 sm:w-11"
+                            imageClassName="h-full w-full object-cover"
+                          />
+                          <p className="mt-0.5 text-center text-[9px] font-medium leading-[0.7rem] text-stone-100 sm:text-[10px] sm:leading-3">
+                            {reference?.name ?? role.name}
+                          </p>
+                        </div>
+                        <div className="min-w-0 flex-1 pt-0.5">
                           {reference?.ability ? (
-                            <p className="mt-1 text-sm leading-6 text-stone-300">{reference.ability}</p>
+                            <p className="text-[11px] leading-4 text-stone-300 sm:text-xs sm:leading-5">{reference.ability}</p>
                           ) : (
-                            <p className="mt-1 text-sm leading-6 text-stone-500">
+                            <p className="text-[11px] leading-4 text-stone-500 sm:text-xs sm:leading-5">
                               Для этой роли пока нет загруженного текста способности.
                             </p>
                           )}

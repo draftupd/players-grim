@@ -32,6 +32,7 @@ export type GrimoireStyle = {
   tokenScale: number;
   extraTokenScale: number;
   nameScale: number;
+  grimoireHeightScale?: number;
   lockTokens?: boolean;
 };
 

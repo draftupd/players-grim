@@ -26,11 +26,11 @@ const readJsonFile = async (file: File, label: string) => {
 };
 
 export const readImportedArchive = async (file: File) => {
-  const parsed = await readJsonFile(file, "Файл архива");
+  const parsed = await readJsonFile(file, "Файл истории");
 
   if (!isArchiveBundle(parsed)) {
     throw new Error(
-      "Это не архив Player's Grimoire. Нужен JSON-файл, выгруженный через кнопку «Выгрузить архив».",
+      "Это не история Player's Grimoire. Нужен JSON-файл, выгруженный через кнопку «Выгрузить историю».",
     );
   }
 

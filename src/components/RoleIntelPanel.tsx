@@ -1,5 +1,6 @@
 import { Edit3, Save, Send, Trash2, X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 import type { Note, Phase, Player, RoleType, ScriptRole } from "../types";
 import { formatDate, formatTime } from "../utils/dates";
 import { mergeManualAndMentionLinks } from "../utils/mentions";
@@ -282,25 +283,25 @@ const splitRoleGroupsForCompactPicker = (
     ]),
   );
 
-  const leftPrimaryGroup = roleGroupsByKey.get("townsfolk");
-  const leftSecondaryGroups = (["traveller", "fabled", "loric"] satisfies RoleType[])
+  const townsfolkGroup = roleGroupsByKey.get("townsfolk");
+  const bottomGroups = (["traveller", "fabled", "loric"] satisfies RoleType[])
     .map((key) => roleGroupsByKey.get(key))
     .filter((group): group is NonNullable<typeof group> => Boolean(group));
-  const leftSecondaryMergedGroup =
-    leftSecondaryGroups.length > 0
+  const bottomMergedGroup =
+    bottomGroups.length > 0
       ? {
           key: "misc",
-          roleIds: leftSecondaryGroups.flatMap((group) => group.roleIds),
+          roleIds: bottomGroups.flatMap((group) => group.roleIds),
         }
       : null;
-  const rightGroups = (["outsider", "minion", "demon"] satisfies RoleType[])
+  const sideGroups = (["outsider", "minion", "demon"] satisfies RoleType[])
     .map((key) => roleGroupsByKey.get(key))
     .filter((group): group is NonNullable<typeof group> => Boolean(group));
 
   return {
-    leftPrimaryGroup,
-    leftSecondaryMergedGroup,
-    rightGroups,
+    townsfolkGroup,
+    sideGroups,
+    bottomMergedGroup,
   };
 };
 
@@ -1167,6 +1168,7 @@ export default function RoleIntelPanel({
   const [selectedRoleOptionIds, setSelectedRoleOptionIds] = useState<string[]>([]);
   const [selectedPlayerRolePairs, setSelectedPlayerRolePairs] = useState<Array<{ playerId: string; roleId: string }>>([]);
   const [activePairIndex, setActivePairIndex] = useState(0);
+  const [activeTwoRoleSlot, setActiveTwoRoleSlot] = useState<"first" | "second">("first");
   const [selectedSecondaryRoleOptionId, setSelectedSecondaryRoleOptionId] = useState("");
   const [selectedCountValue, setSelectedCountValue] = useState("");
   const [selectedChoiceValue, setSelectedChoiceValue] = useState("");
@@ -1233,23 +1235,6 @@ export default function RoleIntelPanel({
     () => new Map(roleGroups.map((group) => [group.key, group])),
     [roleGroups],
   );
-  const townsfolkRoleGroup = roleGroupsByKey.get("townsfolk");
-  const sideRoleGroups = (["outsider", "minion", "demon"] satisfies RoleType[])
-    .map((key) => roleGroupsByKey.get(key))
-    .filter((group): group is NonNullable<typeof group> => Boolean(group));
-  const miscRoleGroups = (["traveller", "fabled", "loric"] satisfies RoleType[])
-    .map((key) => roleGroupsByKey.get(key))
-    .filter((group): group is NonNullable<typeof group> => Boolean(group));
-  const miscRoleGroup = useMemo(
-    () =>
-      miscRoleGroups.length > 0
-        ? {
-            key: "misc",
-            roleIds: miscRoleGroups.flatMap((group) => group.roleIds),
-          }
-        : null,
-    [miscRoleGroups],
-  );
   const playersById = useMemo(() => new Map(players.map((player) => [player.id, player])), [players]);
   const selectedRoleConfig = useMemo(
     () => (selectedRoleId ? getRoleSpecialConfig(selectedRoleId) : null),
@@ -1292,6 +1277,7 @@ export default function RoleIntelPanel({
     setSelectedRoleOptionIds([]);
     setSelectedPlayerRolePairs([]);
     setActivePairIndex(0);
+    setActiveTwoRoleSlot("first");
     setSelectedSecondaryRoleOptionId("");
     setSelectedCountValue("");
     setSelectedChoiceValue("");
@@ -1325,6 +1311,7 @@ export default function RoleIntelPanel({
     setSelectedRoleOptionIds([]);
     setSelectedPlayerRolePairs([]);
     setActivePairIndex(0);
+    setActiveTwoRoleSlot("first");
     setSelectedSecondaryRoleOptionId("");
     setSelectedCountValue("");
     setSelectedChoiceValue("");
@@ -1354,6 +1341,14 @@ export default function RoleIntelPanel({
     });
   };
 
+  const compactPlayerChipClass = (selected: boolean) =>
+    clsx(
+      "rounded-lg border px-2 py-1 text-xs leading-4 transition",
+      selected
+        ? "role-player-selected border-transparent text-stone-50"
+        : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8",
+    );
+
   const renderCompactRolePicker = ({
     rolesForPicker,
     selectedId,
@@ -1368,57 +1363,64 @@ export default function RoleIntelPanel({
     const compactPicker = splitRoleGroupsForCompactPicker(rolesForPicker);
 
     return (
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1.5">
-          {compactPicker.leftPrimaryGroup ? (
+      <div className="space-y-0.5">
+        <div className="grid grid-cols-2 gap-1">
+          {compactPicker.townsfolkGroup ? (
             <RoleIconGrid
-              groups={[compactPicker.leftPrimaryGroup]}
+              groups={[compactPicker.townsfolkGroup]}
               roles={rolesForPicker}
               selectedRoleId={selectedId}
               selectedRoleIds={selectedIds}
               onSelect={onSelect}
-              groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
-              columnsClassName="grid-cols-5 gap-0.5"
-              buttonClassName="rounded-sm"
-              iconClassName="h-6 w-6"
+              className="h-full"
+              groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+              columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
+              buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
+              iconClassName="h-8 w-8 sm:h-10 sm:w-10"
+              roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+              compact
               unframed
               showGroupLabel={false}
             />
-          ) : null}
-          {compactPicker.leftSecondaryMergedGroup ? (
-            <RoleIconGrid
-              groups={[compactPicker.leftSecondaryMergedGroup]}
-              roles={rolesForPicker}
-              selectedRoleId={selectedId}
-              selectedRoleIds={selectedIds}
-              onSelect={onSelect}
-              groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
-              columnsClassName="grid-cols-5 gap-0.5"
-              buttonClassName="rounded-sm"
-              iconClassName="h-6 w-6"
-              unframed
-              showGroupLabel={false}
-            />
-          ) : null}
+          ) : (
+            <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+          )}
+
+          <RoleIconGrid
+            groups={compactPicker.sideGroups}
+            roles={rolesForPicker}
+            selectedRoleId={selectedId}
+            selectedRoleIds={selectedIds}
+            onSelect={onSelect}
+            className="h-full"
+            groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+            columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
+            buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
+            iconClassName="h-8 w-8 sm:h-10 sm:w-10"
+            roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+            compact
+            unframed
+            showGroupLabel={false}
+          />
         </div>
-        <div className="space-y-1.5">
-          {compactPicker.rightGroups.map((group) => (
-            <RoleIconGrid
-              key={group.key}
-              groups={[group]}
-              roles={rolesForPicker}
-              selectedRoleId={selectedId}
-              selectedRoleIds={selectedIds}
-              onSelect={onSelect}
-              groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
-              columnsClassName="grid-cols-4 gap-0.5"
-              buttonClassName="rounded-sm"
-              iconClassName="h-6 w-6"
-              unframed
-              showGroupLabel={false}
-            />
-          ))}
-        </div>
+
+        {compactPicker.bottomMergedGroup ? (
+          <RoleIconGrid
+            groups={[compactPicker.bottomMergedGroup]}
+            roles={rolesForPicker}
+            selectedRoleId={selectedId}
+            selectedRoleIds={selectedIds}
+            onSelect={onSelect}
+            groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+            columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
+            buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
+            iconClassName="h-8 w-8 sm:h-10 sm:w-10"
+            roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+            compact
+            unframed
+            showGroupLabel={false}
+          />
+        ) : null}
       </div>
     );
   };
@@ -1920,58 +1922,11 @@ export default function RoleIntelPanel({
                 ? `Выбрана роль: ${sortedRoles.find((role) => role.id === selectedRoleId)?.name ?? prettifyRoleName(selectedRoleId)}`
                 : "Выберите роль"}
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                {townsfolkRoleGroup ? (
-                  <RoleIconGrid
-                    groups={[townsfolkRoleGroup]}
-                    roles={pickerRoles}
-                    selectedRoleId={selectedRoleId}
-                    onSelect={handleSelectRole}
-                    groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
-                    columnsClassName="grid-cols-5 gap-0.5"
-                    buttonClassName="rounded-sm"
-                    iconClassName="h-6 w-6"
-                    unframed
-                    showGroupLabel={false}
-                  />
-                ) : (
-                  <div className="rounded-2xl border border-ember-200/10 px-1 py-0.5" />
-                )}
-                {miscRoleGroup ? (
-                  <RoleIconGrid
-                    groups={[miscRoleGroup]}
-                    roles={pickerRoles}
-                    selectedRoleId={selectedRoleId}
-                    onSelect={handleSelectRole}
-                    groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
-                    columnsClassName="grid-cols-5 gap-0.5"
-                    buttonClassName="rounded-sm"
-                    iconClassName="h-6 w-6"
-                    unframed
-                    showGroupLabel={false}
-                  />
-                ) : null}
-              </div>
-
-              <div className="space-y-1.5">
-                {sideRoleGroups.map((group) => (
-                  <RoleIconGrid
-                    key={group.key}
-                    groups={[group]}
-                    roles={pickerRoles}
-                    selectedRoleId={selectedRoleId}
-                    onSelect={handleSelectRole}
-                    groupClassName="rounded-2xl border border-ember-200/10 px-1 py-0.5"
-                    columnsClassName="grid-cols-4 gap-0.5"
-                    buttonClassName="rounded-sm"
-                    iconClassName="h-6 w-6"
-                    unframed
-                    showGroupLabel={false}
-                  />
-                ))}
-              </div>
-            </div>
+            {renderCompactRolePicker({
+              rolesForPicker: pickerRoles,
+              selectedId: selectedRoleId,
+              onSelect: handleSelectRole,
+            })}
           </div>
         ) : null}
 
@@ -1990,11 +1945,7 @@ export default function RoleIntelPanel({
                       onClick={() =>
                         setSelectedSourcePlayerId((current) => (current === player.id ? "" : player.id))
                       }
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        selectedSourcePlayerId === player.id
-                          ? "role-player-selected border-transparent text-stone-50"
-                          : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                      }`}
+                      className={compactPlayerChipClass(selectedSourcePlayerId === player.id)}
                     >
                       {player.name}
                     </button>
@@ -2023,11 +1974,7 @@ export default function RoleIntelPanel({
                             : undefined,
                       )
                     }
-                    className={`rounded-xl border px-3 py-2 text-sm transition ${
-                      selectedPlayerIds.includes(player.id)
-                        ? "role-player-selected border-transparent text-stone-50"
-                        : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                    }`}
+                    className={compactPlayerChipClass(selectedPlayerIds.includes(player.id))}
                   >
                     {player.name}
                   </button>
@@ -2043,11 +1990,7 @@ export default function RoleIntelPanel({
                       key={player.id}
                       type="button"
                       onClick={() => togglePlayer(player.id, selectedRoleConfig.count)}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        selectedPlayerIds.includes(player.id)
-                          ? "role-player-selected border-transparent text-stone-50"
-                          : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                      }`}
+                      className={compactPlayerChipClass(selectedPlayerIds.includes(player.id))}
                     >
                       {player.name}
                     </button>
@@ -2080,11 +2023,7 @@ export default function RoleIntelPanel({
                     key={player.id}
                     type="button"
                     onClick={() => setSelectedPlayerIds((current) => (current[0] === player.id ? [] : [player.id]))}
-                    className={`rounded-xl border px-3 py-2 text-sm transition ${
-                      selectedPlayerIds[0] === player.id
-                        ? "role-player-selected border-transparent text-stone-50"
-                        : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                    }`}
+                    className={compactPlayerChipClass(selectedPlayerIds[0] === player.id)}
                   >
                     {player.name}
                   </button>
@@ -2103,11 +2042,7 @@ export default function RoleIntelPanel({
                           current === "cannibal_did_not_wake" ? "" : "cannibal_did_not_wake",
                         )
                       }
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        selectedChoiceValue === "cannibal_did_not_wake"
-                          ? "role-player-selected border-transparent text-stone-50"
-                          : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                      }`}
+                      className={compactPlayerChipClass(selectedChoiceValue === "cannibal_did_not_wake")}
                     >
                       Cannibal не просыпался
                     </button>
@@ -2119,11 +2054,7 @@ export default function RoleIntelPanel({
                     key={player.id}
                     type="button"
                     onClick={() => setSelectedPlayerIds((current) => (current[0] === player.id ? [] : [player.id]))}
-                    className={`rounded-xl border px-3 py-2 text-sm transition ${
-                      selectedPlayerIds[0] === player.id
-                        ? "role-player-selected border-transparent text-stone-50"
-                        : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                    }`}
+                    className={compactPlayerChipClass(selectedPlayerIds[0] === player.id)}
                   >
                       {player.name}
                     </button>
@@ -2157,51 +2088,60 @@ export default function RoleIntelPanel({
                     key={player.id}
                     type="button"
                     onClick={() => setSelectedPlayerIds((current) => (current[0] === player.id ? [] : [player.id]))}
-                    className={`rounded-xl border px-3 py-2 text-sm transition ${
-                      selectedPlayerIds[0] === player.id
-                        ? "role-player-selected border-transparent text-stone-50"
-                        : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                    }`}
+                    className={compactPlayerChipClass(selectedPlayerIds[0] === player.id)}
                   >
                       {player.name}
                     </button>
                   ))}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
-                      {selectedRoleConfig.firstRoleLabel}
-                    </span>
-                    <div className="space-y-2">
-                      {renderCompactRolePicker({
-                        rolesForPicker: firstFilteredRoleOptions,
-                        selectedId: selectedRoleOptionId,
-                        onSelect: setSelectedRoleOptionId,
-                      })}
-                      <p className="text-sm text-stone-400">
+                <div className="rounded-2xl border border-ember-200/10 bg-black/10 p-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTwoRoleSlot("first")}
+                      className={clsx(
+                        "flex min-h-[64px] w-full flex-col items-start justify-center rounded-2xl border px-3 py-2.5 text-left transition",
+                        activeTwoRoleSlot === "first"
+                          ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
+                          : "border-ember-100/35 bg-black/20",
+                      )}
+                    >
+                      <span className="text-xs uppercase tracking-[0.18em] text-stone-400">
+                        {selectedRoleConfig.firstRoleLabel}
+                      </span>
+                      <span className="mt-1 text-sm font-semibold text-stone-50">
                         {selectedRoleOptionId
                           ? firstFilteredRoleOptions.find((role) => role.id === selectedRoleOptionId)?.name ?? prettifyRoleName(selectedRoleOptionId)
                           : "Роль пока не выбрана"}
-                      </p>
-                    </div>
-                  </label>
-                  <label className="block">
-                    <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
-                      {selectedRoleConfig.secondRoleLabel}
-                    </span>
-                    <div className="space-y-2">
-                      {renderCompactRolePicker({
-                        rolesForPicker: secondFilteredRoleOptions,
-                        selectedId: selectedSecondaryRoleOptionId,
-                        onSelect: setSelectedSecondaryRoleOptionId,
-                      })}
-                      <p className="text-sm text-stone-400">
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTwoRoleSlot("second")}
+                      className={clsx(
+                        "flex min-h-[64px] w-full flex-col items-start justify-center rounded-2xl border px-3 py-2.5 text-left transition",
+                        activeTwoRoleSlot === "second"
+                          ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
+                          : "border-ember-100/35 bg-black/20",
+                      )}
+                    >
+                      <span className="text-xs uppercase tracking-[0.18em] text-stone-400">
+                        {selectedRoleConfig.secondRoleLabel}
+                      </span>
+                      <span className="mt-1 text-sm font-semibold text-stone-50">
                         {selectedSecondaryRoleOptionId
                           ? secondFilteredRoleOptions.find((role) => role.id === selectedSecondaryRoleOptionId)?.name ?? prettifyRoleName(selectedSecondaryRoleOptionId)
                           : "Роль пока не выбрана"}
-                      </p>
-                    </div>
-                  </label>
+                      </span>
+                    </button>
+                  </div>
+                  <div className="mt-3">
+                    {renderCompactRolePicker({
+                      rolesForPicker: activeTwoRoleSlot === "first" ? firstFilteredRoleOptions : secondFilteredRoleOptions,
+                      selectedId: activeTwoRoleSlot === "first" ? selectedRoleOptionId : selectedSecondaryRoleOptionId,
+                      onSelect: activeTwoRoleSlot === "first" ? setSelectedRoleOptionId : setSelectedSecondaryRoleOptionId,
+                    })}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -2214,11 +2154,7 @@ export default function RoleIntelPanel({
                     key={player.id}
                     type="button"
                     onClick={() => togglePlayer(player.id, 2)}
-                    className={`rounded-xl border px-3 py-2 text-sm transition ${
-                      selectedPlayerIds.includes(player.id)
-                        ? "role-player-selected border-transparent text-stone-50"
-                        : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                    }`}
+                    className={compactPlayerChipClass(selectedPlayerIds.includes(player.id))}
                   >
                       {player.name}
                     </button>
@@ -2336,11 +2272,7 @@ export default function RoleIntelPanel({
                         key={index}
                         type="button"
                         onClick={() => setActivePairIndex(index)}
-                        className={`rounded-xl border px-3 py-2 text-sm transition ${
-                          isActive
-                            ? "role-player-selected border-transparent text-stone-50"
-                            : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                        }`}
+                        className={compactPlayerChipClass(isActive)}
                       >
                         {label}
                       </button>
@@ -2362,11 +2294,7 @@ export default function RoleIntelPanel({
                             playerId: selected ? "" : player.id,
                           })
                         }
-                        className={`rounded-xl border px-3 py-2 text-sm transition ${
-                          selected
-                            ? "role-player-selected border-transparent text-stone-50"
-                            : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                        }`}
+                        className={compactPlayerChipClass(selected)}
                       >
                         {player.name}
                       </button>
@@ -2413,11 +2341,7 @@ export default function RoleIntelPanel({
                       key={player.id}
                       type="button"
                       onClick={() => togglePlayer(player.id, selectedRoleConfig.count)}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        selectedPlayerIds.includes(player.id)
-                          ? "role-player-selected border-transparent text-stone-50"
-                          : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                      }`}
+                      className={compactPlayerChipClass(selectedPlayerIds.includes(player.id))}
                     >
                       {player.name}
                     </button>
@@ -2451,11 +2375,7 @@ export default function RoleIntelPanel({
                       key={choice.value}
                       type="button"
                       onClick={() => setSelectedChoiceValue((current) => (current === choice.value ? "" : choice.value))}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        selectedChoiceValue === choice.value
-                          ? "role-player-selected border-transparent text-stone-50"
-                          : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                      }`}
+                      className={compactPlayerChipClass(selectedChoiceValue === choice.value)}
                     >
                       {choice.label}
                     </button>
@@ -2472,11 +2392,7 @@ export default function RoleIntelPanel({
                       key={player.id}
                       type="button"
                       onClick={() => setSelectedPlayerIds((current) => (current[0] === player.id ? [] : [player.id]))}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        selectedPlayerIds[0] === player.id
-                          ? "role-player-selected border-transparent text-stone-50"
-                          : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                      }`}
+                      className={compactPlayerChipClass(selectedPlayerIds[0] === player.id)}
                     >
                       {player.name}
                     </button>
@@ -2492,11 +2408,7 @@ export default function RoleIntelPanel({
                         key={choice.value}
                         type="button"
                         onClick={() => setSelectedChoiceValue((current) => (current === choice.value ? "" : choice.value))}
-                        className={`rounded-xl border px-3 py-2 text-sm transition ${
-                          selectedChoiceValue === choice.value
-                            ? "role-player-selected border-transparent text-stone-50"
-                            : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8"
-                        }`}
+                        className={compactPlayerChipClass(selectedChoiceValue === choice.value)}
                       >
                         {choice.label}
                       </button>

@@ -1,12 +1,12 @@
 import clsx from "clsx";
 import { ChevronDown, Lock, LockOpen, Plus, Save, Settings2, X } from "lucide-react";
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import type {
   GrimoireStyle,
   Note,
   Phase,
   Player,
-  PlayerTeam,
   PlayerVoteAvailability,
   ScriptRole,
   TokenPosition,
@@ -14,10 +14,11 @@ import type {
 } from "../types";
 import { phaseTitle, sortPhases } from "../utils/dates";
 import { getPlayerSetup } from "../utils/playerSetup";
-import { defaultFabledRoles, defaultLoricRoles, defaultTravellerRoles, getRoleLabel, mergeScriptRoles, prettifyRoleName } from "../utils/scripts";
+import { defaultFabledRoles, defaultLoricRoles, defaultTravellerRoles, getRoleLabel, mergeScriptRoles } from "../utils/scripts";
+import { useReferenceData } from "../utils/referenceData";
 import RoleTokenImage from "./RoleTokenImage";
 import PlayerToken from "./PlayerToken";
-import RolePicker from "./RolePicker";
+import RoleIconGrid from "./RoleIconGrid";
 
 type PlayerCircleProps = {
   players: Player[];
@@ -44,9 +45,14 @@ type PlayerCircleProps = {
   onAddTraveller?: (payload: {
     name: string;
     travellerRole: string;
-    travellerTeam: PlayerTeam;
+    travellerTeam: Player["travellerTeam"];
     joinedPhaseId?: string;
   }) => Promise<void> | void;
+  travellerFormOpen?: boolean;
+  onCloseTravellerForm?: () => void;
+  specialFormOpen?: boolean;
+  specialFormRoleType?: "fabled" | "loric";
+  onCloseSpecialForm?: () => void;
   activeFabledIds?: string[];
   activeLoricIds?: string[];
   onUpdateSpecialRoles?: (payload: { activeFabledIds: string[]; activeLoricIds: string[] }) => Promise<void> | void;
@@ -133,6 +139,12 @@ const getEvenlySpacedStadiumPoints = (count: number, xRadius: number, yRadius: n
   );
 };
 
+const shiftTokenPositionsY = (positions: TokenPosition[], offset: number) =>
+  positions.map((position) => ({
+    ...position,
+    y: Math.min(96, Math.max(4, position.y + offset)),
+  }));
+
 export default function PlayerCircle({
   players,
   notes,
@@ -156,13 +168,19 @@ export default function PlayerCircle({
   grimoireStyle,
   onUpdateGrimoireStyle,
   onAddTraveller,
+  travellerFormOpen: externalTravellerFormOpen,
+  onCloseTravellerForm,
+  specialFormOpen: externalSpecialFormOpen,
+  specialFormRoleType = "fabled",
+  onCloseSpecialForm,
   activeFabledIds = [],
   activeLoricIds = [],
   onUpdateSpecialRoles,
   onPlayerClick,
 }: PlayerCircleProps) {
   const isSmallViewport = typeof window !== "undefined" && window.innerWidth < 640;
-  const defaultMobileTokenScale = 1 / 1.5;
+  const isLargeViewport = typeof window !== "undefined" && window.innerWidth >= 1024;
+  const defaultTenPlayerTokenScale = 1 / 1.5;
   const sortedPlayers = [...players].sort((a, b) => a.seatIndex - b.seatIndex);
   const regularPlayerCount = players.filter((player) => !player.isTraveller).length;
   const travellerCount = players.filter((player) => player.isTraveller).length;
@@ -178,8 +196,13 @@ export default function PlayerCircle({
   const yRadius = Math.min(49.5, Math.max(xRadius * stadiumRatio, xRadius + 6));
   const offsetRatio = playerTotal >= 12 && playerTotal % 2 === 0 ? 0.5 / playerTotal : 0;
   const defaultTokenPositions = useMemo(
-    () => getEvenlySpacedStadiumPoints(sortedPlayers.length, xRadius, yRadius, offsetRatio),
-    [offsetRatio, sortedPlayers.length, xRadius, yRadius],
+    () => {
+      const rawPositions = getEvenlySpacedStadiumPoints(sortedPlayers.length, xRadius, yRadius, offsetRatio);
+      const minY = rawPositions.reduce((lowest, position) => Math.min(lowest, position.y), 50);
+      const targetMinY = playerTotal >= 14 ? 11 : playerTotal >= 11 ? 13 : playerTotal >= 8 ? 15 : 18;
+      return shiftTokenPositionsY(rawPositions, targetMinY - minY);
+    },
+    [offsetRatio, playerTotal, sortedPlayers.length, xRadius, yRadius],
   );
   const defaultPositionsById = useMemo(
     () =>
@@ -238,20 +261,49 @@ export default function PlayerCircle({
 
     return counts;
   }, [notes]);
-  const [travellerFormOpen, setTravellerFormOpen] = useState(false);
+  const [travellerFormOpenInternal, setTravellerFormOpen] = useState(false);
   const [travellerName, setTravellerName] = useState("");
   const [travellerRole, setTravellerRole] = useState("");
-  const [travellerTeam, setTravellerTeam] = useState<PlayerTeam>("unknown");
   const [travellerJoinedPhaseId, setTravellerJoinedPhaseId] = useState("");
-  const [specialFormOpen, setSpecialFormOpen] = useState(false);
+  const [specialFormOpenInternal, setSpecialFormOpen] = useState(false);
   const [selectedSpecialRoleId, setSelectedSpecialRoleId] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [travellerPreviewRoleId, setTravellerPreviewRoleId] = useState("");
+  const [specialPreviewRoleId, setSpecialPreviewRoleId] = useState("");
+  const [phaseSelectionOpen, setPhaseSelectionOpen] = useState(false);
+  const travellerFormOpen = externalTravellerFormOpen ?? travellerFormOpenInternal;
+  const specialFormOpen = externalSpecialFormOpen ?? specialFormOpenInternal;
+  const { data: referenceData } = useReferenceData();
+  const isDayTheme = currentPhase?.type === "day";
+  const modalShellClass = clsx(
+    "mt-3 w-full max-w-4xl max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:mt-0 sm:max-h-[92vh] sm:p-5",
+    isDayTheme
+      ? "border-amber-900/20 bg-[linear-gradient(180deg,rgba(255,250,242,0.99),rgba(245,231,208,0.99))] text-stone-900 shadow-[0_24px_60px_rgba(76,48,22,0.22)]"
+      : "border-ember-200/15 bg-ink-850 text-stone-100 shadow-black/40",
+  );
+  const modalTitleClass = isDayTheme ? "text-stone-900" : "text-stone-50";
+  const modalMutedClass = isDayTheme ? "text-stone-600" : "text-stone-400";
+  const modalBodyTextClass = isDayTheme ? "text-stone-700" : "text-stone-300";
+  const modalSurfaceClass = isDayTheme ? "border-amber-900/12 bg-black/5" : "border-ember-200/10 bg-black/10";
+  const modalLabelClass = isDayTheme ? "text-amber-900/80" : "text-ember-100/80";
+  const modalCloseButtonClass = clsx(
+    "min-h-10 w-10 px-0",
+    isDayTheme
+      ? "border-amber-900/18 bg-white/88 text-stone-800 hover:bg-white"
+      : "secondary-button",
+  );
+  const modalOverlayClass =
+    "fixed inset-0 z-[90] flex items-end overflow-y-auto bg-black/45 p-0 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-6";
+  const modalPreviewOverlayClass =
+    "fixed inset-0 z-[100] flex items-end overflow-y-auto bg-black/50 p-0 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-6";
+  const modalPhaseOverlayClass =
+    "fixed inset-0 z-[110] flex items-end overflow-y-auto bg-black/50 p-0 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-6";
   const travellerPickerGroups = useMemo(
     () => [
       {
         key: "traveller",
         label: "Traveller",
-        options: travellerRoleOptions.map((role) => ({ id: role.id, label: prettifyRoleName(role.id) })),
+        roleIds: travellerRoleOptions.map((role) => role.id),
       },
     ],
     [travellerRoleOptions],
@@ -261,34 +313,63 @@ export default function PlayerCircle({
       {
         key: "fabled",
         label: "Fabled",
-        options: specialRoleOptions
+        roleIds: specialRoleOptions
           .filter((role) => role.type === "fabled")
-          .map((role) => ({ id: role.id, label: prettifyRoleName(role.id) })),
+          .map((role) => role.id),
       },
       {
         key: "loric",
         label: "Loric",
-        options: specialRoleOptions
+        roleIds: specialRoleOptions
           .filter((role) => role.type === "loric")
-          .map((role) => ({ id: role.id, label: prettifyRoleName(role.id) })),
+          .map((role) => role.id),
       },
-    ].filter((group) => group.options.length > 0),
+    ].filter((group) => group.roleIds.length > 0),
     [specialRoleOptions],
   );
+  const filteredSpecialPickerGroups = useMemo(
+    () =>
+      specialPickerGroups
+        .filter((group) => group.key === specialFormRoleType)
+        .map((group) => ({
+          ...group,
+          roleIds: group.roleIds.filter((roleId) => !activeFabledIds.includes(roleId) && !activeLoricIds.includes(roleId)),
+        })),
+    [activeFabledIds, activeLoricIds, specialFormRoleType, specialPickerGroups],
+  );
+  const modalRoot = typeof document !== "undefined" ? document.body : null;
+  const joinedPhaseTitle =
+    sortedPhases.find((phase) => phase.id === travellerJoinedPhaseId)?.title ||
+    (travellerJoinedPhaseId ? undefined : currentPhase?.title);
+  const travellerPreviewReference = travellerPreviewRoleId
+    ? referenceData?.roleMap.get(travellerPreviewRoleId.toLowerCase().replaceAll(" ", "").replaceAll("-", "")) ?? null
+    : null;
+  const specialPreviewReference = specialPreviewRoleId
+    ? referenceData?.roleMap.get(specialPreviewRoleId.toLowerCase().replaceAll(" ", "").replaceAll("-", "")) ?? null
+    : null;
 
+  const baseAspectRatio =
+    playerTotal >= 14
+      ? isSmallViewport
+        ? 5 / 9
+        : isLargeViewport
+          ? 5 / 8
+          : 4 / 7
+      : playerTotal >= 11
+        ? isSmallViewport
+          ? 11 / 15
+          : isLargeViewport
+            ? 9 / 12
+            : 5 / 8
+        : 1;
   const layout = {
     maxWidth: playerTotal >= 14
       ? "max-w-[360px] sm:max-w-[520px] lg:max-w-[620px]"
       : playerTotal >= 11
         ? "max-w-[350px] sm:max-w-[500px] lg:max-w-[600px]"
         : "max-w-[390px] sm:max-w-[620px] lg:max-w-[700px]",
-    aspect:
-      playerTotal >= 14
-        ? "aspect-[5/9] sm:aspect-[4/7] lg:aspect-[5/8]"
-        : playerTotal >= 11
-          ? "aspect-[11/15] sm:aspect-[5/8] lg:aspect-[9/12]"
-          : "aspect-square",
-    center: density === "dense" ? "h-[64px] w-[64px] p-1.5 sm:h-32 sm:w-32 sm:p-3" : density === "compact" ? "h-[70px] w-[70px] p-1.5 sm:h-36 sm:w-36 sm:p-3.5" : "h-[84px] w-[84px] p-2 sm:h-44 sm:w-44 sm:p-5",
+    aspectRatio: baseAspectRatio,
+    center: density === "dense" ? "h-[76px] w-[76px] p-2 sm:h-36 sm:w-36 sm:p-3.5" : density === "compact" ? "h-[84px] w-[84px] p-2 sm:h-40 sm:w-40 sm:p-4" : "h-[96px] w-[96px] p-2.5 sm:h-48 sm:w-48 sm:p-5.5",
     xRadius,
     yRadius,
   };
@@ -306,10 +387,28 @@ export default function PlayerCircle({
         : "h-4 w-4 sm:h-6 sm:w-6";
   const votingStage = voteDraft?.stage ?? null;
   const isVotingMode = Boolean(voteDraft);
+  const tokenScaleRange =
+    playerTotal === 10
+      ? {
+          min: Math.max(0.35, Number((defaultTenPlayerTokenScale - 0.3).toFixed(3))),
+          max: Math.min(1.35, Number((defaultTenPlayerTokenScale + 0.3).toFixed(3))),
+        }
+      : {
+          min: 0.75,
+          max: 1.35,
+        };
+  const defaultTokenScale = Number((((tokenScaleRange.min + tokenScaleRange.max) / 2)).toFixed(3));
+  const extraTokenScaleRange = { min: 0.75, max: 1.5 };
+  const nameScaleRange = { min: 0.8, max: 1.5 };
+  const grimoireHeightScaleRange = { min: 0.75, max: 1.5 };
+  const defaultExtraTokenScale = Number((((extraTokenScaleRange.min + extraTokenScaleRange.max) / 2)).toFixed(3));
+  const defaultNameScale = Number((((nameScaleRange.min + nameScaleRange.max) / 2)).toFixed(3));
+  const defaultGrimoireHeightScale = Number((((grimoireHeightScaleRange.min + grimoireHeightScaleRange.max) / 2)).toFixed(3));
   const currentStyle = {
-    tokenScale: grimoireStyle?.tokenScale ?? (isSmallViewport ? defaultMobileTokenScale : 1),
-    extraTokenScale: grimoireStyle?.extraTokenScale ?? 1,
-    nameScale: grimoireStyle?.nameScale ?? 1,
+    tokenScale: grimoireStyle?.tokenScale ?? defaultTokenScale,
+    extraTokenScale: grimoireStyle?.extraTokenScale ?? defaultExtraTokenScale,
+    nameScale: grimoireStyle?.nameScale ?? defaultNameScale,
+    grimoireHeightScale: grimoireStyle?.grimoireHeightScale ?? defaultGrimoireHeightScale,
     lockTokens: grimoireStyle?.lockTokens ?? false,
   };
   const canManualArrange = !isVotingMode && !currentStyle.lockTokens;
@@ -486,22 +585,28 @@ export default function PlayerCircle({
 
   const submitTraveller = async () => {
     const trimmedName = travellerName.trim();
+    const fallbackName = travellerRole ? getRoleLabel(travellerRole, travellerRoleOptions) : "Traveller";
 
-    if (!trimmedName || !travellerRole) {
+    if (!travellerRole) {
       return;
     }
 
     await onAddTraveller?.({
-      name: trimmedName,
+      name: trimmedName || fallbackName,
       travellerRole,
-      travellerTeam,
-      joinedPhaseId: travellerJoinedPhaseId || undefined,
+      travellerTeam: "unknown",
+      joinedPhaseId: travellerJoinedPhaseId || currentPhase?.id || undefined,
     });
     setTravellerName("");
     setTravellerRole("");
-    setTravellerTeam("unknown");
     setTravellerJoinedPhaseId("");
-    setTravellerFormOpen(false);
+    setTravellerPreviewRoleId("");
+    setPhaseSelectionOpen(false);
+    if (onCloseTravellerForm) {
+      onCloseTravellerForm();
+    } else {
+      setTravellerFormOpen(false);
+    }
   };
 
   const submitSpecialRole = async () => {
@@ -525,7 +630,12 @@ export default function PlayerCircle({
       activeLoricIds: nextLoricIds,
     });
     setSelectedSpecialRoleId("");
-    setSpecialFormOpen(false);
+    setSpecialPreviewRoleId("");
+    if (onCloseSpecialForm) {
+      onCloseSpecialForm();
+    } else {
+      setSpecialFormOpen(false);
+    }
   };
 
   const removeSpecialRole = async (roleId: string, roleType: ScriptRole["type"]) => {
@@ -537,114 +647,6 @@ export default function PlayerCircle({
 
   return (
     <section className="panel overflow-hidden p-3 sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => updateStyle({ lockTokens: !currentStyle.lockTokens })}
-            className={clsx(
-              "inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 transition",
-              currentStyle.lockTokens
-                ? "border-red-200 bg-red-500/35 text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.35)]"
-                : "border-emerald-200 bg-emerald-500/35 text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.3)]",
-            )}
-            aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
-            title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
-          >
-            {currentStyle.lockTokens ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
-          </button>
-          {onUpdateSpecialRoles ? (
-            <button type="button" onClick={() => setSpecialFormOpen((current) => !current)} className="secondary-button min-h-10 px-3">
-              <Plus className="h-4 w-4" />
-              Fabled / Loric
-            </button>
-          ) : null}
-          {onAddTraveller ? (
-            <button type="button" onClick={() => setTravellerFormOpen((current) => !current)} className="primary-button min-h-10 px-3">
-              <Plus className="h-4 w-4" />
-              Traveller
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setSettingsOpen((current) => !current)}
-            className={clsx(
-              "secondary-button min-h-10 w-10 shrink-0 px-0",
-              settingsOpen && "border-ember-200/45 bg-ember-200/10 text-ember-100",
-            )}
-            aria-label={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
-            title={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
-          >
-            <Settings2 className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {specialFormOpen ? (
-        <div className="mb-4 grid gap-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:grid-cols-[1fr_auto_auto]">
-          <RolePicker
-            value={selectedSpecialRoleId}
-            onChange={setSelectedSpecialRoleId}
-            groups={specialPickerGroups.map((group) => ({
-              ...group,
-              options: group.options.filter(
-                (role) =>
-                  !activeFabledIds.includes(role.id) &&
-                  !activeLoricIds.includes(role.id),
-              ),
-            }))}
-            roles={specialRoleOptions}
-            placeholder="Выберите Fabled или Loric"
-          />
-          <button type="button" onClick={() => setSpecialFormOpen(false)} className="secondary-button">
-            Отмена
-          </button>
-          <button type="button" onClick={() => void submitSpecialRole()} className="primary-button">
-            Добавить
-          </button>
-        </div>
-      ) : null}
-
-      {travellerFormOpen ? (
-        <div className="mb-4 grid gap-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:grid-cols-2">
-          <input
-            value={travellerName}
-            onChange={(event) => setTravellerName(event.target.value)}
-            className="field"
-            placeholder="Имя Traveller"
-          />
-          <RolePicker
-            value={travellerRole}
-            onChange={setTravellerRole}
-            groups={travellerPickerGroups}
-            roles={travellerRoleOptions}
-            placeholder="Роль Traveller"
-          />
-          <select value={travellerTeam} onChange={(event) => setTravellerTeam(event.target.value as PlayerTeam)} className="field">
-            <option value="unknown">Команда неизвестна</option>
-            <option value="good">Синий / добро</option>
-            <option value="evil">Красный / зло</option>
-          </select>
-          <select value={travellerJoinedPhaseId} onChange={(event) => setTravellerJoinedPhaseId(event.target.value)} className="field">
-            <option value="">Фаза прихода</option>
-            {sortedPhases.map((phase) => (
-              <option key={phase.id} value={phase.id}>
-                {phase.title || phaseTitle(phase.number, phase.type)}
-              </option>
-            ))}
-          </select>
-          <div className="sm:col-span-2 flex gap-2">
-            <button type="button" onClick={() => setTravellerFormOpen(false)} className="secondary-button">
-              Отмена
-            </button>
-            <button type="button" onClick={() => void submitTraveller()} className="primary-button">
-              <Plus className="h-4 w-4" />
-              Добавить Traveller
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {settingsOpen ? (
         <div className="mb-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -661,14 +663,14 @@ export default function PlayerCircle({
               <ChevronDown className="h-4 w-4 rotate-180" />
             </button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <label className="block space-y-2">
               <span className="label">Размер жетонов</span>
               <input
                 type="range"
-                min="0.75"
-                max="1.35"
-                step="0.05"
+                min={tokenScaleRange.min}
+                max={tokenScaleRange.max}
+                step="0.065"
                 value={currentStyle.tokenScale}
                 onChange={(event) => updateStyle({ tokenScale: Number(event.target.value) })}
                 className="w-full accent-ember-200"
@@ -678,9 +680,9 @@ export default function PlayerCircle({
               <span className="label">Доп. жетоны</span>
               <input
                 type="range"
-                min="0.75"
-                max="1.5"
-                step="0.05"
+                min={extraTokenScaleRange.min}
+                max={extraTokenScaleRange.max}
+                step="0.065"
                 value={currentStyle.extraTokenScale}
                 onChange={(event) => updateStyle({ extraTokenScale: Number(event.target.value) })}
                 className="w-full accent-ember-200"
@@ -690,11 +692,23 @@ export default function PlayerCircle({
               <span className="label">Текст имени</span>
               <input
                 type="range"
-                min="0.8"
-                max="1.5"
+                min={nameScaleRange.min}
+                max={nameScaleRange.max}
                 step="0.05"
                 value={currentStyle.nameScale}
                 onChange={(event) => updateStyle({ nameScale: Number(event.target.value) })}
+                className="w-full accent-ember-200"
+              />
+            </label>
+            <label className="block space-y-2">
+              <span className="label">Высота гримуара</span>
+              <input
+                type="range"
+                min={grimoireHeightScaleRange.min}
+                max={grimoireHeightScaleRange.max}
+                step="0.1"
+                value={currentStyle.grimoireHeightScale}
+                onChange={(event) => updateStyle({ grimoireHeightScale: Number(event.target.value) })}
                 className="w-full accent-ember-200"
               />
             </label>
@@ -704,8 +718,38 @@ export default function PlayerCircle({
 
       <div
         ref={containerRef}
-        className={`relative mx-auto w-full overflow-visible bg-black/15 ${layout.aspect} ${layout.maxWidth}`}
+        className={`relative mx-auto w-full overflow-visible bg-black/15 ${layout.maxWidth}`}
+        style={{ aspectRatio: layout.aspectRatio / currentStyle.grimoireHeightScale }}
       >
+        <div className="absolute right-3 top-3 z-30 flex flex-wrap gap-2 sm:right-4 sm:top-4">
+          <button
+            type="button"
+            onClick={() => updateStyle({ lockTokens: !currentStyle.lockTokens })}
+            className={clsx(
+              "inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 transition",
+              currentStyle.lockTokens
+                ? "border-red-200 bg-red-500/35 text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.35)]"
+                : "border-emerald-200 bg-emerald-500/35 text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.3)]",
+            )}
+            aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
+            title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
+          >
+            {currentStyle.lockTokens ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((current) => !current)}
+            className={clsx(
+              "secondary-button min-h-10 w-10 shrink-0 px-0",
+              settingsOpen && "border-ember-200/45 bg-ember-200/10 text-ember-100",
+            )}
+            aria-label={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
+            title={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+        </div>
+
         {currentPhase ? (
           <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-[225%] sm:-translate-y-[235%]">
             <span className="inline-flex rounded-full border border-ember-100/55 bg-ink-900/95 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-ember-100 shadow-[0_0_18px_rgba(242,204,116,0.42),0_0_36px_rgba(242,204,116,0.18),0_12px_24px_rgba(0,0,0,0.35)] sm:px-5 sm:py-2.5 sm:text-lg">
@@ -765,20 +809,20 @@ export default function PlayerCircle({
             )}
           </div>
         ) : (
-          <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/90 text-center shadow-inner ${layout.center}`}>
-            <div className="w-full max-w-[82%] space-y-2 sm:max-w-[78%]">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-1.5 gap-y-0.5 text-[7px] leading-tight sm:gap-x-2.5 sm:text-[11px]">
-                <span className="text-left text-sky-100">Горожане</span>
-                <strong className="text-sky-100">{setup.townsfolk}</strong>
+          <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/92 text-center shadow-inner ${layout.center}`}>
+            <div className="w-full max-w-[84%] space-y-2 sm:max-w-[80%]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 text-[8px] font-medium leading-tight sm:gap-x-2.5 sm:text-[12px]">
+                <span className="text-left text-blue-700">Горожане</span>
+                <strong className="text-blue-700">{setup.townsfolk}</strong>
 
-                <span className="text-left text-sky-200/80">Изгои</span>
-                <strong className="text-sky-200">{setup.outsiders}</strong>
+                <span className="text-left text-blue-500">Изгои</span>
+                <strong className="text-blue-500">{setup.outsiders}</strong>
 
-                <span className="text-left text-red-100">Присп.</span>
-                <strong className="text-red-100">{setup.minions}</strong>
+                <span className="text-left text-rose-100">Присп.</span>
+                <strong className="text-rose-100">{setup.minions}</strong>
 
-                <span className="text-left text-red-200">Демоны</span>
-                <strong className="text-red-200">{setup.demons}</strong>
+                <span className="text-left text-red-100">Демоны</span>
+                <strong className="text-red-100">{setup.demons}</strong>
 
                 {travellerCount > 0 ? (
                   <>
@@ -837,6 +881,7 @@ export default function PlayerCircle({
           const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";
           const canVoteInCurrentSession = voteAvailability !== "dead_spent";
           const isSelectedVoter = voteDraft?.selectedVoterIds.includes(player.id) ?? false;
+          const selectedVoterNumber = isSelectedVoter ? (voteDraft?.selectedVoterIds.indexOf(player.id) ?? -1) + 1 : 0;
           const isSelectableNominator = votingStage === "select_nominator" && Boolean(selectableNominatorIds?.has(player.id));
           const isSelectableNominee = votingStage === "select_nominee" && Boolean(selectableNomineeIds?.has(player.id));
           const isSelectedNominator = voteDraft?.nominatorPlayerId === player.id;
@@ -882,14 +927,18 @@ export default function PlayerCircle({
                 >
                   <span
                     className={clsx(
-                      "flex items-center justify-center rounded-full border shadow-md shadow-black/35",
+                      "relative flex items-center justify-center rounded-full border shadow-md shadow-black/35",
                       voteMarkerClass,
                       voteAvailability === "alive"
                         ? "border-emerald-200/80 bg-emerald-400/90"
                         : "border-stone-300/35 bg-stone-500/80",
                     )}
                   >
-                    {voteAvailability === "dead_available" ? (
+                    {isSelectedVoter ? (
+                      <span className="text-[11px] font-black leading-none text-stone-950 sm:text-[13px]">
+                        {selectedVoterNumber}
+                      </span>
+                    ) : voteAvailability === "dead_available" ? (
                       <span className={clsx("rounded-full bg-red-400", innerVoteDotClass)} />
                     ) : null}
                   </span>
@@ -913,6 +962,286 @@ export default function PlayerCircle({
           );
         })}
       </div>
+
+      {specialFormOpen && modalRoot
+        ? createPortal(
+            <div
+              className={modalOverlayClass}
+              onClick={() => {
+                if (onCloseSpecialForm) {
+                  onCloseSpecialForm();
+                } else {
+                  setSpecialFormOpen(false);
+                }
+              }}
+            >
+              <section className={modalShellClass} onClick={(event) => event.stopPropagation()}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className={clsx("text-2xl font-bold", modalTitleClass)}>
+                      {specialFormRoleType === "loric" ? "Добавить Loric" : "Добавить Fabled"}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onCloseSpecialForm) {
+                        onCloseSpecialForm();
+                      } else {
+                        setSpecialFormOpen(false);
+                      }
+                    }}
+                    className={modalCloseButtonClass}
+                    aria-label="Закрыть"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <RoleIconGrid
+                    groups={filteredSpecialPickerGroups}
+                    roles={specialRoleOptions}
+                    selectedRoleId={selectedSpecialRoleId}
+                    onSelect={(roleId) => {
+                      setSelectedSpecialRoleId(roleId);
+                      setSpecialPreviewRoleId(roleId);
+                    }}
+                    columnsClassName="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                    iconClassName="h-14 w-14 sm:h-16 sm:w-16"
+                    roleLabelClassName={isDayTheme ? "text-stone-800" : "text-stone-100"}
+                    showGroupLabel={false}
+                  />
+                  {filteredSpecialPickerGroups[0]?.roleIds.length === 0 ? (
+                    <p className={clsx("text-sm", modalMutedClass)}>
+                      Все {specialFormRoleType === "loric" ? "лорики" : "фэйблы"} уже добавлены.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
+            </div>,
+            modalRoot,
+          )
+        : null}
+
+      {travellerFormOpen && modalRoot
+        ? createPortal(
+            <div
+              className={modalOverlayClass}
+              onClick={() => {
+                if (onCloseTravellerForm) {
+                  onCloseTravellerForm();
+                } else {
+                  setTravellerFormOpen(false);
+                }
+              }}
+            >
+              <section className={modalShellClass} onClick={(event) => event.stopPropagation()}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className={clsx("text-2xl font-bold", modalTitleClass)}>Добавить Traveller</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onCloseTravellerForm) {
+                        onCloseTravellerForm();
+                      } else {
+                        setTravellerFormOpen(false);
+                      }
+                    }}
+                    className={modalCloseButtonClass}
+                    aria-label="Закрыть"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    value={travellerName}
+                    onChange={(event) => setTravellerName(event.target.value)}
+                    className="field"
+                    placeholder="Имя Traveller"
+                  />
+                  <div className="sm:col-span-2 space-y-3">
+                    <RoleIconGrid
+                      groups={travellerPickerGroups}
+                      roles={travellerRoleOptions}
+                      selectedRoleId={travellerRole}
+                      onSelect={(roleId) => {
+                        setTravellerRole(roleId);
+                        setTravellerPreviewRoleId(roleId);
+                      }}
+                      columnsClassName="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                      iconClassName="h-14 w-14 sm:h-16 sm:w-16"
+                      roleLabelClassName={isDayTheme ? "text-stone-800" : "text-stone-100"}
+                      showGroupLabel={false}
+                    />
+                  </div>
+                </div>
+              </section>
+            </div>,
+            modalRoot,
+          )
+        : null}
+
+      {travellerPreviewRoleId && modalRoot
+        ? createPortal(
+            <div
+              className={modalPreviewOverlayClass}
+              onClick={() => {
+                setTravellerPreviewRoleId("");
+                setPhaseSelectionOpen(false);
+              }}
+            >
+              <section className={clsx(modalShellClass, "max-w-2xl")} onClick={(event) => event.stopPropagation()}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <RoleTokenImage
+                      roleId={travellerPreviewRoleId}
+                      roles={travellerRoleOptions}
+                      className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                      imageClassName="h-full w-full object-cover"
+                    />
+                    <div>
+                      <h3 className={clsx("text-2xl font-bold", modalTitleClass)}>
+                        {travellerPreviewReference?.name ?? getRoleLabel(travellerPreviewRoleId, travellerRoleOptions)}
+                      </h3>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTravellerPreviewRoleId("");
+                      setPhaseSelectionOpen(false);
+                    }}
+                    className={modalCloseButtonClass}
+                    aria-label="Закрыть"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div className={clsx("rounded-2xl border p-4", modalSurfaceClass)}>
+                    <p className={clsx("text-sm leading-6", modalBodyTextClass)}>
+                      {travellerPreviewReference?.ability || "Для этой роли пока нет загруженного текста способности."}
+                    </p>
+                  </div>
+                  <input
+                    value={travellerName}
+                    onChange={(event) => setTravellerName(event.target.value)}
+                    className="field"
+                    placeholder="Имя Traveller"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPhaseSelectionOpen(true)}
+                    className={clsx(
+                      "field flex items-center justify-between text-left",
+                      isDayTheme && "border-amber-900/15 bg-white/90 text-stone-900",
+                    )}
+                  >
+                    <span>{joinedPhaseTitle ? `Фаза прихода: ${joinedPhaseTitle}` : "Фаза прихода"}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  </button>
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => void submitTraveller()} className="primary-button">
+                      <Plus className="h-4 w-4" />
+                      Добавить Traveller
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>,
+            modalRoot,
+          )
+        : null}
+
+      {specialPreviewRoleId && modalRoot
+        ? createPortal(
+            <div
+              className={modalPreviewOverlayClass}
+              onClick={() => setSpecialPreviewRoleId("")}
+            >
+              <section className={clsx(modalShellClass, "max-w-2xl")} onClick={(event) => event.stopPropagation()}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <RoleTokenImage
+                      roleId={specialPreviewRoleId}
+                      roles={specialRoleOptions}
+                      className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                      imageClassName="h-full w-full object-cover"
+                    />
+                    <div>
+                      <h3 className={clsx("text-2xl font-bold", modalTitleClass)}>
+                        {specialPreviewReference?.name ?? getRoleLabel(specialPreviewRoleId, specialRoleOptions)}
+                      </h3>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setSpecialPreviewRoleId("")} className={modalCloseButtonClass} aria-label="Закрыть">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div className={clsx("rounded-2xl border p-4", modalSurfaceClass)}>
+                    <p className={clsx("text-sm leading-6", modalBodyTextClass)}>
+                      {specialPreviewReference?.ability || "Для этой роли пока нет загруженного текста способности."}
+                    </p>
+                  </div>
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => void submitSpecialRole()} className="primary-button">
+                      Добавить
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>,
+            modalRoot,
+          )
+        : null}
+
+      {phaseSelectionOpen && modalRoot
+        ? createPortal(
+            <div
+              className={modalPhaseOverlayClass}
+              onClick={() => setPhaseSelectionOpen(false)}
+            >
+              <section className={clsx(modalShellClass, "max-w-xl")} onClick={(event) => event.stopPropagation()}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className={clsx("text-2xl font-bold", modalTitleClass)}>Фаза прихода</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPhaseSelectionOpen(false)}
+                    className={modalCloseButtonClass}
+                    aria-label="Закрыть"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {sortedPhases.map((phase) => (
+                    <button
+                      key={phase.id}
+                      type="button"
+                      onClick={() => {
+                        setTravellerJoinedPhaseId(phase.id);
+                        setPhaseSelectionOpen(false);
+                      }}
+                      className={clsx(
+                        "secondary-button w-full justify-start",
+                        travellerJoinedPhaseId === phase.id && "border-ember-200/45 bg-ember-200/10",
+                      )}
+                    >
+                      {phase.title || phaseTitle(phase.number, phase.type)}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </div>,
+            modalRoot,
+          )
+        : null}
     </section>
   );
 }

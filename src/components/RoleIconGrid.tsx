@@ -24,6 +24,9 @@ type RoleIconGridProps = {
   unframed?: boolean;
   inlineGroupLabel?: boolean;
   showGroupLabel?: boolean;
+  showRoleLabels?: boolean;
+  roleLabelClassName?: string;
+  compact?: boolean;
 };
 
 export default function RoleIconGrid({
@@ -41,6 +44,9 @@ export default function RoleIconGrid({
   unframed = false,
   inlineGroupLabel = false,
   showGroupLabel = true,
+  showRoleLabels = true,
+  roleLabelClassName,
+  compact = false,
 }: RoleIconGridProps) {
   return (
     <div className={clsx("space-y-3", className)}>
@@ -77,7 +83,9 @@ export default function RoleIconGrid({
                   onClick={() => onSelect(roleId)}
                   title={getRoleLabel(roleId, roles)}
                   className={clsx(
-                    "flex aspect-square items-center justify-center rounded-2xl border transition",
+                    compact
+                      ? "flex min-h-0 flex-col items-center justify-start gap-0 rounded-2xl border px-0 py-0 text-center transition"
+                      : "flex min-h-[4.9rem] flex-col items-center justify-start gap-1.5 rounded-2xl border px-1.5 py-1.5 text-center transition",
                     selected && "role-icon-selected",
                     selected
                       ? unframed
@@ -89,17 +97,29 @@ export default function RoleIconGrid({
                     buttonClassName,
                   )}
                 >
-                  <RoleTokenImage
-                    roleId={roleId}
-                    roles={roles}
-                    className={clsx(
-                      "h-10 w-10 overflow-hidden rounded-full border border-ember-200/20 bg-white/90 sm:h-11 sm:w-11",
+                    <RoleTokenImage
+                      roleId={roleId}
+                      roles={roles}
+                      className={clsx(
+                        "h-10 w-10 overflow-hidden rounded-full border border-ember-200/20 bg-white/90 sm:h-11 sm:w-11",
                       unframed && "border-0 bg-transparent shadow-none",
                       iconClassName,
-                    )}
-                    imageClassName="h-full w-full object-cover"
-                  />
-                </button>
+                      )}
+                      imageClassName="h-full w-full object-cover"
+                    />
+                    {showRoleLabels ? (
+                      <span
+                        className={clsx(
+                          compact
+                            ? "text-[10px] font-medium leading-tight text-inherit sm:text-[11px]"
+                            : "line-clamp-2 text-[10px] font-medium leading-tight text-inherit sm:text-[11px]",
+                          roleLabelClassName,
+                        )}
+                      >
+                        {getRoleLabel(roleId, roles)}
+                      </span>
+                    ) : null}
+                  </button>
               );
             })}
           </div>
