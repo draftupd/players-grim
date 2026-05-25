@@ -14,7 +14,7 @@ type SetupEditorModalProps = {
   onSave: (
     gameValues: Pick<
       Game,
-      "title" | "date" | "storyteller" | "scriptName" | "scriptAuthor" | "scriptRoles"
+      "title" | "date" | "storyteller" | "scriptName" | "scriptVersion" | "scriptAuthor" | "scriptRoles"
     >,
     playerValues: Array<
       Pick<
@@ -63,6 +63,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
   const [date, setDate] = useState(game.date);
   const [storyteller, setStoryteller] = useState(game.storyteller ?? "");
   const [scriptName, setScriptName] = useState(game.scriptName ?? "");
+  const [scriptVersion, setScriptVersion] = useState(game.scriptVersion ?? "");
   const [scriptAuthor, setScriptAuthor] = useState(game.scriptAuthor ?? "");
   const [scriptRoles, setScriptRoles] = useState<ScriptRole[]>(game.scriptRoles ?? []);
   const [playerNames, setPlayerNames] = useState(
@@ -84,6 +85,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
       const parsed = await readImportedScript(file);
 
       setScriptName(parsed.name ?? file.name.replace(/\.json$/i, ""));
+      setScriptVersion(parsed.version ?? "");
       setScriptAuthor(parsed.author ?? "");
       setScriptRoles((current) => mergeScriptRoles(current, parsed.roles));
       setError("");
@@ -136,6 +138,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
     }
 
     setScriptName(preset.name);
+    setScriptVersion("");
     setScriptAuthor(preset.author);
     setScriptRoles(preset.roles);
     setError("");
@@ -174,6 +177,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
           date,
           storyteller: storyteller.trim(),
           scriptName: scriptName.trim() || undefined,
+          scriptVersion: scriptVersion.trim() || undefined,
           scriptAuthor: scriptAuthor.trim() || undefined,
           scriptRoles,
         },

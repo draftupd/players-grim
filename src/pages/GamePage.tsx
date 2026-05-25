@@ -679,6 +679,11 @@ export default function GamePage() {
     let current: string | null = null;
 
     selectedPhaseVoteAnalysesAsc.forEach((analysis) => {
+      if (analysis.voteRecord.resultedInExecution) {
+        current = null;
+        return;
+      }
+
       if (analysis.voteType !== "execution") {
         return;
       }
@@ -690,6 +695,31 @@ export default function GamePage() {
 
       if (analysis.isOnTheBlock) {
         current = analysis.voteRecord.nomineePlayerId;
+      }
+    });
+
+    return current;
+  }, [selectedPhaseVoteAnalysesAsc]);
+  const currentBlockVoteRecordId = useMemo(() => {
+    let current: string | null = null;
+
+    selectedPhaseVoteAnalysesAsc.forEach((analysis) => {
+      if (analysis.voteRecord.resultedInExecution) {
+        current = null;
+        return;
+      }
+
+      if (analysis.voteType !== "execution") {
+        return;
+      }
+
+      if (analysis.removedPreviousFromBlock && !analysis.isOnTheBlock) {
+        current = null;
+        return;
+      }
+
+      if (analysis.isOnTheBlock) {
+        current = analysis.voteRecord.id;
       }
     });
 
@@ -749,6 +779,7 @@ export default function GamePage() {
 
       return {
         headline: `Нужно ${threshold} голосов, чтобы изгнать Traveller`,
+        requiredVotes: threshold,
         aliveVotes,
         deadVotes,
         totalVotes,
@@ -786,6 +817,7 @@ export default function GamePage() {
         highestVotes === 0
           ? `Нужно ${threshold} голосов, чтобы номинировать`
           : `Нужно ${highestVotes} голосов, чтобы сровнять, и ${highestVotes + 1} — чтобы номинировать`,
+      requiredVotes: highestVotes === 0 ? threshold : highestVotes + 1,
       aliveVotes,
       deadVotes,
       totalVotes,
@@ -1380,6 +1412,7 @@ export default function GamePage() {
       date: todayInputValue(),
       storyteller: sourceGame.storyteller,
       scriptName: sourceGame.scriptName,
+      scriptVersion: sourceGame.scriptVersion,
       scriptAuthor: sourceGame.scriptAuthor,
       scriptRoles: sourceGame.scriptRoles,
       playerCount: sourceGame.playerCount,
@@ -1553,7 +1586,7 @@ export default function GamePage() {
   const saveSetup = async (
     gameValues: Pick<
       Game,
-      "title" | "date" | "storyteller" | "scriptName" | "scriptAuthor" | "scriptRoles"
+      "title" | "date" | "storyteller" | "scriptName" | "scriptVersion" | "scriptAuthor" | "scriptRoles"
     >,
     playerValues: Array<
       Pick<
@@ -2485,7 +2518,7 @@ export default function GamePage() {
       : contentTab === "roleIntel"
         ? "Заметки по ролям"
         : contentTab === "reference"
-          ? "Инфо"
+          ? ""
           : contentTab === "summaryDeaths"
               ? "Смерти и казни"
               : contentTab === "summaryRoles"
@@ -2493,9 +2526,11 @@ export default function GamePage() {
                 : "";
   const isDayPhase = !selectedPhase || selectedPhase.type === "day";
   const contentModalIsBottomSheet = contentTab === "summaryDeaths" || contentTab === "summaryRoles";
-  const contentModalShellClass = isDayPhase
-    ? "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 shadow-[0_24px_60px_rgba(76,48,22,0.2)] sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6"
-    : "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6";
+  const contentModalShellClass = contentTab === "reference"
+    ? "w-screen min-h-[100dvh] max-h-[100dvh] rounded-none bg-[linear-gradient(180deg,rgba(255,251,244,0.995),rgba(246,232,208,0.995))] px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-none sm:mx-auto sm:h-[96dvh] sm:min-h-0 sm:max-h-[96dvh] sm:max-w-6xl sm:rounded-3xl sm:px-5 sm:pb-5 sm:pt-5 sm:shadow-[0_24px_60px_rgba(76,48,22,0.2)]"
+    : isDayPhase
+      ? "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 shadow-[0_24px_60px_rgba(76,48,22,0.2)] sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6"
+      : "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6";
   const renderSummaryNoteText = (text: string) => {
     if (!roleMentionRegex) {
       return <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-stone-100">{text}</p>;
@@ -3145,8 +3180,8 @@ export default function GamePage() {
 
         <div className="grid min-w-0 gap-4 xl:grid-cols-[0.95fr_minmax(0,1.05fr)] xl:gap-5">
           <div className="min-w-0 space-y-4 sm:space-y-5">
-            <section className="panel p-2 sm:p-3">
-              <div className="flex flex-wrap gap-2">
+            <section className="panel overflow-x-auto p-2 sm:p-3">
+              <div className="flex min-w-max flex-nowrap items-center gap-1.5">
                 {!gameHasStarted ? (
                   <button type="button" onClick={startGame} className="primary-button min-h-10 px-3 whitespace-nowrap">
                     <Play className="h-4 w-4" />
@@ -3160,13 +3195,13 @@ export default function GamePage() {
                   <button
                     type="button"
                     onClick={openNightResultModal}
-                    className="primary-button min-h-10 w-12 shrink-0 px-0"
+                    className="primary-button min-h-9 w-11 shrink-0 px-0"
                     aria-label={`Открыть результат ${selectedPhase.number} ночи`}
                     title={`Результат ${selectedPhase.number} ночи`}
                   >
-                    <span className="relative inline-flex h-6 w-6 items-center justify-center">
+                    <span className="relative inline-flex h-5 w-5 items-center justify-center">
                       <SunMedium className="h-5 w-5" />
-                      <span className="absolute right-[-4px] top-[-4px] inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-ink-900 px-[2px] text-[9px] font-bold leading-none text-amber-50">
+                      <span className="absolute right-[-4px] top-[-4px] inline-flex h-3 min-w-3 items-center justify-center rounded-full bg-ink-900 px-[2px] text-[8px] font-bold leading-none text-amber-50">
                         {selectedPhase.number}
                       </span>
                     </span>
@@ -3175,13 +3210,13 @@ export default function GamePage() {
                   <button
                     type="button"
                     onClick={() => void advanceToNextPhase("day_to_night")}
-                    className="secondary-button min-h-10 w-12 shrink-0 px-0"
+                    className="secondary-button min-h-9 w-11 shrink-0 px-0"
                     aria-label={`Перейти в ${selectedPhase.number + 1} ночь`}
                     title={`${selectedPhase.number + 1} ночь`}
                   >
-                    <span className="relative inline-flex h-6 w-6 items-center justify-center">
+                    <span className="relative inline-flex h-5 w-5 items-center justify-center">
                       <MoonStar className="h-5 w-5" />
-                      <span className="absolute right-[-4px] top-[-4px] inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-ink-900 px-[2px] text-[9px] font-bold leading-none text-amber-50">
+                      <span className="absolute right-[-4px] top-[-4px] inline-flex h-3 min-w-3 items-center justify-center rounded-full bg-ink-900 px-[2px] text-[8px] font-bold leading-none text-amber-50">
                         {selectedPhase.number + 1}
                       </span>
                     </span>
@@ -3190,45 +3225,37 @@ export default function GamePage() {
                 <button
                   type="button"
                   onClick={() => openContentModal("roleIntel")}
-                  className={contentTab === "roleIntel" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                  className={contentTab === "roleIntel" ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
                   title="По ролям"
                   aria-label="По ролям"
                 >
-                  <img src="/button-icons/add.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+                  <span className="inline-flex h-5 w-5 items-center justify-center">
+                    <img src="/button-icons/add.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                  </span>
                 </button>
                 {gameHasStarted && selectedPhase?.type === "day" ? (
                   <button
                     type="button"
                     onClick={() => beginVoteDraft("execution")}
-                    className={voteDraft?.voteType === "execution" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                    className={voteDraft?.voteType === "execution" ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
                   title="Номинация"
                   aria-label="Номинация"
                   >
-                    <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+                    <span className="inline-flex h-5 w-5 items-center justify-center">
+                      <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                    </span>
                   </button>
                 ) : null}
                 {gameHasStarted && selectedPhase?.type === "day" && players.some((player) => player.isTraveller) ? (
                   <button
                     type="button"
                     onClick={() => beginVoteDraft("traveller_exile")}
-                    className={voteDraft?.voteType === "traveller_exile" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                    className={voteDraft?.voteType === "traveller_exile" ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
                   title="Изгнание Traveller"
                   aria-label="Изгнание Traveller"
                   >
-                    <img src="/button-icons/door-open.svg" alt="" aria-hidden="true" className="h-6 w-6" />
-                  </button>
-                ) : null}
-                {gameHasStarted && selectedPhase?.type === "day" ? (
-                  <button
-                    type="button"
-                    onClick={() => openExecutionWithoutNominationModal()}
-                    className={executionModalOpen || selectedPhaseExecutionNote ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
-                  title="Казнь без номинации"
-                  aria-label="Казнь без номинации"
-                  >
-                    <span className="relative inline-flex h-10 w-6 items-center justify-center">
-                      <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-6 w-6" />
-                      <img src="/button-icons/lightning.svg" alt="" aria-hidden="true" className="absolute right-[-4px] top-[-5px] h-11 w-11" />
+                    <span className="inline-flex h-5 w-5 items-center justify-center">
+                      <img src="/button-icons/door-open.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
                     </span>
                   </button>
                 ) : null}
@@ -3236,40 +3263,62 @@ export default function GamePage() {
                   <button
                     type="button"
                     onClick={() => openDayDeathModal()}
-                    className={dayDeathModalOpen ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                    className={dayDeathModalOpen ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
                   title="Человек умер"
                   aria-label="Человек умер"
                   >
-                    <img src="/button-icons/knife.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+                    <span className="inline-flex h-5 w-5 items-center justify-center">
+                      <img src="/button-icons/knife.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                    </span>
+                  </button>
+                ) : null}
+                {gameHasStarted && selectedPhase?.type === "day" ? (
+                  <button
+                    type="button"
+                    onClick={() => openExecutionWithoutNominationModal()}
+                    className={executionModalOpen || selectedPhaseExecutionNote ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
+                  title="Казнь без номинации"
+                  aria-label="Казнь без номинации"
+                  >
+                    <span className="relative inline-flex h-5 w-5 items-center justify-center">
+                      <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                      <img src="/button-icons/lightning.svg" alt="" aria-hidden="true" className="absolute right-[-4px] top-[-5px] h-7 w-7 object-contain" />
+                    </span>
                   </button>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => openContentModal("reference")}
-                  className={contentTab === "reference" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                  className={contentTab === "reference" ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
                   title="Роли"
                   aria-label="Роли"
                 >
-                  <img src="/button-icons/info.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+                  <span className="inline-flex h-5 w-5 items-center justify-center">
+                    <img src="/button-icons/info.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openContentModal("summaryRoles")}
+                  className={contentTab === "summaryRoles" ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
+                  title="Сводка ролей"
+                  aria-label="Сводка ролей"
+                >
+                  <span className="inline-flex h-5 w-5 items-center justify-center">
+                    <img src="/button-icons/interaction.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => openContentModal("summaryDeaths")}
-                  className={contentTab === "summaryDeaths" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
+                  className={contentTab === "summaryDeaths" ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
                   title="Смерти и казни"
                   aria-label="Смерти и казни"
                   >
-                  <img src="/button-icons/skull.svg" alt="" aria-hidden="true" className="h-6 w-6" />
+                  <span className="inline-flex h-5 w-5 items-center justify-center">
+                    <img src="/button-icons/skull.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                  </span>
                   </button>
-                <button
-                  type="button"
-                  onClick={() => openContentModal("summaryRoles")}
-                  className={contentTab === "summaryRoles" ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0" : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"}
-                  title="Сводка ролей"
-                  aria-label="Сводка ролей"
-                >
-                  <img src="/button-icons/interaction.svg" alt="" aria-hidden="true" className="h-5 w-5" />
-                </button>
                 </div>
             </section>
             <PlayerCircle
@@ -3313,7 +3362,18 @@ export default function GamePage() {
               onCloseSpecialForm={() => setSpecialFormOpen(false)}
               travellerFormOpen={travellerFormOpen}
               onCloseTravellerForm={() => setTravellerFormOpen(false)}
-              onPlayerClick={(player) => setSelectedPlayerId(player.id)}
+              onPlayerClick={(player) => {
+                if (
+                  selectedPhase?.type === "day" &&
+                  currentBlockPlayerId === player.id &&
+                  currentBlockVoteRecordId
+                ) {
+                  void promptVoteRecordExecution(currentBlockVoteRecordId);
+                  return;
+                }
+
+                setSelectedPlayerId(player.id);
+              }}
             />
             {gameHasStarted && selectedPhase?.type === "day" ? (
               <section className="panel p-3 sm:p-4">
@@ -3454,8 +3514,10 @@ export default function GamePage() {
           <div className="min-w-0">
             {contentTab ? (
               <div
-                className={`fixed inset-0 z-[60] flex overflow-y-auto bg-black/45 p-0 backdrop-blur-sm sm:items-center sm:p-6 ${
-                  contentModalIsBottomSheet
+                className={`fixed inset-0 z-[60] flex overflow-y-auto bg-black/45 p-0 backdrop-blur-sm ${
+                  contentTab === "reference"
+                    ? "items-start"
+                    : contentModalIsBottomSheet
                     ? "items-end pt-[calc(0.75rem+env(safe-area-inset-top))] pb-0"
                     : "items-start pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom)]"
                 }`}
@@ -3468,14 +3530,14 @@ export default function GamePage() {
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm text-stone-400">{selectedPhase?.title ?? "Партия"}</p>
-                      <h2 className="text-2xl font-bold text-stone-50">{contentModalTitle}</h2>
+                      {contentModalTitle ? <h2 className="text-2xl font-bold text-stone-50">{contentModalTitle}</h2> : null}
                     </div>
                     <button type="button" onClick={closeContentModal} className="secondary-button px-3">
                       <X className="h-5 w-5" />
                     </button>
                   </div>
 
-                  <div className="max-h-[calc(100dvh-9rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 sm:max-h-[84vh] sm:pr-1">
+                  <div className={contentTab === "reference" ? "h-[calc(100dvh-6rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 sm:h-[calc(96dvh-5.5rem)] sm:pr-1" : "max-h-[calc(100dvh-9rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 sm:max-h-[84vh] sm:pr-1"}>
             {gameHasStarted && contentTab === "notes" ? (
               <PhaseNotes
                 phase={selectedPhase}
@@ -3498,7 +3560,7 @@ export default function GamePage() {
               />
             ) : null}
             {contentTab === "reference" ? (
-              <section className="space-y-3">
+              <section className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -3518,7 +3580,6 @@ export default function GamePage() {
 
                 {referenceTab === "nightOrder" ? (
                   <NightOrderPanel
-                    phase={selectedPhase}
                     roles={roleReferenceRoles}
                     nightOrder={referenceData?.nightOrder ?? null}
                     referenceMap={referenceData?.roleMap ?? new Map()}
@@ -3527,6 +3588,9 @@ export default function GamePage() {
                   <RoleReferencePanel
                     roles={roleReferenceRoles}
                     referenceMap={referenceData?.roleMap ?? new Map()}
+                    scriptName={game.scriptName}
+                    scriptVersion={game.scriptVersion}
+                    scriptAuthor={game.scriptAuthor}
                   />
                 )}
               </section>

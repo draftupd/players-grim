@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { ChevronDown, Lock, LockOpen, Plus, Save, Settings2, Skull, Users, X } from "lucide-react";
+import { ChevronDown, Hand, Lock, LockOpen, Plus, Save, Settings2, X } from "lucide-react";
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import type {
@@ -33,6 +33,7 @@ type PlayerCircleProps = {
   voteAvailabilityByPlayerId?: ReadonlyMap<string, PlayerVoteAvailability>;
   voteRequirementSummary?: {
     headline: string;
+    requiredVotes: number;
     aliveVotes: number;
     deadVotes: number;
     totalVotes: number;
@@ -780,77 +781,61 @@ export default function PlayerCircle({
           </div>
         ) : null}
 
-        {votingStage && voteRequirementSummary ? (
-          <div className="absolute left-1/2 top-1/2 z-20 w-[220px] max-w-[82%] -translate-x-1/2 -translate-y-[160%] rounded-[22px] border border-ember-100/30 px-3 py-2.5 text-center shadow-[0_18px_40px_rgba(0,0,0,0.32)] backdrop-blur-sm sm:w-[280px] sm:max-w-[70%] sm:px-4"
-            style={{ backgroundColor: "rgba(53, 53, 57, 0.72)" }}
-          >
-            <p className="text-[11px] font-semibold leading-snug text-white sm:text-[13px]">
-              {voteRequirementSummary.headline}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-[10px] text-stone-100 sm:text-xs">
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1">
-                <Users className="h-3.5 w-3.5 text-emerald-200" />
-                <span className="text-white">{voteRequirementSummary.aliveVotes}</span>
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1">
-                <Skull className="h-3.5 w-3.5 text-rose-200" />
-                <span className="text-white">{voteRequirementSummary.deadVotes}</span>
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1">
-                <Plus className="h-3.5 w-3.5 text-amber-200" />
-                <span className="text-white">{voteRequirementSummary.totalVotes}</span>
-              </span>
-            </div>
-          </div>
-        ) : null}
-
         {votingStage ? (
           <div
-            className="absolute left-1/2 top-1/2 z-20 flex w-[138px] max-w-[74%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2.5 rounded-[24px] border border-ember-100/30 px-3 py-3 text-center shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:w-[196px] sm:max-w-[68%] sm:px-4 sm:py-4"
+            className="absolute left-1/2 top-1/2 z-20 flex w-[112px] max-w-[62%] -translate-x-1/2 -translate-y-[44%] flex-col items-center gap-1 rounded-[20px] border border-ember-100/30 px-2 py-2 text-center shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:w-[154px] sm:max-w-[56%] sm:gap-1.5 sm:px-2.5 sm:py-2.5"
             style={{ backgroundColor: "rgba(53, 53, 57, 0.72)" }}
           >
-            <p className="text-xs font-semibold leading-snug text-white sm:text-base">
-              {votingStage === "select_nominator"
-                ? voteDraft?.voteType === "traveller_exile"
-                  ? "Выберите, кто номинировал изгнание"
-                  : "Выберите, кто номинировал"
-                : votingStage === "select_nominee"
+            {votingStage === "select_voters" && voteRequirementSummary ? (
+              <>
+                <p className="flex items-center gap-1 text-[12px] font-semibold leading-none text-white sm:text-[14px]">
+                  <span>Нужно {voteRequirementSummary.requiredVotes}</span>
+                  <Hand className="h-3.5 w-3.5 text-amber-200 sm:h-4 sm:w-4" />
+                </p>
+                <span className="inline-flex min-w-6 items-center justify-center rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[12px] font-semibold leading-none text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] sm:min-w-7 sm:text-[13px]">
+                  {voteDraft?.selectedVoterIds.length ?? 0}
+                </span>
+              </>
+            ) : (
+              <p className="text-[10px] font-semibold leading-[1.2] text-white sm:text-[13px]">
+                {votingStage === "select_nominator"
                   ? voteDraft?.voteType === "traveller_exile"
-                    ? "Выберите Traveller на изгнание"
-                    : "Выберите, кого номинировали"
-                  : "Отметьте, кто голосовал"}
-            </p>
+                    ? "Кто изгоняет"
+                    : "Кто номинировал"
+                  : "Кого номинировали"}
+              </p>
+            )}
             {votingStage === "select_voters" ? (
-              <div className="flex w-full justify-center gap-2">
+              <div className="mt-0.5 flex w-full justify-center gap-1">
                 <button
                   type="button"
                   onClick={() => onSaveVoteDraft?.()}
                   disabled={voteSaving}
-                  className="primary-button min-h-9 w-9 rounded-2xl px-0 sm:min-h-10 sm:w-10"
+                  className="primary-button min-h-7 w-7 rounded-xl px-0 sm:min-h-8 sm:w-8"
                   aria-label="Сохранить голосование"
                   title="Сохранить голосование"
                 >
-                  <Save className="h-4 w-4" />
+                  <Save className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => onCancelVoteDraft?.()}
-                  className="secondary-button min-h-9 w-9 rounded-2xl px-0 text-white sm:min-h-10 sm:w-10"
+                  className="secondary-button min-h-7 w-7 rounded-xl px-0 text-white sm:min-h-8 sm:w-8"
                   aria-label="Отменить голосование"
                   title="Отменить голосование"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => onCancelVoteDraft?.()}
-                className="secondary-button min-h-9 w-9 rounded-2xl px-0 text-white sm:min-h-10 sm:w-10"
+                className="secondary-button min-h-7 w-7 rounded-xl px-0 text-white sm:min-h-8 sm:w-8"
                 aria-label="Отменить голосование"
                 title="Отменить голосование"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -927,7 +912,6 @@ export default function PlayerCircle({
           const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";
           const canVoteInCurrentSession = voteAvailability !== "dead_spent";
           const isSelectedVoter = voteDraft?.selectedVoterIds.includes(player.id) ?? false;
-          const selectedVoterNumber = isSelectedVoter ? (voteDraft?.selectedVoterIds.indexOf(player.id) ?? -1) + 1 : 0;
           const isSelectableNominator = votingStage === "select_nominator" && Boolean(selectableNominatorIds?.has(player.id));
           const isSelectableNominee = votingStage === "select_nominee" && Boolean(selectableNomineeIds?.has(player.id));
           const isSelectedNominator = voteDraft?.nominatorPlayerId === player.id;
@@ -942,7 +926,6 @@ export default function PlayerCircle({
                 isSelectableNominee && "rounded-full ring-2 ring-amber-800/60 ring-offset-4 ring-offset-transparent",
                 isSelectedNominator && "rounded-full ring-4 ring-violet-400/90 ring-offset-4 ring-offset-transparent shadow-[0_0_24px_rgba(167,139,250,0.45)]",
                 isSelectedNominee && "rounded-full ring-4 ring-amber-800/90 ring-offset-4 ring-offset-transparent shadow-[0_0_24px_rgba(146,64,14,0.42)]",
-                (votingStage === "select_voters" && isSelectedVoter) && "rounded-full ring-4 ring-emerald-300/90 ring-offset-4 ring-offset-transparent shadow-[0_0_22px_rgba(74,222,128,0.4)]",
                 canManualArrange ? "cursor-grab active:cursor-grabbing touch-none" : "",
               )}
               style={{
@@ -959,6 +942,13 @@ export default function PlayerCircle({
                 void finishDragging(player.id, event);
               }}
             >
+              {votingStage === "select_voters" && isSelectedVoter ? (
+                <span
+                  className="pointer-events-none absolute inset-[-9px] z-0 rounded-full border-[3px] border-emerald-400 shadow-[0_0_18px_rgba(34,197,94,0.38)] sm:inset-[-10px] sm:border-[3px] sm:shadow-[0_0_20px_rgba(34,197,94,0.42)]"
+                  aria-hidden="true"
+                />
+              ) : null}
+
               {showVoteMarkers ? (
                 <div
                   className="pointer-events-none absolute left-1/2 top-1/2 z-10"
@@ -983,9 +973,7 @@ export default function PlayerCircle({
                     )}
                   >
                     {isSelectedVoter ? (
-                      <span className="text-[11px] font-black leading-none text-stone-950 sm:text-[13px]">
-                        {selectedVoterNumber}
-                      </span>
+                      <span className={clsx("rounded-full bg-emerald-100/95", innerVoteDotClass)} />
                     ) : voteAvailability === "dead_available" ? (
                       <span className={clsx("rounded-full bg-red-400", innerVoteDotClass)} />
                     ) : null}

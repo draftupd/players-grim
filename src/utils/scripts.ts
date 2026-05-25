@@ -4,12 +4,23 @@ type ScriptItem = {
   id?: unknown;
   name?: unknown;
   author?: unknown;
+  version?: unknown;
   team?: unknown;
   type?: unknown;
 };
 
+const getOptionalTrimmedString = (value: unknown) => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
 export type ParsedScript = {
   name?: string;
+  version?: string;
   author?: string;
   roles: ScriptRole[];
 };
@@ -335,8 +346,9 @@ export const parseScriptJson = (json: unknown): ParsedScript => {
   }
 
   return {
-    name: typeof meta?.name === "string" ? meta.name : undefined,
-    author: typeof meta?.author === "string" ? meta.author : undefined,
+    name: getOptionalTrimmedString(meta?.name),
+    version: getOptionalTrimmedString(meta?.version),
+    author: getOptionalTrimmedString(meta?.author),
     roles,
   };
 };

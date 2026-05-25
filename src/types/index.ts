@@ -42,6 +42,7 @@ export type Game = {
   date: string;
   storyteller?: string;
   scriptName?: string;
+  scriptVersion?: string;
   scriptAuthor?: string;
   scriptRoles?: ScriptRole[];
   activeFabledIds?: string[];

@@ -17,6 +17,7 @@ export default function NewGamePage() {
   const [title, setTitle] = useState(`Партия от ${formatDate(todayInputValue())}`);
   const [storyteller, setStoryteller] = useState("");
   const [scriptName, setScriptName] = useState("");
+  const [scriptVersion, setScriptVersion] = useState("");
   const [scriptAuthor, setScriptAuthor] = useState("");
   const [scriptRoles, setScriptRoles] = useState<ScriptRole[]>([]);
   const [playerCount, setPlayerCount] = useState(8);
@@ -50,12 +51,14 @@ export default function NewGamePage() {
       const nextScriptName = parsed.name ?? file.name.replace(/\.json$/i, "");
 
       setScriptName(nextScriptName);
+      setScriptVersion(parsed.version ?? "");
       setScriptAuthor(parsed.author ?? "");
       setScriptRoles(parsed.roles);
       setTitle((current) => (current.trim() ? current : nextScriptName));
       setError("");
     } catch (error) {
       setScriptName("");
+      setScriptVersion("");
       setScriptAuthor("");
       setScriptRoles([]);
       setError(
@@ -70,6 +73,7 @@ export default function NewGamePage() {
 
   const clearScript = () => {
     setScriptName("");
+    setScriptVersion("");
     setScriptAuthor("");
     setScriptRoles([]);
   };
@@ -82,6 +86,7 @@ export default function NewGamePage() {
     }
 
     setScriptName(preset.name);
+    setScriptVersion("");
     setScriptAuthor(preset.author);
     setScriptRoles(preset.roles);
     setError("");
@@ -119,6 +124,7 @@ export default function NewGamePage() {
       date,
       storyteller: storyteller.trim(),
       scriptName: scriptName.trim() || undefined,
+      scriptVersion: scriptVersion.trim() || undefined,
       scriptAuthor: scriptAuthor.trim() || undefined,
       scriptRoles,
       playerCount,

@@ -119,7 +119,7 @@ function PlayerDetailForm({
   const [noteError, setNoteError] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>(player.isTraveller ? null : "main");
+  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>(null);
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
   const { data: referenceData } = useReferenceData();
@@ -243,14 +243,12 @@ function PlayerDetailForm({
 
     if (activeRoleSlot === "main") {
       setMainRole(roleId);
-      setActiveRoleSlot(0);
       return;
     }
 
     setAdditionalRoles((current) =>
       current.map((role, index) => (index === activeRoleSlot ? roleId : role)),
     );
-    setActiveRoleSlot((current) => (current === 0 ? 1 : current === 1 ? 2 : "main"));
   };
 
   const startEditingNote = (note: Note) => {
@@ -651,10 +649,6 @@ function PlayerDetailForm({
                     <p className="text-xs leading-4 text-stone-500">
                       После загрузки сценария дополнительные роли тоже начнут выпадать списком.
                     </p>
-                  ) : activeRoleSlot === null ? (
-                    <p className="text-xs leading-4 text-stone-500">
-                      Сначала выберите слот роли сверху, потом нажмите на жетон роли ниже.
-                    </p>
                   ) : null}
                 </div>
               </div>
@@ -730,12 +724,6 @@ function PlayerDetailForm({
 
             {mainRoleNoteRoleId && currentPhase ? (
               <div className="space-y-3 rounded-2xl border border-ember-200/10 bg-black/15 p-3">
-                <div>
-                  <h4 className="text-sm font-semibold text-stone-100">Спец. заметка по основной роли</h4>
-                  <p className="text-sm text-stone-400">
-                    Можно добавлять только ролевую информацию по основной роли этого игрока.
-                  </p>
-                </div>
                 <RoleIntelPanel
                   phase={currentPhase}
                   notes={[]}

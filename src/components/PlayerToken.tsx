@@ -145,7 +145,7 @@ export default function PlayerToken({
           </span>
         </span>
       ) : null}
-      {isOnBlock ? (
+      {isOnBlock && player.alive ? (
         <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <Skull className="h-[56%] w-[56%] text-black/42 drop-shadow-[0_3px_8px_rgba(255,255,255,0.24)]" strokeWidth={2.5} />
         </span>

@@ -1954,7 +1954,9 @@ export default function RoleIntelPanel({
               </label>
             ) : null}
 
-            <p className="text-sm text-stone-400">{selectedRoleConfig.helper}</p>
+            {selectedRoleConfig.helper !== "Выберите игрока, на которого была направлена способность." ? (
+              <p className="text-sm text-stone-400">{selectedRoleConfig.helper}</p>
+            ) : null}
 
             {selectedRoleConfig.kind === "generic" ||
             selectedRoleConfig.kind === "players_exact" ||
