@@ -1,7 +1,8 @@
 import { Edit3, Save, Trash2, UserRound, X } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import clsx from "clsx";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { Note, PersonalTeam, Phase, Player, RoleType, ScriptRole, TokenTint } from "../types";
-import { formatDate, formatTime, sortPhases } from "../utils/dates";
+import { formatTime, sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
 import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
 import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, normalizeRoleId, prettifyRoleName } from "../utils/scripts";
@@ -119,10 +120,14 @@ function PlayerDetailForm({
   const [noteError, setNoteError] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>(null);
+  const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>("main");
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
   const { data: referenceData } = useReferenceData();
+
+  useEffect(() => {
+    setActiveRoleSlot("main");
+  }, [player.id]);
   const linkedPlayerNotes = useMemo(
     () =>
       notes.filter(
@@ -132,14 +137,29 @@ function PlayerDetailForm({
       ),
     [notes, player.id],
   );
+  const playersById = useMemo(
+    () => new Map(players.map((currentPlayer) => [currentPlayer.id, currentPlayer])),
+    [players],
+  );
+
+  const getRoleIntelSourcePlayerName = (note: Note) => {
+    const sourcePlayerId = note.linkedPlayerIds[0];
+    return sourcePlayerId ? playersById.get(sourcePlayerId)?.name : undefined;
+  };
 
   const notesByPhase = useMemo(() => {
-    return sortedPhases.map((phase) => ({
-      phase,
-      notes: linkedPlayerNotes
-        .filter((note) => note.phaseId === phase.id)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    }));
+    return sortedPhases
+      .map((phase) => ({
+        phase,
+        notes: linkedPlayerNotes
+          .filter((note) => note.phaseId === phase.id)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      }))
+      .sort((a, b) => {
+        const aLatest = a.notes[0]?.createdAt ?? a.phase.createdAt;
+        const bLatest = b.notes[0]?.createdAt ?? b.phase.createdAt;
+        return bLatest.localeCompare(aLatest);
+      });
   }, [linkedPlayerNotes, sortedPhases]);
 
   const updateAdditionalRole = (index: number, value: string) => {
@@ -196,10 +216,10 @@ function PlayerDetailForm({
     [roleIconGroups],
   );
   const townsfolkRoleGroup = roleIconGroupsByKey.get("townsfolk");
+  const outsiderRoleGroup = roleIconGroupsByKey.get("outsider");
+  const minionRoleGroup = roleIconGroupsByKey.get("minion");
+  const demonRoleGroup = roleIconGroupsByKey.get("demon");
   const travellerRoleGroup = roleIconGroupsByKey.get("traveller");
-  const sideRoleGroups = (["outsider", "minion", "demon"] satisfies RoleType[])
-    .map((key) => roleIconGroupsByKey.get(key))
-    .filter((group): group is NonNullable<typeof group> => Boolean(group));
   const currentVisibleRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
   const mainRoleReference = currentVisibleRoleId
     ? referenceData?.roleMap.get(normalizeRoleId(currentVisibleRoleId)) ?? null
@@ -236,19 +256,35 @@ function PlayerDetailForm({
   const linkedNoteCount = linkedPlayerNotes.length;
   const mainRoleNoteRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
 
-  const assignRoleToSlot = (roleId: string) => {
-    if (activeRoleSlot === null) {
-      return;
+  const getNextRoleSlot = (roleSlot: "main" | 0 | 1 | 2): "main" | 0 | 1 | 2 => {
+    if (roleSlot === "main") {
+      return 0;
     }
 
-    if (activeRoleSlot === "main") {
+    if (roleSlot === 0) {
+      return 1;
+    }
+
+    if (roleSlot === 1) {
+      return 2;
+    }
+
+    return "main";
+  };
+
+  const assignRoleToSlot = (roleId: string) => {
+    const targetRoleSlot = activeRoleSlot ?? "main";
+
+    if (targetRoleSlot === "main") {
       setMainRole(roleId);
+      setActiveRoleSlot(getNextRoleSlot(targetRoleSlot));
       return;
     }
 
     setAdditionalRoles((current) =>
-      current.map((role, index) => (index === activeRoleSlot ? roleId : role)),
+      current.map((role, index) => (index === targetRoleSlot ? roleId : role)),
     );
+    setActiveRoleSlot(getNextRoleSlot(targetRoleSlot));
   };
 
   const startEditingNote = (note: Note) => {
@@ -295,15 +331,57 @@ function PlayerDetailForm({
     setNoteError("");
   };
 
-  const renderPlayerNoteText = (text: string) => {
-    if (!roleMentionRegex) {
-      return <p className="whitespace-pre-wrap text-sm leading-6 text-stone-200">{text}</p>;
+  const stripLeadingRoleLabel = (text: string, roleId?: string) => {
+    if (!roleId) {
+      return text;
     }
 
-    const lines = text.split("\n");
+    const labels = uniqueIds([getRoleLabel(roleId, mergedScriptRoles), prettifyRoleName(roleId), roleId])
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length);
+
+    return labels.reduce((current, label) => {
+      const pattern = new RegExp(`^\\s*${escapeRegExp(label)}\\s*[:—-]?\\s*`, "iu");
+      return current.replace(pattern, "");
+    }, text);
+  };
+
+  const renderPlayerNoteText = (text: string, hiddenRoleId?: string, sourcePlayerName?: string) => {
+    const noteText = stripLeadingRoleLabel(text, hiddenRoleId);
+    const hiddenNormalizedRoleId = hiddenRoleId ? normalizeRoleId(hiddenRoleId) : "";
+    const trimmedSourcePlayerName = sourcePlayerName?.trim() ?? "";
+    const shouldShowSourcePlayerName =
+      Boolean(trimmedSourcePlayerName) &&
+      !noteText.trim().toLocaleLowerCase("ru-RU").startsWith(trimmedSourcePlayerName.toLocaleLowerCase("ru-RU"));
+
+    if (!noteText.trim()) {
+      return null;
+    }
+
+    if (!roleMentionRegex) {
+      return (
+        <p className="whitespace-pre-wrap text-sm leading-5 text-stone-200">
+          {shouldShowSourcePlayerName ? (
+            <>
+              <span className="font-semibold text-stone-100">{trimmedSourcePlayerName}</span>
+              {": "}
+            </>
+          ) : null}
+          {noteText}
+        </p>
+      );
+    }
+
+    const lines = noteText.split("\n");
 
     return (
-      <p className="whitespace-pre-wrap text-sm leading-6 text-stone-200">
+      <p className="whitespace-pre-wrap text-sm leading-5 text-stone-200">
+        {shouldShowSourcePlayerName ? (
+          <>
+            <span className="font-semibold text-stone-100">{trimmedSourcePlayerName}</span>
+            {": "}
+          </>
+        ) : null}
         {lines.map((line, lineIndex) => (
           <Fragment key={`${lineIndex}-${line}`}>
             {line.split(roleMentionRegex).map((part, partIndex) => {
@@ -311,6 +389,10 @@ function PlayerDetailForm({
 
               if (!roleId) {
                 return <Fragment key={`${lineIndex}-${partIndex}`}>{part}</Fragment>;
+              }
+
+              if (hiddenNormalizedRoleId && normalizeRoleId(roleId) === hiddenNormalizedRoleId) {
+                return null;
               }
 
               const roleLabel = getRoleLabel(roleId, mergedScriptRoles);
@@ -324,8 +406,8 @@ function PlayerDetailForm({
                   <RoleTokenImage
                     roleId={roleId}
                     roles={mergedScriptRoles}
-                    className="h-8 w-8 overflow-hidden rounded-full border border-ember-200/20 bg-white/90 shadow-[0_4px_10px_rgba(0,0,0,0.12)]"
-                    imageClassName="h-full w-full object-cover"
+                    className="inline-flex h-8 max-h-8 min-h-8 w-8 min-w-8 max-w-8 overflow-hidden rounded-full border border-ember-200/20 bg-white/90 shadow-[0_4px_10px_rgba(0,0,0,0.12)]"
+                    imageClassName="h-8 max-h-8 w-8 max-w-8 object-cover"
                     fallback={
                       <span className="inline-flex items-center rounded-full border border-ember-200/20 bg-black/10 px-2 py-1 text-xs">
                         {roleLabel}
@@ -412,10 +494,10 @@ function PlayerDetailForm({
         className="player-detail-shell flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="player-detail-header flex items-start justify-between gap-3 border-b border-ember-200/10 bg-ink-850/95 px-4 py-4 backdrop-blur sm:px-6 sm:py-5">
+        <div className="player-detail-header flex items-start justify-between gap-2 border-b border-ember-200/10 bg-ink-850/95 px-4 py-2.5 backdrop-blur sm:px-5 sm:py-3">
           <div>
-            <p className="text-sm text-stone-400">Карточка игрока</p>
-            <h2 className="text-2xl font-bold text-stone-50">{player.name}</h2>
+            <p className="text-xs text-stone-400">Карточка игрока</p>
+            <h2 className="text-xl font-bold leading-tight text-stone-50">{player.name}</h2>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {player.isTraveller ? (
@@ -425,7 +507,7 @@ function PlayerDetailForm({
                 disabled={saving}
                 aria-label="Удалить Traveller"
                 title="Удалить Traveller"
-                className="danger-button min-h-12 px-4"
+                className="danger-button min-h-10 px-3"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -436,30 +518,21 @@ function PlayerDetailForm({
               disabled={saving}
               aria-label="Сохранить игрока"
               title="Сохранить игрока"
-              className="primary-button min-h-12 px-4"
+              className="primary-button min-h-10 px-3"
             >
               <Save className="h-4 w-4" />
             </button>
-            <button type="button" onClick={onClose} className="secondary-button shrink-0 px-3">
+            <button type="button" onClick={onClose} className="secondary-button min-h-10 shrink-0 px-3">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        <div className="player-detail-body overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-          <div className="space-y-4">
-            <div className="player-detail-top space-y-4">
-              <div className="space-y-3">
-                <div className="grid grid-cols-[minmax(0,1fr)_56px_56px_56px] gap-3">
-                  <label className="block">
-                    <input
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      className="field min-h-[56px]"
-                      placeholder="Имя игрока"
-                    />
-                  </label>
-
+        <div className="player-detail-body overflow-y-auto px-4 py-2.5 sm:px-5 sm:py-3">
+          <div className="space-y-3">
+            <div className="player-detail-top space-y-2.5">
+              <div className="space-y-2">
+                <div className="grid grid-cols-[minmax(5.6rem,auto)_minmax(0,1fr)_44px_44px] gap-2">
                   <button
                     type="button"
                     onClick={handleToggleMyToken}
@@ -467,40 +540,54 @@ function PlayerDetailForm({
                     aria-pressed={markedAsMine}
                     aria-label="Это мой жетон"
                     title="Это мой жетон"
-                    className={`flex min-h-[56px] items-center justify-center rounded-xl border px-3 py-2 transition ${
+                    className={clsx(
+                      "flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs font-bold leading-tight transition sm:px-3 sm:text-sm",
                       myTokenLocked
                         ? "cursor-not-allowed border-stone-200/10 bg-black/10 text-stone-600"
                         : markedAsMine
-                          ? "border-ember-200/35 bg-ember-200/10 text-ember-100 shadow-[0_0_18px_rgba(242,204,116,0.12)]"
-                          : "border-stone-200/10 bg-black/20 text-stone-300"
-                    }`}
+                          ? "border-teal-700/70 bg-teal-500/35 text-teal-950 shadow-[0_0_0_2px_rgba(20,184,166,0.26),0_10px_24px_rgba(15,118,110,0.2)]"
+                          : "border-teal-700/35 bg-teal-500/18 text-teal-950 hover:border-teal-700/55 hover:bg-teal-500/28",
+                    )}
                   >
                     <span
-                      className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                      className={clsx(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition",
                         myTokenLocked
                           ? "bg-black/20 text-stone-600"
-                          : markedAsMine
-                            ? "bg-ember-200 text-ink-900"
-                            : "bg-black/20 text-stone-500"
-                      }`}
+                        : markedAsMine
+                            ? "bg-teal-50 text-teal-950"
+                            : "bg-teal-50/70 text-teal-950",
+                      )}
                     >
-                      <UserRound className="h-4.5 w-4.5" />
+                      <UserRound className="h-4 w-4" />
                     </span>
+                    <span className="hidden sm:inline">Это мой жетон</span>
+                    <span className="sm:hidden">Мой</span>
                   </button>
+
+                  <label className="block">
+                    <input
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      className="field min-h-11"
+                      placeholder="Имя игрока"
+                    />
+                  </label>
+
                   <button
                     type="button"
                     onClick={() => setAlive((current) => !current)}
                     aria-pressed={alive}
                     aria-label="Игрок жив"
                     title="Игрок жив"
-                    className={`flex min-h-[56px] items-center justify-center rounded-xl border px-3 py-2 transition ${
+                    className={`flex min-h-11 items-center justify-center rounded-xl border px-2 py-1.5 transition ${
                       alive
                         ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-100 shadow-[0_0_18px_rgba(110,231,183,0.12)]"
                         : "border-stone-200/10 bg-black/20 text-stone-300"
                     }`}
                   >
                     <span
-                      className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                      className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
                         alive ? "bg-emerald-200/18 text-emerald-100" : "bg-black/20 text-stone-500"
                       }`}
                     >
@@ -515,7 +602,7 @@ function PlayerDetailForm({
                     aria-pressed={deadVoteAvailable}
                     aria-label="Есть мертвый голос"
                     title="Есть мертвый голос"
-                    className={`flex min-h-[56px] items-center justify-center rounded-xl border px-3 py-2 transition ${
+                    className={`flex min-h-11 items-center justify-center rounded-xl border px-2 py-1.5 transition ${
                       alive
                         ? "cursor-not-allowed border-stone-200/10 bg-black/10 text-stone-600"
                         : deadVoteAvailable
@@ -524,7 +611,7 @@ function PlayerDetailForm({
                     }`}
                   >
                     <span
-                      className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                      className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
                         alive
                           ? "bg-black/20 text-stone-600"
                           : deadVoteAvailable
@@ -538,15 +625,15 @@ function PlayerDetailForm({
                 </div>
 
                 {myTokenHint ? (
-                  <p className="text-[10px] leading-3 text-stone-500">
+                  <p className="text-[9px] leading-3 text-stone-500">
                     {myTokenHint}
                   </p>
                 ) : null}
               </div>
 
-            <div className="player-detail-role-panel space-y-3 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-3 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
-              <div className="grid grid-cols-[minmax(0,1fr)_10.5rem] items-start gap-3">
-                <label className="block space-y-3">
+            <div className="player-detail-role-panel space-y-2 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-2.5 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
+              <div className="grid grid-cols-[minmax(0,1fr)_9.25rem] items-start gap-2">
+                <label className="block space-y-2">
                   <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
                   {player.isTraveller ? (
                     <input
@@ -558,8 +645,9 @@ function PlayerDetailForm({
                     <>
                       <button
                         type="button"
+                        autoFocus
                         onClick={() => setActiveRoleSlot("main")}
-                        className={`flex min-h-[52px] w-full items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition ${
+                        className={`flex min-h-11 w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                           activeRoleSlot === "main"
                             ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
                             : "border-ember-100/35 bg-black/25"
@@ -569,11 +657,11 @@ function PlayerDetailForm({
                           <RoleTokenImage
                             roleId={mainRole}
                             roles={roleOptions}
-                            className="h-7 w-7 shrink-0 overflow-hidden rounded-full border-0 bg-transparent"
+                            className="h-6 w-6 shrink-0 overflow-hidden rounded-full border-0 bg-transparent"
                             imageClassName="h-full w-full object-cover"
                           />
                         ) : (
-                          <span className="h-7 w-7 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+                          <span className="h-6 w-6 shrink-0 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
                         )}
                         <span className="text-sm font-semibold text-stone-50">
                           {mainRole ? getRoleLabel(mainRole, roleOptions) : "Основная роль"}
@@ -600,16 +688,16 @@ function PlayerDetailForm({
                   ) : null}
                 </label>
 
-                <div className="player-detail-extra-roles space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-3">
-                  <p className="text-xs font-medium text-stone-500">Дополнительные роли</p>
-                  <div className="grid grid-cols-3 gap-2">
+                <div className="player-detail-extra-roles space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-2">
+                  <p className="text-xs font-medium text-stone-500">Доп.роли</p>
+                  <div className="grid grid-cols-3 gap-1.5">
                   {[0, 1, 2].map((index) => (
                     roleOptions.length > 0 ? (
                       <button
                         key={index}
                         type="button"
                         onClick={() => setActiveRoleSlot(index as 0 | 1 | 2)}
-                        className={`flex min-h-[52px] items-center justify-center rounded-2xl border px-2 py-2 transition ${
+                        className={`flex min-h-11 items-center justify-center rounded-xl border px-1.5 py-1.5 transition ${
                           activeRoleSlot === index
                             ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
                             : "border-stone-200/10 bg-black/20"
@@ -620,11 +708,11 @@ function PlayerDetailForm({
                           <RoleTokenImage
                             roleId={additionalRoles[index]}
                             roles={roleOptions}
-                            className="h-7 w-7 overflow-hidden rounded-full border-0 bg-transparent"
+                            className="h-6 w-6 overflow-hidden rounded-full border-0 bg-transparent"
                             imageClassName="h-full w-full object-cover"
                           />
                         ) : (
-                          <span className="h-7 w-7 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+                          <span className="h-6 w-6 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
                         )}
                       </button>
                     ) : (
@@ -664,10 +752,10 @@ function PlayerDetailForm({
                         onSelect={assignRoleToSlot}
                         className="h-full"
                         groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
-                        columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
-                        buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
-                        iconClassName="h-8 w-8 sm:h-10 sm:w-10"
-                        roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+                        wrap
+                        buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+                        iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+                        roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
                         compact
                         unframed
                         showGroupLabel={false}
@@ -676,22 +764,70 @@ function PlayerDetailForm({
                       <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
                     )}
 
-                    <RoleIconGrid
-                      groups={sideRoleGroups}
-                      roles={roleOptions}
-                      selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
-                      onSelect={assignRoleToSlot}
-                      className="h-full"
-                      groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
-                      columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
-                      buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
-                      iconClassName="h-8 w-8 sm:h-10 sm:w-10"
-                      roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
-                      compact
-                      unframed
-                      showGroupLabel={false}
-                    />
+                    {outsiderRoleGroup ? (
+                      <RoleIconGrid
+                        groups={[outsiderRoleGroup]}
+                        roles={roleOptions}
+                        selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                        onSelect={assignRoleToSlot}
+                        className="h-full"
+                        groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                        wrap
+                        buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+                        iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+                        roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
+                        compact
+                        unframed
+                        showGroupLabel={false}
+                      />
+                    ) : (
+                      <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+                    )}
                   </div>
+
+                  {minionRoleGroup || demonRoleGroup ? (
+                    <div className="grid grid-cols-2 gap-1">
+                      {minionRoleGroup ? (
+                        <RoleIconGrid
+                          groups={[minionRoleGroup]}
+                          roles={roleOptions}
+                          selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                          onSelect={assignRoleToSlot}
+                          className="h-full"
+                          groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                          wrap
+                          buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+                          iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+                          roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
+                          compact
+                          unframed
+                          showGroupLabel={false}
+                        />
+                      ) : (
+                        <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+                      )}
+
+                      {demonRoleGroup ? (
+                        <RoleIconGrid
+                          groups={[demonRoleGroup]}
+                          roles={roleOptions}
+                          selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
+                          onSelect={assignRoleToSlot}
+                          className="h-full"
+                          groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                          wrap
+                          buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+                          iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+                          roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
+                          compact
+                          unframed
+                          showGroupLabel={false}
+                        />
+                      ) : (
+                        <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+                      )}
+                    </div>
+                  ) : null}
 
                   {travellerRoleGroup ? (
                     <RoleIconGrid
@@ -700,10 +836,10 @@ function PlayerDetailForm({
                       selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
                       onSelect={assignRoleToSlot}
                       groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
-                      columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
-                      buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
-                      iconClassName="h-8 w-8 sm:h-10 sm:w-10"
-                      roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+                        wrap
+                      buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+                      iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+                      roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
                       compact
                       unframed
                       showGroupLabel={false}
@@ -753,11 +889,11 @@ function PlayerDetailForm({
                 notesByPhase
                   .filter((group) => group.notes.length > 0)
                   .map(({ phase, notes: phaseNotes }) => (
-                    <section key={phase.id} className="player-detail-note-group rounded-2xl border border-ember-200/10 bg-black/18 p-4">
-                      <h4 className="mb-3 font-semibold text-ember-100">{phase.title}</h4>
-                      <div className="space-y-3">
+                    <section key={phase.id} className="player-detail-note-group rounded-2xl border border-ember-200/10 bg-black/18 p-3">
+                      <h4 className="mb-2 font-semibold text-ember-100">{phase.title}</h4>
+                      <div className="space-y-2">
                         {phaseNotes.map((note) => (
-                          <article key={note.id} className="rounded-xl border border-ember-200/10 bg-black/15 p-3">
+                          <article key={note.id} className="rounded-xl border border-ember-200/10 bg-black/15 p-2.5">
                             {editingNoteId === note.id ? (
                               <div className="space-y-3">
                                 <textarea
@@ -777,38 +913,38 @@ function PlayerDetailForm({
                                 </div>
                               </div>
                             ) : (
-                              <>
+                              <div className="flex items-start gap-2.5">
                                 {note.kind === "role_intel" && note.roleId ? (
-                                  <div className="mb-3 flex items-center gap-2">
+                                  <div className="shrink-0 pt-0.5">
                                     <RoleTokenImage
                                       roleId={note.roleId}
                                       roles={mergedScriptRoles}
-                                      className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
-                                      imageClassName="h-full w-full object-cover"
+                                      className="inline-flex h-8 max-h-8 min-h-8 w-8 min-w-8 max-w-8 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                                      imageClassName="h-8 max-h-8 w-8 max-w-8 object-cover"
                                     />
-                                    <div>
-                                      <p className="text-xs uppercase tracking-[0.22em] text-ember-100/70">Ролевая информация</p>
-                                      <p className="text-sm font-semibold text-stone-100">
-                                        {getRoleLabel(note.roleId, mergedScriptRoles)}
-                                      </p>
-                                    </div>
                                   </div>
                                 ) : null}
-                                {renderPlayerNoteText(note.text)}
-                                <div className="mt-3 flex items-center justify-between gap-3">
-                                  <span className="text-xs text-stone-500">
-                                    {formatDate(note.createdAt)} · {formatTime(note.createdAt)}
+                                <div className="min-w-0 flex-1">
+                                  {renderPlayerNoteText(
+                                    note.text,
+                                    note.kind === "role_intel" ? note.roleId : undefined,
+                                    note.kind === "role_intel" ? getRoleIntelSourcePlayerName(note) : undefined,
+                                  )}
+                                  <div className="mt-2 flex items-center justify-between gap-2">
+                                    <span className="text-sm font-semibold leading-none text-stone-500">
+                                      {formatTime(note.createdAt)}
                                   </span>
-                                  <div className="flex gap-2">
-                                  <button type="button" onClick={() => startEditingNote(note)} className="secondary-button min-h-10 px-3">
-                                    <Edit3 className="h-4 w-4" />
-                                  </button>
-                                  <button type="button" onClick={() => onDeleteNote(note.id)} className="danger-button">
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
+                                    <div className="flex shrink-0 gap-1.5">
+                                      <button type="button" onClick={() => startEditingNote(note)} className="secondary-button min-h-9 px-2.5">
+                                        <Edit3 className="h-4 w-4" />
+                                      </button>
+                                      <button type="button" onClick={() => onDeleteNote(note.id)} className="danger-button min-h-9 px-2.5">
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
-                              </>
+                              </div>
                             )}
                           </article>
                         ))}

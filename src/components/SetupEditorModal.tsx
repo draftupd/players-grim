@@ -1,9 +1,10 @@
 import clsx from "clsx";
-import { FileJson, Plus, Save, Trash2, X } from "lucide-react";
+import { FileJson, Link as LinkIcon, Minus, Plus, Save, Trash2, X } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import type { Game, Player, RoleType, ScriptRole } from "../types";
 import { baseScriptPresets } from "../utils/baseScripts";
-import { readImportedScript } from "../utils/importErrors";
+import { createId } from "../utils/ids";
+import { readImportedScript, readImportedScriptUrl } from "../utils/importErrors";
 import { getRoleLabel, mergeScriptRoles, prettifyRoleName } from "../utils/scripts";
 
 type SetupEditorModalProps = {
@@ -14,7 +15,7 @@ type SetupEditorModalProps = {
   onSave: (
     gameValues: Pick<
       Game,
-      "title" | "date" | "storyteller" | "scriptName" | "scriptVersion" | "scriptAuthor" | "scriptRoles"
+      "title" | "date" | "storyteller" | "scriptName" | "scriptVersion" | "scriptAuthor" | "scriptRoles" | "playerCount"
     >,
     playerValues: Array<
       Pick<
@@ -33,6 +34,9 @@ type SetupEditorModalProps = {
     deletedPlayerIds: string[],
   ) => Promise<void>;
 };
+
+const MIN_PLAYERS = 5;
+const MAX_PLAYERS = 15;
 
 type SetupEditorFormProps = Omit<SetupEditorModalProps, "game"> & {
   game: Game;
@@ -66,6 +70,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
   const [scriptVersion, setScriptVersion] = useState(game.scriptVersion ?? "");
   const [scriptAuthor, setScriptAuthor] = useState(game.scriptAuthor ?? "");
   const [scriptRoles, setScriptRoles] = useState<ScriptRole[]>(game.scriptRoles ?? []);
+  const [scriptUrl, setScriptUrl] = useState("");
   const [playerNames, setPlayerNames] = useState(
     sortedPlayers.map((player) => ({ id: player.id, name: player.name })),
   );
@@ -73,6 +78,16 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
   const [newRoleType, setNewRoleType] = useState<RoleType>("traveller");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loadingScriptUrl, setLoadingScriptUrl] = useState(false);
+  const canEditPlayerCount = !game.hasStarted;
+
+  const applyParsedScript = (parsed: Awaited<ReturnType<typeof readImportedScript>>, fallbackName: string) => {
+    setScriptName(parsed.name ?? fallbackName);
+    setScriptVersion(parsed.version ?? "");
+    setScriptAuthor(parsed.author ?? "");
+    setScriptRoles((current) => mergeScriptRoles(current, parsed.roles));
+    setError("");
+  };
 
   const handleScriptFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -82,13 +97,7 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
     }
 
     try {
-      const parsed = await readImportedScript(file);
-
-      setScriptName(parsed.name ?? file.name.replace(/\.json$/i, ""));
-      setScriptVersion(parsed.version ?? "");
-      setScriptAuthor(parsed.author ?? "");
-      setScriptRoles((current) => mergeScriptRoles(current, parsed.roles));
-      setError("");
+      applyParsedScript(await readImportedScript(file), file.name.replace(/\.json$/i, ""));
     } catch (error) {
       setError(
         error instanceof Error
@@ -100,9 +109,33 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
     }
   };
 
+  const handleScriptUrl = async () => {
+    setLoadingScriptUrl(true);
+
+    try {
+      applyParsedScript(await readImportedScriptUrl(scriptUrl), "Сценарий по ссылке");
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось загрузить сценарий по ссылке. Проверьте адрес и попробуйте снова.",
+      );
+    } finally {
+      setLoadingScriptUrl(false);
+    }
+  };
+
   const updatePlayerName = (playerId: string, name: string) => {
     setPlayerNames((current) =>
       current.map((player) => (player.id === playerId ? { ...player, name } : player)),
+    );
+  };
+
+  const updatePlayerCount = (value: number) => {
+    const nextCount = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, value || MIN_PLAYERS));
+
+    setPlayerNames((current) =>
+      Array.from({ length: nextCount }, (_, index) => current[index] ?? { id: createId(), name: "" }),
     );
   };
 
@@ -180,9 +213,12 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
           scriptVersion: scriptVersion.trim() || undefined,
           scriptAuthor: scriptAuthor.trim() || undefined,
           scriptRoles,
+          playerCount: playerNames.length,
         },
         regularPlayerValues,
-        [],
+        sortedPlayers
+          .filter((player) => !playerNames.some((currentPlayer) => currentPlayer.id === player.id))
+          .map((player) => player.id),
       );
       onClose();
     } catch {
@@ -260,6 +296,31 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
                 ))}
               </div>
 
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  type="url"
+                  value={scriptUrl}
+                  onChange={(event) => setScriptUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && scriptUrl.trim()) {
+                      event.preventDefault();
+                      void handleScriptUrl();
+                    }
+                  }}
+                  className="field"
+                  placeholder="https://www.botcscripts.com/api/scripts/15466/json/"
+                />
+                <button
+                  type="button"
+                  onClick={handleScriptUrl}
+                  disabled={loadingScriptUrl || !scriptUrl.trim()}
+                  className="secondary-button min-h-12 px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <LinkIcon className="h-4 w-4" />
+                  {loadingScriptUrl ? "Загрузка" : "Загрузить"}
+                </button>
+              </div>
+
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="block space-y-2">
                   <span className="label">Название сценария</span>
@@ -281,7 +342,37 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
             </div>
 
             <div>
-              <h3 className={clsx("mb-3 font-semibold", lightTheme ? "text-stone-800" : "text-stone-50")}>Имена игроков</h3>
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className={clsx("font-semibold", lightTheme ? "text-stone-800" : "text-stone-50")}>Имена игроков</h3>
+                  <p className={clsx("text-sm", lightTheme ? "text-stone-500" : "text-stone-400")}>{playerNames.length} игроков за столом</p>
+                </div>
+                {canEditPlayerCount ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updatePlayerCount(playerNames.length - 1)}
+                      disabled={playerNames.length <= MIN_PLAYERS}
+                      className="secondary-button h-10 min-h-0 w-10 shrink-0 px-0 disabled:cursor-not-allowed disabled:opacity-35"
+                      aria-label="Уменьшить количество игроков"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <div className="field flex h-10 w-14 items-center justify-center px-0 text-center font-semibold">
+                      {playerNames.length}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updatePlayerCount(playerNames.length + 1)}
+                      disabled={playerNames.length >= MAX_PLAYERS}
+                      className="secondary-button h-10 min-h-0 w-10 shrink-0 px-0 disabled:cursor-not-allowed disabled:opacity-35"
+                      aria-label="Увеличить количество игроков"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <div className="space-y-3">
                 {playerNames.map((player, index) => (
                   <div

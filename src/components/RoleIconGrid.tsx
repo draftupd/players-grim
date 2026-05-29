@@ -27,6 +27,7 @@ type RoleIconGridProps = {
   showRoleLabels?: boolean;
   roleLabelClassName?: string;
   compact?: boolean;
+  wrap?: boolean;
 };
 
 export default function RoleIconGrid({
@@ -47,6 +48,7 @@ export default function RoleIconGrid({
   showRoleLabels = true,
   roleLabelClassName,
   compact = false,
+  wrap = false,
 }: RoleIconGridProps) {
   return (
     <div className={clsx("space-y-3", className)}>
@@ -68,7 +70,7 @@ export default function RoleIconGrid({
           ) : null}
           <div
             className={clsx(
-              "grid grid-cols-4 gap-2 sm:grid-cols-5",
+              wrap ? "flex flex-wrap items-start gap-x-1 gap-y-2" : "grid grid-cols-4 gap-2 sm:grid-cols-5",
               (inlineGroupLabel || !showGroupLabel) && "min-w-0 flex-1",
               columnsClassName,
             )}
@@ -85,7 +87,7 @@ export default function RoleIconGrid({
                   className={clsx(
                     compact
                       ? "flex min-h-0 flex-col items-center justify-start gap-0 rounded-2xl border px-0 py-0 text-center transition"
-                      : "flex min-h-[4.9rem] flex-col items-center justify-start gap-1.5 rounded-2xl border px-1.5 py-1.5 text-center transition",
+                      : "flex min-h-[3.9rem] flex-col items-center justify-start gap-1.5 rounded-2xl border px-1.5 py-1.5 text-center transition",
                     selected && "role-icon-selected",
                     selected
                       ? unframed
@@ -111,8 +113,8 @@ export default function RoleIconGrid({
                       <span
                         className={clsx(
                           compact
-                            ? "text-[10px] font-medium leading-tight text-inherit sm:text-[11px]"
-                            : "line-clamp-2 text-[10px] font-medium leading-tight text-inherit sm:text-[11px]",
+                            ? "text-[9px] font-medium leading-tight text-inherit sm:text-[11px]"
+                            : "line-clamp-2 text-[9px] font-medium leading-tight text-inherit sm:text-[11px]",
                           roleLabelClassName,
                         )}
                       >

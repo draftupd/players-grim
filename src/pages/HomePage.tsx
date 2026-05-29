@@ -154,6 +154,7 @@ export default function HomePage() {
       date: todayInputValue(),
       storyteller: game.storyteller,
       scriptName: game.scriptName,
+      scriptVersion: game.scriptVersion,
       scriptAuthor: game.scriptAuthor,
       scriptRoles: game.scriptRoles,
       playerCount: game.playerCount,

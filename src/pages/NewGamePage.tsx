@@ -1,4 +1,4 @@
-import { ArrowLeft, FileJson, Minus, Plus, Save, X } from "lucide-react";
+import { ArrowLeft, FileJson, Link as LinkIcon, Minus, Plus, Save, X } from "lucide-react";
 import { ChangeEvent, FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "../db/db";
@@ -6,7 +6,7 @@ import type { Game, Phase, Player, ScriptRole } from "../types";
 import { baseScriptPresets } from "../utils/baseScripts";
 import { formatDate, phaseTitle, timestamp, todayInputValue } from "../utils/dates";
 import { createId } from "../utils/ids";
-import { readImportedScript } from "../utils/importErrors";
+import { readImportedScript, readImportedScriptUrl } from "../utils/importErrors";
 
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 15;
@@ -20,10 +20,12 @@ export default function NewGamePage() {
   const [scriptVersion, setScriptVersion] = useState("");
   const [scriptAuthor, setScriptAuthor] = useState("");
   const [scriptRoles, setScriptRoles] = useState<ScriptRole[]>([]);
+  const [scriptUrl, setScriptUrl] = useState("");
   const [playerCount, setPlayerCount] = useState(8);
   const [playerNames, setPlayerNames] = useState<string[]>(Array.from({ length: 8 }, () => ""));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loadingScriptUrl, setLoadingScriptUrl] = useState(false);
 
   const updatePlayerCount = (value: number) => {
     const nextCount = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, value || MIN_PLAYERS));
@@ -39,6 +41,17 @@ export default function NewGamePage() {
     );
   };
 
+  const applyParsedScript = (parsed: Awaited<ReturnType<typeof readImportedScript>>, fallbackName: string) => {
+    const nextScriptName = parsed.name ?? fallbackName;
+
+    setScriptName(nextScriptName);
+    setScriptVersion(parsed.version ?? "");
+    setScriptAuthor(parsed.author ?? "");
+    setScriptRoles(parsed.roles);
+    setTitle((current) => (current.trim() ? current : nextScriptName));
+    setError("");
+  };
+
   const handleScriptFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
@@ -47,15 +60,7 @@ export default function NewGamePage() {
     }
 
     try {
-      const parsed = await readImportedScript(file);
-      const nextScriptName = parsed.name ?? file.name.replace(/\.json$/i, "");
-
-      setScriptName(nextScriptName);
-      setScriptVersion(parsed.version ?? "");
-      setScriptAuthor(parsed.author ?? "");
-      setScriptRoles(parsed.roles);
-      setTitle((current) => (current.trim() ? current : nextScriptName));
-      setError("");
+      applyParsedScript(await readImportedScript(file), file.name.replace(/\.json$/i, ""));
     } catch (error) {
       setScriptName("");
       setScriptVersion("");
@@ -68,6 +73,26 @@ export default function NewGamePage() {
       );
     } finally {
       event.target.value = "";
+    }
+  };
+
+  const handleScriptUrl = async () => {
+    setLoadingScriptUrl(true);
+
+    try {
+      applyParsedScript(await readImportedScriptUrl(scriptUrl), "Сценарий по ссылке");
+    } catch (error) {
+      setScriptName("");
+      setScriptVersion("");
+      setScriptAuthor("");
+      setScriptRoles([]);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Не удалось загрузить сценарий по ссылке. Проверьте адрес и попробуйте снова.",
+      );
+    } finally {
+      setLoadingScriptUrl(false);
     }
   };
 
@@ -254,7 +279,7 @@ export default function NewGamePage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">Сценарий</h2>
-                <p className="text-sm text-stone-400">Выберите базовый сценарий или загрузите JSON из Script Tool.</p>
+                <p className="text-sm text-stone-400">Выберите базовый сценарий, загрузите JSON или вставьте ссылку.</p>
               </div>
               <label className="secondary-button cursor-pointer">
                 <FileJson className="h-4 w-4" />
@@ -274,6 +299,31 @@ export default function NewGamePage() {
                   {preset.name}
                 </button>
               ))}
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                type="url"
+                value={scriptUrl}
+                onChange={(event) => setScriptUrl(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && scriptUrl.trim()) {
+                    event.preventDefault();
+                    void handleScriptUrl();
+                  }
+                }}
+                className="field"
+                placeholder="https://www.botcscripts.com/api/scripts/15466/json/"
+              />
+              <button
+                type="button"
+                onClick={handleScriptUrl}
+                disabled={loadingScriptUrl || !scriptUrl.trim()}
+                className="secondary-button min-h-12 px-3 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <LinkIcon className="h-4 w-4" />
+                {loadingScriptUrl ? "Загрузка" : "Загрузить"}
+              </button>
             </div>
 
             {scriptRoles.length > 0 ? (

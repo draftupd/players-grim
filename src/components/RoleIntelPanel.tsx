@@ -82,6 +82,13 @@ type RoleSpecialConfig =
       summary: (names: string[], choiceLabel: string) => string;
     }
   | {
+      kind: "players_any_choice";
+      helper: string;
+      choiceLabel: string;
+      choices: Array<{ label: string; value: string }>;
+      summary: (names: string[], choiceLabel: string) => string;
+    }
+  | {
       kind: "count";
       helper: string;
       label: string;
@@ -243,6 +250,12 @@ const buildPartialRoleIntelText = ({
       if (selectedChoiceLabel) parts.push(`Результат: ${selectedChoiceLabel}`);
       return parts.join("\n");
     }
+    case "players_any_choice": {
+      const parts = [];
+      if (selectedNames.length > 0) parts.push(`Выбраны игроки: ${selectedNames.join(", ")}`);
+      if (selectedChoiceLabel) parts.push(`Результат: ${selectedChoiceLabel}`);
+      return parts.join("\n");
+    }
     case "count":
       return selectedCountValue ? `Выбрано число: ${selectedCountValue}` : "";
     case "role_only":
@@ -284,6 +297,9 @@ const splitRoleGroupsForCompactPicker = (
   );
 
   const townsfolkGroup = roleGroupsByKey.get("townsfolk");
+  const outsiderGroup = roleGroupsByKey.get("outsider");
+  const minionGroup = roleGroupsByKey.get("minion");
+  const demonGroup = roleGroupsByKey.get("demon");
   const bottomGroups = (["traveller", "fabled", "loric"] satisfies RoleType[])
     .map((key) => roleGroupsByKey.get(key))
     .filter((group): group is NonNullable<typeof group> => Boolean(group));
@@ -294,13 +310,11 @@ const splitRoleGroupsForCompactPicker = (
           roleIds: bottomGroups.flatMap((group) => group.roleIds),
         }
       : null;
-  const sideGroups = (["outsider", "minion", "demon"] satisfies RoleType[])
-    .map((key) => roleGroupsByKey.get(key))
-    .filter((group): group is NonNullable<typeof group> => Boolean(group));
-
   return {
     townsfolkGroup,
-    sideGroups,
+    outsiderGroup,
+    minionGroup,
+    demonGroup,
     bottomMergedGroup,
   };
 };
@@ -511,13 +525,24 @@ const getRoleSpecialConfig = (roleId: string): RoleSpecialConfig => {
     };
   }
 
-  if (["flowergirl", "towncrier"].includes(normalizedRoleId)) {
+  if (normalizedRoleId === "flowergirl") {
+    return {
+      kind: "players_any_choice",
+      helper: "Отметьте игроков, связанных с голосованием, и укажите, голосовал ли Демон сегодня.",
+      choiceLabel: "результат",
+      choices: [
+        { label: "Да", value: "yes" },
+        { label: "Нет", value: "no" },
+      ],
+      summary: (names, choiceLabel) =>
+        `Flowergirl: Демон голосовал — ${choiceLabel.toLowerCase()}${names.length > 0 ? `; игроки: ${names.join(", ")}` : ""}`,
+    };
+  }
+
+  if (normalizedRoleId === "towncrier") {
     return {
       kind: "choice_only",
-      helper:
-        normalizedRoleId === "flowergirl"
-          ? "Отметьте, голосовал ли Демон сегодня."
-          : "Отметьте, номинировал ли Миньон сегодня.",
+      helper: "Отметьте, номинировал ли Миньон сегодня.",
       choiceLabel: "результат",
       choices: [
         { label: "Да", value: "yes" },
@@ -1343,7 +1368,7 @@ export default function RoleIntelPanel({
 
   const compactPlayerChipClass = (selected: boolean) =>
     clsx(
-      "rounded-lg border px-2 py-1 text-xs leading-4 transition",
+      "min-h-8 rounded-xl border px-3 py-1.5 text-sm leading-5 transition",
       selected
         ? "role-player-selected border-transparent text-stone-50"
         : "border-ember-200/10 bg-black/20 text-stone-200 hover:border-ember-200/25 hover:bg-ember-200/8",
@@ -1373,11 +1398,11 @@ export default function RoleIntelPanel({
               selectedRoleIds={selectedIds}
               onSelect={onSelect}
               className="h-full"
-              groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
-              columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
-              buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
-              iconClassName="h-8 w-8 sm:h-10 sm:w-10"
-              roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+              groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+              wrap
+              buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+              iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+              roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
               compact
               unframed
               showGroupLabel={false}
@@ -1386,23 +1411,73 @@ export default function RoleIntelPanel({
             <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
           )}
 
-          <RoleIconGrid
-            groups={compactPicker.sideGroups}
-            roles={rolesForPicker}
-            selectedRoleId={selectedId}
-            selectedRoleIds={selectedIds}
-            onSelect={onSelect}
-            className="h-full"
-            groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
-            columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
-            buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
-            iconClassName="h-8 w-8 sm:h-10 sm:w-10"
-            roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
-            compact
-            unframed
-            showGroupLabel={false}
-          />
+          {compactPicker.outsiderGroup ? (
+            <RoleIconGrid
+              groups={[compactPicker.outsiderGroup]}
+              roles={rolesForPicker}
+              selectedRoleId={selectedId}
+              selectedRoleIds={selectedIds}
+              onSelect={onSelect}
+              className="h-full"
+              groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+              wrap
+              buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+              iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+              roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
+              compact
+              unframed
+              showGroupLabel={false}
+            />
+          ) : (
+            <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+          )}
         </div>
+
+        {compactPicker.minionGroup || compactPicker.demonGroup ? (
+          <div className="grid grid-cols-2 gap-1">
+            {compactPicker.minionGroup ? (
+              <RoleIconGrid
+                groups={[compactPicker.minionGroup]}
+                roles={rolesForPicker}
+                selectedRoleId={selectedId}
+                selectedRoleIds={selectedIds}
+                onSelect={onSelect}
+                className="h-full"
+                groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                wrap
+                buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+                iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+                roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
+                compact
+                unframed
+                showGroupLabel={false}
+              />
+            ) : (
+              <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+            )}
+
+            {compactPicker.demonGroup ? (
+              <RoleIconGrid
+                groups={[compactPicker.demonGroup]}
+                roles={rolesForPicker}
+                selectedRoleId={selectedId}
+                selectedRoleIds={selectedIds}
+                onSelect={onSelect}
+                className="h-full"
+                groupClassName="h-full rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
+                wrap
+                buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+                iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+                roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
+                compact
+                unframed
+                showGroupLabel={false}
+              />
+            ) : (
+              <div className="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1" />
+            )}
+          </div>
+        ) : null}
 
         {compactPicker.bottomMergedGroup ? (
           <RoleIconGrid
@@ -1412,10 +1487,10 @@ export default function RoleIntelPanel({
             selectedRoleIds={selectedIds}
             onSelect={onSelect}
             groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
-            columnsClassName="grid-cols-4 gap-0 sm:grid-cols-4"
-            buttonClassName="relative overflow-visible rounded-lg sm:!min-h-[3.1rem] sm:py-0.5"
-            iconClassName="h-8 w-8 sm:h-10 sm:w-10"
-            roleLabelClassName="mt-[-0.32rem] max-w-[2.5rem] rounded bg-[rgba(255,248,237,0.94)] px-0.5 text-[6px] leading-[0.48rem] text-stone-700 sm:mt-0 sm:max-w-none sm:rounded-none sm:bg-transparent sm:px-0 sm:text-[8px] sm:leading-3 sm:text-inherit"
+            wrap
+            buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
+            iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
+            roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
             compact
             unframed
             showGroupLabel={false}
@@ -1599,6 +1674,28 @@ export default function RoleIntelPanel({
             roleConfig: selectedRoleConfig,
             selectedNames,
             selectedChoiceLabel: selectedChoice?.label,
+          });
+          return partialText
+            ? {
+                text: withExtraText(partialText, extraText),
+                linkedPlayerIds: mergeManualAndMentionLinks(extraText, players, selectedPlayerIds),
+              }
+            : extraTextOnlyResult(extraText, players);
+        }
+
+        return {
+          text: withExtraText(selectedRoleConfig.summary(selectedNames, selectedChoice.label), extraText),
+          linkedPlayerIds: mergeManualAndMentionLinks(extraText, players, selectedPlayerIds),
+        };
+      }
+      case "players_any_choice": {
+        const selectedChoice = selectedRoleConfig.choices.find((choice) => choice.value === selectedChoiceValue);
+
+        if (!selectedChoice) {
+          const partialText = buildPartialRoleIntelText({
+            roleConfig: selectedRoleConfig,
+            selectedNames,
+            selectedChoiceLabel: undefined,
           });
           return partialText
             ? {
@@ -1914,9 +2011,9 @@ export default function RoleIntelPanel({
         </div>
       ) : null}
 
-      <div className="space-y-4 rounded-2xl border border-ember-200/10 bg-black/15 p-3 sm:p-4">
+      <div className="space-y-4 rounded-2xl border border-ember-200/10 bg-black/15 p-2.5 sm:p-3">
         {!hideHeader || pickerRoles.length > 1 ? (
-          <div className="p-1">
+          <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-ember-100/75">
               {selectedRoleId
                 ? `Выбрана роль: ${sortedRoles.find((role) => role.id === selectedRoleId)?.name ?? prettifyRoleName(selectedRoleId)}`
@@ -1934,7 +2031,7 @@ export default function RoleIntelPanel({
           <div className="space-y-3">
             {showSourcePlayerPicker ? (
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                   Кто передал информацию
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -1952,10 +2049,6 @@ export default function RoleIntelPanel({
                   ))}
                 </div>
               </label>
-            ) : null}
-
-            {selectedRoleConfig.helper !== "Выберите игрока, на которого была направлена способность." ? (
-              <p className="text-sm text-stone-400">{selectedRoleConfig.helper}</p>
             ) : null}
 
             {selectedRoleConfig.kind === "generic" ||
@@ -1999,7 +2092,7 @@ export default function RoleIntelPanel({
                   ))}
                 </div>
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                  <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                     {selectedRoleConfig.roleLabel}
                   </span>
                   <div className="space-y-2">
@@ -2063,7 +2156,7 @@ export default function RoleIntelPanel({
                   ))}
                 </div>
                   <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                  <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                     {selectedRoleConfig.roleLabel}
                   </span>
                   <div className="space-y-2">
@@ -2108,7 +2201,7 @@ export default function RoleIntelPanel({
                           : "border-ember-100/35 bg-black/20",
                       )}
                     >
-                      <span className="text-xs uppercase tracking-[0.18em] text-stone-400">
+                      <span className="text-[9px] uppercase tracking-[0.12em] text-stone-400">
                         {selectedRoleConfig.firstRoleLabel}
                       </span>
                       <span className="mt-1 text-sm font-semibold text-stone-50">
@@ -2127,7 +2220,7 @@ export default function RoleIntelPanel({
                           : "border-ember-100/35 bg-black/20",
                       )}
                     >
-                      <span className="text-xs uppercase tracking-[0.18em] text-stone-400">
+                      <span className="text-[9px] uppercase tracking-[0.12em] text-stone-400">
                         {selectedRoleConfig.secondRoleLabel}
                       </span>
                       <span className="mt-1 text-sm font-semibold text-stone-50">
@@ -2163,7 +2256,7 @@ export default function RoleIntelPanel({
                   ))}
                 </div>
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                  <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                     {selectedRoleConfig.choiceLabel}
                   </span>
                   <div className="flex flex-wrap gap-2">
@@ -2186,9 +2279,43 @@ export default function RoleIntelPanel({
               </div>
             ) : null}
 
+            {selectedRoleConfig.kind === "players_any_choice" ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {players.map((player) => (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => togglePlayer(player.id)}
+                      className={compactPlayerChipClass(selectedPlayerIds.includes(player.id))}
+                    >
+                      {player.name}
+                    </button>
+                  ))}
+                </div>
+                <label className="block">
+                  <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
+                    {selectedRoleConfig.choiceLabel}
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedRoleConfig.choices.map((choice) => (
+                      <button
+                        key={choice.value}
+                        type="button"
+                        onClick={() => setSelectedChoiceValue((current) => (current === choice.value ? "" : choice.value))}
+                        className={compactPlayerChipClass(selectedChoiceValue === choice.value)}
+                      >
+                        {choice.label}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+              </div>
+            ) : null}
+
             {selectedRoleConfig.kind === "count" ? (
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                   {selectedRoleConfig.label}
                 </span>
                 <input
@@ -2205,7 +2332,7 @@ export default function RoleIntelPanel({
 
             {selectedRoleConfig.kind === "role_only" ? (
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                   {selectedRoleConfig.roleLabel}
                 </span>
                 <div className="space-y-2">
@@ -2225,7 +2352,7 @@ export default function RoleIntelPanel({
 
             {selectedRoleConfig.kind === "roles_multi" ? (
               <div className="space-y-3">
-                <span className="block text-xs uppercase tracking-[0.18em] text-stone-400">
+                <span className="block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                   {selectedRoleConfig.roleLabel}
                 </span>
                 {renderCompactRolePicker({
@@ -2305,7 +2432,7 @@ export default function RoleIntelPanel({
                 </div>
 
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                  <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                     {selectedRoleConfig.roleLabel}
                   </span>
                   <div className="space-y-2">
@@ -2350,7 +2477,7 @@ export default function RoleIntelPanel({
                   ))}
                 </div>
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                  <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                     {selectedRoleConfig.countLabel}
                   </span>
                   <input
@@ -2368,7 +2495,7 @@ export default function RoleIntelPanel({
 
             {selectedRoleConfig.kind === "choice_only" ? (
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                   {selectedRoleConfig.choiceLabel}
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -2401,7 +2528,7 @@ export default function RoleIntelPanel({
                   ))}
                 </div>
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-[0.18em] text-stone-400">
+                  <span className="mb-2 block text-[9px] uppercase tracking-[0.12em] text-stone-400">
                     {selectedRoleConfig.choiceLabel}
                   </span>
                   <div className="flex flex-wrap gap-2">

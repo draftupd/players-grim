@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { ChevronDown, Hand, Lock, LockOpen, Plus, Save, Settings2, X } from "lucide-react";
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type {
   GrimoireStyle,
@@ -39,6 +39,7 @@ type PlayerCircleProps = {
     totalVotes: number;
   } | null;
   currentBlockPlayerId?: string | null;
+  grimoireActions?: ReactNode;
   selectableNominatorIds?: ReadonlySet<string>;
   selectableNomineeIds?: ReadonlySet<string>;
   onToggleVoteVoter?: (playerId: string) => void;
@@ -153,6 +154,12 @@ const shiftTokenPositionsY = (positions: TokenPosition[], offset: number) =>
     y: Math.min(96, Math.max(4, position.y + offset)),
   }));
 
+const shiftTokenPositionsX = (positions: TokenPosition[], offset: number) =>
+  positions.map((position) => ({
+    ...position,
+    x: Math.min(96, Math.max(4, position.x + offset)),
+  }));
+
 export default function PlayerCircle({
   players,
   notes,
@@ -166,6 +173,7 @@ export default function PlayerCircle({
   voteAvailabilityByPlayerId,
   voteRequirementSummary = null,
   currentBlockPlayerId = null,
+  grimoireActions,
   selectableNominatorIds,
   selectableNomineeIds,
   onToggleVoteVoter,
@@ -196,6 +204,8 @@ export default function PlayerCircle({
   const travellerCount = players.filter((player) => player.isTraveller).length;
   const setup = getPlayerSetup(regularPlayerCount);
   const playerTotal = sortedPlayers.length;
+  const actionRailCenterOffset = grimoireActions ? (isSmallViewport ? 8 : 6) : 0;
+  const boardCenterX = 50 - actionRailCenterOffset;
   const density = playerTotal >= 14 ? "dense" : playerTotal >= 11 ? "compact" : "normal";
   const tokenDiameterPercent = density === "dense" ? 14.8 : density === "compact" ? 16.2 : 18.6;
   const desiredGapPercent = density === "dense" ? 3.8 : density === "compact" ? 4.6 : 6.2;
@@ -210,9 +220,9 @@ export default function PlayerCircle({
       const rawPositions = getEvenlySpacedStadiumPoints(sortedPlayers.length, xRadius, yRadius, offsetRatio);
       const minY = rawPositions.reduce((lowest, position) => Math.min(lowest, position.y), 50);
       const targetMinY = playerTotal >= 14 ? 11 : playerTotal >= 11 ? 13 : playerTotal >= 8 ? 15 : 18;
-      return shiftTokenPositionsY(rawPositions, targetMinY - minY);
+      return shiftTokenPositionsX(shiftTokenPositionsY(rawPositions, targetMinY - minY), -actionRailCenterOffset);
     },
-    [offsetRatio, playerTotal, sortedPlayers.length, xRadius, yRadius],
+    [actionRailCenterOffset, offsetRatio, playerTotal, sortedPlayers.length, xRadius, yRadius],
   );
   const defaultPositionsById = useMemo(
     () =>
@@ -434,11 +444,13 @@ export default function PlayerCircle({
     grimoireHeightScale: grimoireStyle?.grimoireHeightScale ?? defaultGrimoireHeightScale,
     lockTokens: grimoireStyle?.lockTokens ?? false,
   };
+  const visibleTokenScale =
+    isSmallViewport && playerTotal <= 9 ? currentStyle.tokenScale / 1.5 : currentStyle.tokenScale;
   const canManualArrange = !isVotingMode && !currentStyle.lockTokens;
   const [draggingPlayerId, setDraggingPlayerId] = useState<string | null>(null);
   const baseHalfTokenPercent = density === "dense" ? 8.5 : density === "compact" ? 10 : 12.5;
-  const halfTokenPercent = baseHalfTokenPercent * currentStyle.tokenScale;
-  const minimumTokenDistance = Math.max(10, tokenDiameterPercent * currentStyle.tokenScale * 0.72);
+  const halfTokenPercent = baseHalfTokenPercent * visibleTokenScale;
+  const minimumTokenDistance = Math.max(10, tokenDiameterPercent * visibleTokenScale * 0.72);
 
   const clampPosition = (position: TokenPosition): TokenPosition => ({
     x: Math.min(100 - halfTokenPercent, Math.max(halfTokenPercent, position.x)),
@@ -774,8 +786,8 @@ export default function PlayerCircle({
         </div>
 
         {currentPhase ? (
-          <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-[225%] sm:-translate-y-[235%]">
-            <span className="inline-flex rounded-full border border-ember-100/55 bg-ink-900/95 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-ember-100 shadow-[0_0_18px_rgba(242,204,116,0.42),0_0_36px_rgba(242,204,116,0.18),0_12px_24px_rgba(0,0,0,0.35)] sm:px-5 sm:py-2.5 sm:text-lg">
+          <div className="absolute left-3 top-3 z-20 sm:left-4 sm:top-4">
+            <span className="inline-flex rounded-full border border-ember-100/55 bg-ink-900/95 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-white/95 shadow-[0_0_18px_rgba(242,204,116,0.42),0_0_36px_rgba(242,204,116,0.18),0_12px_24px_rgba(0,0,0,0.35)] sm:px-5 sm:py-2.5 sm:text-lg">
               {currentPhase.title || phaseTitle(currentPhase.number, currentPhase.type)}
             </span>
           </div>
@@ -783,8 +795,8 @@ export default function PlayerCircle({
 
         {votingStage ? (
           <div
-            className="absolute left-1/2 top-1/2 z-20 flex w-[112px] max-w-[62%] -translate-x-1/2 -translate-y-[44%] flex-col items-center gap-1 rounded-[20px] border border-ember-100/30 px-2 py-2 text-center shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:w-[154px] sm:max-w-[56%] sm:gap-1.5 sm:px-2.5 sm:py-2.5"
-            style={{ backgroundColor: "rgba(53, 53, 57, 0.72)" }}
+            className="absolute top-1/2 z-20 flex w-[112px] max-w-[62%] -translate-x-1/2 -translate-y-[44%] flex-col items-center gap-1 rounded-[20px] border border-ember-100/30 px-2 py-2 text-center shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:w-[154px] sm:max-w-[56%] sm:gap-1.5 sm:px-2.5 sm:py-2.5"
+            style={{ left: `${boardCenterX}%`, backgroundColor: "rgba(53, 53, 57, 0.72)" }}
           >
             {votingStage === "select_voters" && voteRequirementSummary ? (
               <>
@@ -840,7 +852,10 @@ export default function PlayerCircle({
             )}
           </div>
         ) : (
-          <div className={`absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/92 text-center shadow-inner ${layout.center}`}>
+          <div
+            className={`absolute top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/92 text-center shadow-inner ${layout.center}`}
+            style={{ left: `${boardCenterX}%` }}
+          >
             <div className="w-full max-w-[84%] space-y-1.5 sm:max-w-[80%] sm:space-y-2">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 text-[8px] font-medium leading-tight sm:gap-x-2.5 sm:text-[12px]">
                 <span className="text-left text-blue-700">Горожане</span>
@@ -898,9 +913,15 @@ export default function PlayerCircle({
           </div>
         )}
 
+        {grimoireActions ? (
+          <div className="absolute bottom-3 right-3 z-30 flex flex-col items-end gap-1.5 sm:bottom-4 sm:right-4 sm:gap-2">
+            {grimoireActions}
+          </div>
+        ) : null}
+
         {sortedPlayers.map((player) => {
           const position = getBasePositionForPlayer(player.id);
-          const dx = position.x - 50;
+          const dx = position.x - boardCenterX;
           const dy = position.y - 50;
           const distance = Math.hypot(dx, dy) || 1;
           const inwardVoteMarkerOffset = density === "dense" ? 18 : density === "compact" ? 22 : 26;
@@ -988,7 +1009,7 @@ export default function PlayerCircle({
                 isMyToken={isMyToken}
                 density={density}
                 disabled={false}
-                tokenScale={currentStyle.tokenScale}
+                tokenScale={visibleTokenScale}
                 extraTokenScale={currentStyle.extraTokenScale}
                 nameScale={currentStyle.nameScale}
                 voteAvailability={voteAvailability}

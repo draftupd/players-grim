@@ -9,6 +9,8 @@ type ScriptItem = {
   type?: unknown;
 };
 
+type ScriptJsonItem = ScriptItem | string;
+
 const getOptionalTrimmedString = (value: unknown) => {
   if (typeof value !== "string") {
     return undefined;
@@ -324,15 +326,20 @@ export const parseScriptJson = (json: unknown): ParsedScript => {
     throw new Error("Сценарий должен быть массивом объектов.");
   }
 
-  const items = json as ScriptItem[];
-  const meta = items.find((item) => item.id === "_meta");
+  const items = json as ScriptJsonItem[];
+  const meta = items.find((item): item is ScriptItem => typeof item === "object" && item !== null && item.id === "_meta");
   const roles = items
-    .filter((item) => typeof item.id === "string" && item.id !== "_meta")
+    .filter((item) =>
+      typeof item === "string" || (typeof item === "object" && item !== null && typeof item.id === "string" && item.id !== "_meta"),
+    )
     .map((item) => {
-      const id = String(item.id);
-      const importedType = normalizeImportedRoleType(item.team) !== "unknown"
-        ? normalizeImportedRoleType(item.team)
-        : normalizeImportedRoleType(item.type);
+      const id = typeof item === "string" ? item : String(item.id);
+      const importedType =
+        typeof item === "string"
+          ? "unknown"
+          : normalizeImportedRoleType(item.team) !== "unknown"
+            ? normalizeImportedRoleType(item.team)
+            : normalizeImportedRoleType(item.type);
 
       return {
         id,
@@ -354,6 +361,8 @@ export const parseScriptJson = (json: unknown): ParsedScript => {
 };
 
 export const getRoleLabel = (roleId: string | undefined, roles: ScriptRole[] = []) => {
+  void roles;
+
   if (!roleId) {
     return "";
   }
