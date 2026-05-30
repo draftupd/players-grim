@@ -2,7 +2,7 @@ import { Edit3, Save, Trash2, UserRound, X } from "lucide-react";
 import clsx from "clsx";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { Note, PersonalTeam, Phase, Player, RoleType, ScriptRole, TokenTint } from "../types";
-import { formatTime, sortPhases } from "../utils/dates";
+import { sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
 import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
 import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, normalizeRoleId, prettifyRoleName } from "../utils/scripts";
@@ -132,7 +132,7 @@ function PlayerDetailForm({
     () =>
       notes.filter(
         (note) =>
-          note.linkedPlayerIds.includes(player.id) &&
+          note.linkedPlayerIds[0] === player.id &&
           note.kind === "role_intel",
       ),
     [notes, player.id],
@@ -360,7 +360,7 @@ function PlayerDetailForm({
 
     if (!roleMentionRegex) {
       return (
-        <p className="whitespace-pre-wrap text-sm leading-5 text-stone-200">
+        <p className="whitespace-pre-wrap text-[13px] leading-4 text-stone-200">
           {shouldShowSourcePlayerName ? (
             <>
               <span className="font-semibold text-stone-100">{trimmedSourcePlayerName}</span>
@@ -375,7 +375,7 @@ function PlayerDetailForm({
     const lines = noteText.split("\n");
 
     return (
-      <p className="whitespace-pre-wrap text-sm leading-5 text-stone-200">
+      <p className="whitespace-pre-wrap text-[13px] leading-4 text-stone-200">
         {shouldShowSourcePlayerName ? (
           <>
             <span className="font-semibold text-stone-100">{trimmedSourcePlayerName}</span>
@@ -889,11 +889,11 @@ function PlayerDetailForm({
                 notesByPhase
                   .filter((group) => group.notes.length > 0)
                   .map(({ phase, notes: phaseNotes }) => (
-                    <section key={phase.id} className="player-detail-note-group rounded-2xl border border-ember-200/10 bg-black/18 p-3">
-                      <h4 className="mb-2 font-semibold text-ember-100">{phase.title}</h4>
-                      <div className="space-y-2">
+                    <section key={phase.id} className="player-detail-note-group rounded-2xl border border-ember-200/10 bg-black/18 p-2.5">
+                      <h4 className="mb-1.5 text-sm font-semibold leading-4 text-ember-100">{phase.title}</h4>
+                      <div className="space-y-1.5">
                         {phaseNotes.map((note) => (
-                          <article key={note.id} className="rounded-xl border border-ember-200/10 bg-black/15 p-2.5">
+                          <article key={note.id} className="rounded-lg border border-ember-200/10 bg-black/15 px-2 py-1.5">
                             {editingNoteId === note.id ? (
                               <div className="space-y-3">
                                 <textarea
@@ -913,14 +913,14 @@ function PlayerDetailForm({
                                 </div>
                               </div>
                             ) : (
-                              <div className="flex items-start gap-2.5">
+                              <div className="flex items-center gap-2">
                                 {note.kind === "role_intel" && note.roleId ? (
-                                  <div className="shrink-0 pt-0.5">
+                                  <div className="shrink-0">
                                     <RoleTokenImage
                                       roleId={note.roleId}
                                       roles={mergedScriptRoles}
-                                      className="inline-flex h-8 max-h-8 min-h-8 w-8 min-w-8 max-w-8 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
-                                      imageClassName="h-8 max-h-8 w-8 max-w-8 object-cover"
+                                      className="inline-flex h-6 max-h-6 min-h-6 w-6 min-w-6 max-w-6 shrink-0 overflow-hidden rounded-full border border-ember-200/20 bg-white/90"
+                                      imageClassName="h-6 max-h-6 w-6 max-w-6 object-cover"
                                     />
                                   </div>
                                 ) : null}
@@ -930,19 +930,14 @@ function PlayerDetailForm({
                                     note.kind === "role_intel" ? note.roleId : undefined,
                                     note.kind === "role_intel" ? getRoleIntelSourcePlayerName(note) : undefined,
                                   )}
-                                  <div className="mt-2 flex items-center justify-between gap-2">
-                                    <span className="text-sm font-semibold leading-none text-stone-500">
-                                      {formatTime(note.createdAt)}
-                                  </span>
-                                    <div className="flex shrink-0 gap-1.5">
-                                      <button type="button" onClick={() => startEditingNote(note)} className="secondary-button min-h-9 px-2.5">
-                                        <Edit3 className="h-4 w-4" />
-                                      </button>
-                                      <button type="button" onClick={() => onDeleteNote(note.id)} className="danger-button min-h-9 px-2.5">
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  </div>
+                                </div>
+                                <div className="flex shrink-0 gap-1">
+                                  <button type="button" onClick={() => startEditingNote(note)} className="secondary-button min-h-7 px-1.5">
+                                    <Edit3 className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button type="button" onClick={() => onDeleteNote(note.id)} className="danger-button min-h-7 px-1.5">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
                                 </div>
                               </div>
                             )}

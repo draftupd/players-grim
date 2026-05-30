@@ -2619,6 +2619,8 @@ export default function GamePage() {
     : isDayPhase
       ? "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 shadow-[0_24px_60px_rgba(76,48,22,0.2)] sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6"
       : "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6";
+  const grimoireActionButtonClass = (active: boolean) =>
+    `grimoire-action-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0 ${active ? "grimoire-action-button-active" : ""}`;
   const stripLeadingSummaryRoleLabel = (text: string, roleId?: string) => {
     if (!roleId) {
       return text;
@@ -2640,7 +2642,7 @@ export default function GamePage() {
 
     if (!roleMentionRegex) {
       return (
-        <p className={`${compact ? "mt-2 leading-5" : "mt-3 leading-6"} whitespace-pre-wrap text-sm text-stone-100`}>
+        <p className={`${compact ? "mt-0 leading-4 text-[13px]" : "mt-3 text-sm leading-6"} whitespace-pre-wrap text-stone-100`}>
           {noteText}
         </p>
       );
@@ -2649,7 +2651,7 @@ export default function GamePage() {
     const lines = noteText.split("\n");
 
     return (
-      <p className={`${compact ? "mt-2 leading-5" : "mt-3 leading-6"} whitespace-pre-wrap text-sm text-stone-100`}>
+      <p className={`${compact ? "mt-0 leading-4 text-[13px]" : "mt-3 text-sm leading-6"} whitespace-pre-wrap text-stone-100`}>
         {lines.map((line, lineIndex) => (
           <Fragment key={`${lineIndex}-${line}`}>
             {line.split(roleMentionRegex).map((part, partIndex) => {
@@ -2668,13 +2670,13 @@ export default function GamePage() {
               return (
                 <span
                   key={`${lineIndex}-${partIndex}-${normalizeRoleId(roleId)}`}
-                  className="mx-0.5 inline-flex h-8 w-8 align-middle"
+                  className={`${compact ? "h-6 w-6" : "h-8 w-8"} mx-0.5 inline-flex align-middle`}
                   title={roleLabel}
                 >
                   <RoleTokenImage
                     roleId={roleId}
                     roles={roleReferenceRoles}
-                    className="h-8 w-8 overflow-hidden rounded-full border border-ember-200/20 bg-white/90 shadow-[0_4px_10px_rgba(0,0,0,0.12)]"
+                    className={`${compact ? "h-6 w-6" : "h-8 w-8"} overflow-hidden rounded-full border border-ember-200/20 bg-white/90 shadow-[0_4px_10px_rgba(0,0,0,0.12)]`}
                     imageClassName="h-full w-full object-cover"
                     fallback={
                       <span className="inline-flex items-center rounded-full border border-ember-200/20 bg-black/10 px-2 py-1 text-xs">
@@ -2973,64 +2975,54 @@ export default function GamePage() {
         : "Роль не указана";
 
       return (
-        <article key={item.id} className="border-t border-stone-900/20 pt-2 first:border-t-0 first:pt-0">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 px-0.5">
-            <h3 className="text-sm font-semibold leading-5 text-stone-100">{roleLabel}</h3>
-            <span className="text-xs leading-5 text-stone-500">
-              {item.notes.length}
-            </span>
+        <article key={item.id} className="border-t border-stone-900/20 pt-1.5 first:border-t-0 first:pt-0">
+          <div className="px-0.5">
+            <h3 className="text-sm font-semibold leading-4 text-stone-100">{roleLabel}</h3>
           </div>
 
-          <div className="mt-1.5 space-y-1.5">
+          <div className="mt-1 space-y-1">
             {item.notes.map((note) => {
               const isEditingNote = editingNoteId === note.id;
 
               return (
-                <div key={note.id} className="rounded-xl bg-black/10 px-2.5 py-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-semibold leading-5 text-stone-100">
-                        {phasesById.get(note.phaseId)?.title ?? "История"}
-                      </h4>
-                      <p className="text-xs font-semibold leading-4 text-stone-500">
-                        {formatTime(note.createdAt)}
-                      </p>
+                <div key={note.id} className="rounded-lg bg-black/10 px-2 py-1.5">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      {isEditingNote ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={editingNoteText}
+                            onChange={(event) => setEditingNoteText(event.target.value)}
+                            className="field min-h-24"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button min-h-9 px-3">
+                              <Save className="h-4 w-4" />
+                              Сохранить
+                            </button>
+                            <button type="button" onClick={cancelEditingHistoryNote} className="secondary-button min-h-9 px-3">
+                              <X className="h-4 w-4" />
+                              Отмена
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        renderSummaryNoteText(note.text, true, item.roleId)
+                      )}
                     </div>
-                    <div className="flex shrink-0 gap-1.5">
+                    <div className="flex shrink-0 gap-1">
                       <button
                         type="button"
                         onClick={() => startEditingHistoryNote(note)}
-                        className="secondary-button min-h-8 px-2"
+                        className="secondary-button min-h-7 px-1.5"
                       >
-                        <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" />
+                        <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-3 w-3" />
                       </button>
-                      <button type="button" onClick={() => void deleteNote(note.id)} className="danger-button min-h-8 px-2">
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <button type="button" onClick={() => void deleteNote(note.id)} className="danger-button min-h-7 px-1.5">
+                        <Trash2 className="h-3 w-3" />
                       </button>
                     </div>
                   </div>
-
-                  {isEditingNote ? (
-                    <div className="mt-3 space-y-3">
-                      <textarea
-                        value={editingNoteText}
-                        onChange={(event) => setEditingNoteText(event.target.value)}
-                        className="field min-h-28"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                          <button type="button" onClick={() => void saveHistoryNote(note)} className="primary-button">
-                            <Save className="h-4 w-4" />
-                            Сохранить
-                        </button>
-                        <button type="button" onClick={cancelEditingHistoryNote} className="secondary-button">
-                          <X className="h-4 w-4" />
-                          Отмена
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    renderSummaryNoteText(note.text, true, item.roleId)
-                  )}
                 </div>
               );
             })}
@@ -3382,11 +3374,7 @@ export default function GamePage() {
                   <button
                     type="button"
                     onClick={() => openContentModal("roleIntel")}
-                    className={
-                      contentTab === "roleIntel"
-                        ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                        : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                    }
+                    className={grimoireActionButtonClass(contentTab === "roleIntel")}
                     title="По ролям"
                     aria-label="По ролям"
                   >
@@ -3400,11 +3388,7 @@ export default function GamePage() {
                       <button
                         type="button"
                         onClick={() => beginVoteDraft("execution")}
-                        className={
-                          voteDraft?.voteType === "execution"
-                            ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                            : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                        }
+                        className={grimoireActionButtonClass(voteDraft?.voteType === "execution")}
                         title="Номинация"
                         aria-label="Номинация"
                       >
@@ -3434,11 +3418,7 @@ export default function GamePage() {
                       <button
                         type="button"
                         onClick={() => openDayDeathModal()}
-                        className={
-                          dayDeathModalOpen
-                            ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                            : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                        }
+                        className={grimoireActionButtonClass(dayDeathModalOpen)}
                         title="Человек умер"
                         aria-label="Человек умер"
                       >
@@ -3451,11 +3431,7 @@ export default function GamePage() {
                       <button
                         type="button"
                         onClick={() => openExecutionWithoutNominationModal()}
-                        className={
-                          executionModalOpen || selectedPhaseExecutionNote
-                            ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                            : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                        }
+                        className={grimoireActionButtonClass(Boolean(executionModalOpen || selectedPhaseExecutionNote))}
                         title="Казнь без номинации"
                         aria-label="Казнь без номинации"
                       >
@@ -3681,10 +3657,12 @@ export default function GamePage() {
                   className={contentModalShellClass}
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className={contentTab === "summaryRoles" ? "mb-3 flex items-start justify-between gap-3" : "mb-4 flex items-start justify-between gap-3"}>
                     <div>
-                      <p className="text-sm text-stone-400">{selectedPhase?.title ?? "Партия"}</p>
-                      {contentModalTitle ? <h2 className="text-2xl font-bold text-stone-50">{contentModalTitle}</h2> : null}
+                      {contentTab === "summaryRoles" ? null : (
+                        <p className="text-sm text-stone-400">{selectedPhase?.title ?? "Партия"}</p>
+                      )}
+                      {contentModalTitle ? <h2 className={contentTab === "summaryRoles" ? "text-2xl font-bold leading-tight text-stone-50" : "text-2xl font-bold text-stone-50"}>{contentModalTitle}</h2> : null}
                     </div>
                     <button type="button" onClick={closeContentModal} className="secondary-button px-3">
                       <X className="h-5 w-5" />
@@ -3776,28 +3754,28 @@ export default function GamePage() {
               </section>
             ) : null}
             {contentTab === "summaryRoles" ? (
-              <section className="panel min-w-0 p-2.5 sm:p-3">
+              <section className="panel min-w-0 p-2 sm:p-2.5">
                 {summaryItems.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
                     История пока пустая.
                   </div>
                 ) : (
-                  <section className="space-y-3">
-                    <div className="space-y-2">
+                  <section className="space-y-2">
+                    <div className="space-y-1.5">
                       {summaryRoleItems.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-ember-200/20 bg-black/10 p-5 text-center text-sm text-stone-400">
                           Пока нет ролевой информации.
                         </div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {summaryRoleItems.map((item) => renderSummaryItem(item))}
                         </div>
                       )}
                     </div>
 
                     {summaryGeneralInfoItems.length > 0 ? (
-                      <div className="space-y-2 border-t border-stone-900/20 pt-2">
-                        <div className="space-y-2">
+                      <div className="space-y-1.5 border-t border-stone-900/20 pt-1.5">
+                        <div className="space-y-1.5">
                           {summaryGeneralInfoItems.map((item) => renderSummaryItem(item))}
                         </div>
                       </div>

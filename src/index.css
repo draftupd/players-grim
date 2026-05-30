@@ -132,6 +132,47 @@ button {
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-ember-200/20 bg-stone-100/5 px-4 py-2.5 text-sm font-semibold text-stone-100 transition hover:border-ember-200/45 hover:bg-stone-100/10 focus:outline-none focus:ring-2 focus:ring-ember-100/30;
   }
 
+  .grimoire-action-button {
+    @apply inline-flex items-center justify-center rounded-xl border transition focus:outline-none focus:ring-2;
+    border-color: rgb(255 248 232 / 0.72);
+    background: rgb(255 250 241 / 0.94);
+    color: rgb(36 23 27);
+    box-shadow: 0 10px 22px rgb(0 0 0 / 0.22);
+  }
+
+  .grimoire-action-button:hover,
+  .grimoire-action-button-active {
+    border-color: rgb(242 204 116 / 0.95);
+    background: rgb(255 237 188 / 0.98);
+    box-shadow:
+      0 0 0 2px rgb(242 204 116 / 0.22),
+      0 12px 26px rgb(0 0 0 / 0.28);
+  }
+
+  .grimoire-action-button img {
+    filter: brightness(0) saturate(100%) invert(11%) sepia(15%) saturate(1195%) hue-rotate(295deg) brightness(94%) contrast(93%);
+  }
+
+  .day-phase-theme .grimoire-action-button {
+    border-color: rgb(36 23 27 / 0.28);
+    background: rgb(24 20 30 / 0.94);
+    color: rgb(255 248 232);
+    box-shadow: 0 12px 24px rgb(95 69 45 / 0.22);
+  }
+
+  .day-phase-theme .grimoire-action-button:hover,
+  .day-phase-theme .grimoire-action-button-active {
+    border-color: rgb(36 23 27 / 0.5);
+    background: rgb(17 14 22 / 0.98);
+    box-shadow:
+      0 0 0 2px rgb(36 23 27 / 0.18),
+      0 14px 28px rgb(95 69 45 / 0.28);
+  }
+
+  .day-phase-theme .grimoire-action-button img {
+    filter: brightness(0) invert(1);
+  }
+
   .danger-button {
     @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-300/25 bg-red-950/30 px-3 py-2 text-sm font-semibold text-red-100 transition hover:border-red-200/50 hover:bg-red-900/40;
   }
