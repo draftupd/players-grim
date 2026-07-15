@@ -4709,20 +4709,7 @@ export default function GamePage() {
                       <X className="h-4 w-4" />
                     </button>
                   ) : selectedPhase.type === "night" ? (
-                    <button
-                      type="button"
-                      onClick={openNightResultModal}
-                      className="primary-button h-9 min-h-0 w-11 shrink-0 gap-0 px-0 py-0"
-                      aria-label={`Открыть результат ${selectedPhase.number} ночи`}
-                      title={`Результат ${selectedPhase.number} ночи`}
-                    >
-                      <span className="relative inline-flex h-5 w-5 items-center justify-center">
-                        <SunMedium className="h-5 w-5" />
-                        <span className="absolute right-[-4px] top-[-4px] inline-flex h-3 min-w-3 items-center justify-center rounded-full bg-ink-900 px-[2px] text-[8px] font-bold leading-none text-amber-50">
-                          {selectedPhase.number}
-                        </span>
-                      </span>
-                    </button>
+                    null
                   ) : (
                     <button
                       type="button"
@@ -4889,6 +4876,21 @@ export default function GamePage() {
               showVoteMarkers={voteDraft?.stage === "select_voters"}
               voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
               voteRequirementSummary={voteRequirementSummary}
+              centerAction={
+                gameHasStarted && selectedPhase?.type === "night" ? (
+                  <button
+                    type="button"
+                    onClick={openNightResultModal}
+                    className="primary-button min-h-7 w-full rounded-lg px-1.5 py-1 text-[8px] leading-none sm:min-h-9 sm:rounded-xl sm:px-3 sm:text-xs"
+                    aria-label={`Перейти в ${selectedPhase.number} день`}
+                    title={`Перейти в ${selectedPhase.number} день`}
+                  >
+                    <SunMedium className="h-3 w-3 shrink-0 sm:h-4 sm:w-4" />
+                    <span className="sm:hidden">В день</span>
+                    <span className="hidden sm:inline">Перейти в день</span>
+                  </button>
+                ) : null
+              }
               currentBlockPlayerId={currentBlockPlayerId}
               selectableNominatorIds={
                 (voteDraft?.voteType ?? "execution") === "traveller_exile"

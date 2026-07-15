@@ -123,6 +123,25 @@ function PlayerDetailForm({
   const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>("main");
   const [saving, setSaving] = useState(false);
   const sortedPhases = sortPhases(phases);
+  const isNightPhase = currentPhase?.type === "night";
+  const myTokenButtonLocked = myTokenLocked && !markedAsMine;
+  const myTokenButtonStyle = isNightPhase
+    ? {
+        backgroundColor: markedAsMine ? "rgba(20, 184, 166, 0.78)" : "rgba(82, 82, 91, 0.92)",
+        borderColor: markedAsMine ? "rgba(204, 251, 241, 0.9)" : "rgba(245, 245, 244, 0.72)",
+        color: "#ffffff",
+        boxShadow: markedAsMine
+          ? "0 0 0 2px rgba(20,184,166,0.32), 0 10px 24px rgba(15,118,110,0.24)"
+          : "0 10px 30px rgba(0,0,0,0.22)",
+      }
+    : {
+        backgroundColor: markedAsMine ? "rgba(94, 234, 212, 0.78)" : "rgba(255, 250, 241, 0.95)",
+        borderColor: markedAsMine ? "rgba(15, 118, 110, 0.62)" : "rgba(68, 64, 60, 0.28)",
+        color: markedAsMine ? "#042f2e" : "#1c1917",
+        boxShadow: markedAsMine
+          ? "0 0 0 2px rgba(20,184,166,0.18), 0 10px 24px rgba(15,118,110,0.16)"
+          : "0 10px 30px rgba(0,0,0,0.16)",
+      };
   const { data: referenceData } = useReferenceData();
 
   useEffect(() => {
@@ -949,15 +968,12 @@ function PlayerDetailForm({
               aria-label="Это мой жетон"
               title="Это мой жетон"
               className={clsx(
-                "flex h-11 w-11 items-center justify-center rounded-2xl border shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur transition",
-                myTokenLocked
-                  ? "cursor-not-allowed border-stone-200/10 bg-black/35 text-stone-600"
-                  : markedAsMine
-                    ? "border-teal-700/70 bg-teal-500/55 text-teal-950 shadow-[0_0_0_2px_rgba(20,184,166,0.26),0_10px_24px_rgba(15,118,110,0.2)]"
-                    : "border-teal-700/35 bg-teal-500/28 text-teal-50 hover:border-teal-700/55 hover:bg-teal-500/38",
+                "flex h-11 w-11 items-center justify-center rounded-2xl border backdrop-blur transition",
+                myTokenButtonLocked && "cursor-not-allowed",
               )}
+              style={myTokenButtonStyle}
             >
-              <UserRound className="h-5 w-5" />
+              <UserRound className="h-5 w-5" strokeWidth={2.55} />
             </button>
             <button
               type="button"

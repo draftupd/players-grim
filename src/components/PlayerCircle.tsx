@@ -38,6 +38,7 @@ type PlayerCircleProps = {
     deadVotes: number;
     totalVotes: number;
   } | null;
+  centerAction?: ReactNode;
   currentBlockPlayerId?: string | null;
   grimoireActions?: ReactNode;
   selectableNominatorIds?: ReadonlySet<string>;
@@ -172,6 +173,7 @@ export default function PlayerCircle({
   showVoteMarkers = false,
   voteAvailabilityByPlayerId,
   voteRequirementSummary = null,
+  centerAction,
   currentBlockPlayerId = null,
   grimoireActions,
   selectableNominatorIds,
@@ -202,6 +204,8 @@ export default function PlayerCircle({
   const sortedPlayers = [...players].sort((a, b) => a.seatIndex - b.seatIndex);
   const regularPlayerCount = players.filter((player) => !player.isTraveller).length;
   const travellerCount = players.filter((player) => player.isTraveller).length;
+  const alivePlayerCount = players.filter((player) => player.alive).length;
+  const deadPlayerCount = players.length - alivePlayerCount;
   const setup = getPlayerSetup(regularPlayerCount);
   const playerTotal = sortedPlayers.length;
   const actionRailCenterOffset = grimoireActions ? (isSmallViewport ? 11 : 7.5) : 0;
@@ -384,6 +388,7 @@ export default function PlayerCircle({
             : 5 / 8
         : 1;
   const hasTravellerSummaryRow = travellerCount > 0;
+  const hasExpandedCenter = hasTravellerSummaryRow || Boolean(centerAction);
   const layout = {
     maxWidth: playerTotal >= 14
       ? "max-w-[360px] sm:max-w-[520px] lg:max-w-[620px]"
@@ -393,14 +398,14 @@ export default function PlayerCircle({
     aspectRatio: baseAspectRatio,
     center:
       density === "dense"
-        ? hasTravellerSummaryRow
+        ? hasExpandedCenter
           ? "h-[88px] w-[88px] p-2 sm:h-40 sm:w-40 sm:p-4"
           : "h-[76px] w-[76px] p-2 sm:h-36 sm:w-36 sm:p-3.5"
         : density === "compact"
-          ? hasTravellerSummaryRow
+          ? hasExpandedCenter
             ? "h-[96px] w-[96px] p-2.5 sm:h-44 sm:w-44 sm:p-4.5"
             : "h-[84px] w-[84px] p-2 sm:h-40 sm:w-40 sm:p-4"
-          : hasTravellerSummaryRow
+          : hasExpandedCenter
             ? "h-[108px] w-[108px] p-3 sm:h-52 sm:w-52 sm:p-6"
             : "h-[96px] w-[96px] p-2.5 sm:h-48 sm:w-48 sm:p-5.5",
     xRadius,
@@ -857,6 +862,14 @@ export default function PlayerCircle({
             style={{ left: `${boardCenterX}%` }}
           >
             <div className="w-full max-w-[84%] space-y-1.5 sm:max-w-[80%] sm:space-y-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 border-b border-veil-500/20 pb-1 text-[8px] font-semibold leading-tight sm:gap-x-2.5 sm:pb-1.5 sm:text-[12px]">
+                <span className="text-left text-emerald-200">Живые</span>
+                <strong className="text-emerald-200">{alivePlayerCount}</strong>
+
+                <span className="text-left text-stone-400">Мертвые</span>
+                <strong className="text-stone-300">{deadPlayerCount}</strong>
+              </div>
+
               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 text-[8px] font-medium leading-tight sm:gap-x-2.5 sm:text-[12px]">
                 <span className="text-left text-blue-700">Горожане</span>
                 <strong className="text-blue-700">{setup.townsfolk}</strong>
@@ -909,6 +922,8 @@ export default function PlayerCircle({
                   ))}
                 </div>
               ) : null}
+
+              {centerAction ? <div className="pt-0.5 sm:pt-1">{centerAction}</div> : null}
             </div>
           </div>
         )}
