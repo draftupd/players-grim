@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Check, Skull, Square } from "lucide-react";
+import { Skull } from "lucide-react";
 import type { Player, PlayerVoteAvailability, ScriptRole } from "../types";
 import { getRoleLabel, getRoleTypeFromRoles } from "../utils/scripts";
 import RoleTokenImage from "./RoleTokenImage";
@@ -91,8 +91,7 @@ export default function PlayerToken({
     transform: `translate(-50%, 50%) scale(${extraTokenScale})`,
     transformOrigin: "center top" as const,
   };
-  const deadShellClass = player.alive ? "" : "opacity-90 saturate-[0.72] brightness-[0.92]";
-  const showShroud = !player.alive;
+  const deadShellClass = player.alive ? "" : "saturate-[0.46] brightness-[0.68]";
   const hasDeadVote = voteAvailability === "dead_available";
 
   return (
@@ -131,19 +130,15 @@ export default function PlayerToken({
           {noteCount}
         </span>
       ) : null}
-      {showShroud ? (
-        <span className="player-token-shroud pointer-events-none absolute inset-0 z-20">
-          <span
-            className={clsx(
-              "player-token-shroud__vote",
-              hasDeadVote ? "player-token-shroud__vote--available" : "player-token-shroud__vote--spent",
-            )}
-            title={hasDeadVote ? "Мертвый голос доступен" : "Мертвый голос потрачен"}
-          >
-            <Square className="h-[72%] w-[72%]" strokeWidth={2.2} />
-            {hasDeadVote ? <Check className="absolute h-[58%] w-[58%]" strokeWidth={3} /> : <span className="player-token-shroud__slash" />}
-          </span>
-        </span>
+      {!player.alive ? (
+        <span className="pointer-events-none absolute inset-0 z-10 rounded-full bg-black/32 shadow-[inset_0_0_24px_rgba(0,0,0,0.58)]" aria-hidden="true" />
+      ) : null}
+      {!player.alive && hasDeadVote ? (
+        <span
+          className="pointer-events-none absolute bottom-[9%] right-[9%] z-30 h-[25%] w-[25%] rounded-full border border-stone-100/75 bg-zinc-700 shadow-[0_0_0_2px_rgba(12,10,14,0.78),0_0_14px_rgba(245,245,244,0.32),inset_0_1px_4px_rgba(255,255,255,0.24)]"
+          title="Мертвый голос доступен"
+          aria-hidden="true"
+        />
       ) : null}
       {isOnBlock && player.alive ? (
         <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">

@@ -33,7 +33,7 @@ type PlayerDetailModalProps = {
     linkedPlayerIds: string[],
     options?: { kind?: Note["kind"]; roleId?: string },
   ) => Promise<void>;
-  onDeleteTraveller?: (playerId: string) => Promise<void>;
+  onDeletePlayer?: (playerId: string) => Promise<void>;
   onDeleteNote: (noteId: string) => Promise<void>;
   onUpdateNote: (noteId: string, text: string, linkedPlayerIds: string[]) => Promise<void>;
 };
@@ -53,7 +53,7 @@ export default function PlayerDetailModal({
   onClose,
   onSave,
   onAddNote,
-  onDeleteTraveller,
+  onDeletePlayer,
   onDeleteNote,
   onUpdateNote,
 }: PlayerDetailModalProps) {
@@ -76,7 +76,7 @@ export default function PlayerDetailModal({
       onClose={onClose}
       onSave={onSave}
       onAddNote={onAddNote}
-      onDeleteTraveller={onDeleteTraveller}
+      onDeletePlayer={onDeletePlayer}
       onDeleteNote={onDeleteNote}
       onUpdateNote={onUpdateNote}
     />
@@ -100,7 +100,7 @@ function PlayerDetailForm({
   onClose,
   onSave,
   onAddNote,
-  onDeleteTraveller,
+  onDeletePlayer,
   onDeleteNote,
   onUpdateNote,
 }: PlayerDetailFormProps) {
@@ -463,12 +463,14 @@ function PlayerDetailForm({
     }
   };
 
-  const handleDeleteTraveller = async () => {
-    if (!player.isTraveller || !onDeleteTraveller) {
+  const handleDeletePlayer = async () => {
+    if (!onDeletePlayer) {
       return;
     }
 
-    if (!window.confirm(`Удалить Traveller ${player.name}?`)) {
+    const playerTypeLabel = player.isTraveller ? "Traveller" : "жетон игрока";
+
+    if (!window.confirm(`Удалить ${playerTypeLabel} ${player.name}?`)) {
       return;
     }
 
@@ -476,10 +478,10 @@ function PlayerDetailForm({
     setError("");
 
     try {
-      await onDeleteTraveller(player.id);
+      await onDeletePlayer(player.id);
       onClose();
     } catch {
-      setError("Не удалось удалить Traveller.");
+      setError(player.isTraveller ? "Не удалось удалить Traveller." : "Не удалось удалить жетон игрока.");
     } finally {
       setSaving(false);
     }
@@ -491,80 +493,35 @@ function PlayerDetailForm({
       onClick={onClose}
     >
       <div
-        className="player-detail-shell flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl"
+        className="player-detail-shell relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-ember-200/15 bg-ink-850 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="player-detail-header flex items-start justify-between gap-2 border-b border-ember-200/10 bg-ink-850/95 px-4 py-2.5 backdrop-blur sm:px-5 sm:py-3">
-          <div>
-            <p className="text-xs text-stone-400">Карточка игрока</p>
-            <h2 className="text-xl font-bold leading-tight text-stone-50">{player.name}</h2>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {player.isTraveller ? (
+        <div className="player-detail-header flex items-start gap-3 border-b border-ember-200/10 bg-ink-850/95 px-4 py-2.5 backdrop-blur sm:px-5 sm:py-3">
+          <div className="flex min-h-10 w-12 shrink-0 items-start">
+            {onDeletePlayer ? (
               <button
                 type="button"
-                onClick={() => void handleDeleteTraveller()}
+                onClick={() => void handleDeletePlayer()}
                 disabled={saving}
-                aria-label="Удалить Traveller"
-                title="Удалить Traveller"
+                aria-label={player.isTraveller ? "Удалить Traveller" : "Удалить жетон"}
+                title={player.isTraveller ? "Удалить Traveller" : "Удалить жетон"}
                 className="danger-button min-h-10 px-3"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              aria-label="Сохранить игрока"
-              title="Сохранить игрока"
-              className="primary-button min-h-10 px-3"
-            >
-              <Save className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={onClose} className="secondary-button min-h-10 shrink-0 px-3">
-              <X className="h-5 w-5" />
-            </button>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-stone-400">Карточка игрока</p>
+            <h2 className="text-xl font-bold leading-tight text-stone-50">{player.name}</h2>
           </div>
         </div>
 
-        <div className="player-detail-body overflow-y-auto px-4 py-2.5 sm:px-5 sm:py-3">
+        <div className="player-detail-body overflow-y-auto px-4 py-2.5 pb-24 sm:px-5 sm:py-3 sm:pb-28">
           <div className="space-y-3">
             <div className="player-detail-top space-y-2.5">
               <div className="space-y-2">
-                <div className="grid grid-cols-[minmax(5.6rem,auto)_minmax(0,1fr)_44px_44px] gap-2">
-                  <button
-                    type="button"
-                    onClick={handleToggleMyToken}
-                    aria-disabled={myTokenLocked && !markedAsMine}
-                    aria-pressed={markedAsMine}
-                    aria-label="Это мой жетон"
-                    title="Это мой жетон"
-                    className={clsx(
-                      "flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs font-bold leading-tight transition sm:px-3 sm:text-sm",
-                      myTokenLocked
-                        ? "cursor-not-allowed border-stone-200/10 bg-black/10 text-stone-600"
-                        : markedAsMine
-                          ? "border-teal-700/70 bg-teal-500/35 text-teal-950 shadow-[0_0_0_2px_rgba(20,184,166,0.26),0_10px_24px_rgba(15,118,110,0.2)]"
-                          : "border-teal-700/35 bg-teal-500/18 text-teal-950 hover:border-teal-700/55 hover:bg-teal-500/28",
-                    )}
-                  >
-                    <span
-                      className={clsx(
-                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition",
-                        myTokenLocked
-                          ? "bg-black/20 text-stone-600"
-                        : markedAsMine
-                            ? "bg-teal-50 text-teal-950"
-                            : "bg-teal-50/70 text-teal-950",
-                      )}
-                    >
-                      <UserRound className="h-4 w-4" />
-                    </span>
-                    <span className="hidden sm:inline">Это мой жетон</span>
-                    <span className="sm:hidden">Мой</span>
-                  </button>
-
+                <div className="grid grid-cols-[minmax(0,1fr)_44px_44px] gap-2">
                   <label className="block">
                     <input
                       value={name}
@@ -977,8 +934,51 @@ function PlayerDetailForm({
                 })}
               </div>
             </div>
+            </div>
           </div>
         </div>
+
+        <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] sm:bottom-5 sm:right-5">
+          <div className="pointer-events-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleToggleMyToken}
+              disabled={myTokenLocked && !markedAsMine}
+              aria-disabled={myTokenLocked && !markedAsMine}
+              aria-pressed={markedAsMine}
+              aria-label="Это мой жетон"
+              title="Это мой жетон"
+              className={clsx(
+                "flex h-11 w-11 items-center justify-center rounded-2xl border shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur transition",
+                myTokenLocked
+                  ? "cursor-not-allowed border-stone-200/10 bg-black/35 text-stone-600"
+                  : markedAsMine
+                    ? "border-teal-700/70 bg-teal-500/55 text-teal-950 shadow-[0_0_0_2px_rgba(20,184,166,0.26),0_10px_24px_rgba(15,118,110,0.2)]"
+                    : "border-teal-700/35 bg-teal-500/28 text-teal-50 hover:border-teal-700/55 hover:bg-teal-500/38",
+              )}
+            >
+              <UserRound className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              aria-label="Сохранить игрока"
+              title="Сохранить игрока"
+              className="modal-save-button h-11 w-11"
+            >
+              <Save className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Закрыть"
+              title="Закрыть"
+              className="modal-close-button h-11 w-11"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

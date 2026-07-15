@@ -204,7 +204,7 @@ export default function PlayerCircle({
   const travellerCount = players.filter((player) => player.isTraveller).length;
   const setup = getPlayerSetup(regularPlayerCount);
   const playerTotal = sortedPlayers.length;
-  const actionRailCenterOffset = grimoireActions ? (isSmallViewport ? 8 : 6) : 0;
+  const actionRailCenterOffset = grimoireActions ? (isSmallViewport ? 11 : 7.5) : 0;
   const boardCenterX = 50 - actionRailCenterOffset;
   const density = playerTotal >= 14 ? "dense" : playerTotal >= 11 ? "compact" : "normal";
   const tokenDiameterPercent = density === "dense" ? 14.8 : density === "compact" ? 16.2 : 18.6;
@@ -219,7 +219,7 @@ export default function PlayerCircle({
     () => {
       const rawPositions = getEvenlySpacedStadiumPoints(sortedPlayers.length, xRadius, yRadius, offsetRatio);
       const minY = rawPositions.reduce((lowest, position) => Math.min(lowest, position.y), 50);
-      const targetMinY = playerTotal >= 14 ? 11 : playerTotal >= 11 ? 13 : playerTotal >= 8 ? 15 : 18;
+      const targetMinY = playerTotal >= 14 ? 12 : playerTotal >= 11 ? 14 : playerTotal >= 8 ? 16 : 19;
       return shiftTokenPositionsX(shiftTokenPositionsY(rawPositions, targetMinY - minY), -actionRailCenterOffset);
     },
     [actionRailCenterOffset, offsetRatio, playerTotal, sortedPlayers.length, xRadius, yRadius],
@@ -572,7 +572,7 @@ export default function PlayerCircle({
     if (votingStage === "select_voters") {
       const availability = voteAvailabilityByPlayerId?.get(player.id);
 
-      if (availability !== "dead_spent") {
+      if (availability !== "dead_spent" && availability !== "unavailable") {
         onToggleVoteVoter?.(player.id);
       }
       return;
@@ -756,12 +756,12 @@ export default function PlayerCircle({
         className={`relative mx-auto w-full overflow-visible bg-black/15 ${layout.maxWidth}`}
         style={{ aspectRatio: layout.aspectRatio / currentStyle.grimoireHeightScale }}
       >
-        <div className="absolute right-3 top-3 z-30 flex flex-wrap gap-2 sm:right-4 sm:top-4">
+        <div className="absolute right-1.5 top-1.5 z-30 flex flex-wrap gap-1.5 sm:right-2.5 sm:top-2.5 sm:gap-2">
           <button
             type="button"
             onClick={() => updateStyle({ lockTokens: !currentStyle.lockTokens })}
             className={clsx(
-              "inline-flex min-h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 transition",
+              "inline-flex min-h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 transition sm:min-h-9 sm:w-9",
               currentStyle.lockTokens
                 ? "border-red-200 bg-red-500/35 text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.35)]"
                 : "border-emerald-200 bg-emerald-500/35 text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.3)]",
@@ -769,25 +769,25 @@ export default function PlayerCircle({
             aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
             title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
           >
-            {currentStyle.lockTokens ? <Lock className="h-4.5 w-4.5" /> : <LockOpen className="h-4.5 w-4.5" />}
+            {currentStyle.lockTokens ? <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <LockOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
           </button>
           <button
             type="button"
             onClick={() => setSettingsOpen((current) => !current)}
             className={clsx(
-              "secondary-button min-h-10 w-10 shrink-0 px-0",
+              "secondary-button min-h-8 w-8 shrink-0 rounded-lg px-0 sm:min-h-9 sm:w-9",
               settingsOpen && "border-ember-200/45 bg-ember-200/10 text-ember-100",
             )}
             aria-label={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
             title={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
           >
-            <Settings2 className="h-4 w-4" />
+            <Settings2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
         </div>
 
         {currentPhase ? (
-          <div className="absolute left-3 top-3 z-20 sm:left-4 sm:top-4">
-            <span className="inline-flex rounded-full border border-ember-100/55 bg-ink-900/95 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-white/95 shadow-[0_0_18px_rgba(242,204,116,0.42),0_0_36px_rgba(242,204,116,0.18),0_12px_24px_rgba(0,0,0,0.35)] sm:px-5 sm:py-2.5 sm:text-lg">
+          <div className="absolute left-1.5 top-1.5 z-20 sm:left-2.5 sm:top-2.5">
+            <span className="inline-flex rounded-full border border-ember-100/45 bg-ink-900/90 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white/90 shadow-[0_0_10px_rgba(242,204,116,0.24),0_8px_18px_rgba(0,0,0,0.24)] sm:px-4 sm:py-2 sm:text-sm">
               {currentPhase.title || phaseTitle(currentPhase.number, currentPhase.type)}
             </span>
           </div>
@@ -914,7 +914,7 @@ export default function PlayerCircle({
         )}
 
         {grimoireActions ? (
-          <div className="absolute bottom-3 right-3 z-30 flex flex-col items-end gap-1.5 sm:bottom-4 sm:right-4 sm:gap-2">
+          <div className="absolute bottom-1.5 right-1.5 z-30 flex flex-col items-end gap-1 sm:bottom-2.5 sm:right-2.5 sm:gap-1.5">
             {grimoireActions}
           </div>
         ) : null}
@@ -931,7 +931,7 @@ export default function PlayerCircle({
           const playerRoleId = player.isTraveller ? player.travellerRole ?? player.mainRole : player.mainRole;
           const isMyToken = Boolean((myPlayerId && player.id === myPlayerId) || (!myPlayerId && myRoleId && playerRoleId === myRoleId));
           const voteAvailability = voteAvailabilityByPlayerId?.get(player.id) ?? "alive";
-          const canVoteInCurrentSession = voteAvailability !== "dead_spent";
+          const canVoteInCurrentSession = voteAvailability !== "dead_spent" && voteAvailability !== "unavailable";
           const isSelectedVoter = voteDraft?.selectedVoterIds.includes(player.id) ?? false;
           const isSelectableNominator = votingStage === "select_nominator" && Boolean(selectableNominatorIds?.has(player.id));
           const isSelectableNominee = votingStage === "select_nominee" && Boolean(selectableNomineeIds?.has(player.id));
@@ -981,7 +981,9 @@ export default function PlayerCircle({
                       ? "Живой игрок: голосует без ограничений"
                       : voteAvailability === "dead_available"
                         ? "Мертвый игрок: мертвый голос еще доступен"
-                        : "Мертвый игрок: мертвый голос уже потрачен"
+                        : voteAvailability === "dead_spent"
+                          ? "Мертвый игрок: мертвый голос уже потрачен"
+                          : "Этот игрок сейчас не может голосовать"
                   }
                 >
                   <span
@@ -990,7 +992,9 @@ export default function PlayerCircle({
                       voteMarkerClass,
                       voteAvailability === "alive"
                         ? "border-emerald-200/80 bg-emerald-400/90"
-                        : "border-stone-300/35 bg-stone-500/80",
+                        : voteAvailability === "unavailable"
+                          ? "border-stone-200/25 bg-stone-800/75"
+                          : "border-stone-300/35 bg-stone-500/80",
                     )}
                   >
                     {isSelectedVoter ? (

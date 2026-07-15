@@ -232,21 +232,18 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={onClose}>
       <div
         className={clsx(
-          "max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-5xl sm:rounded-3xl sm:p-6",
+          "relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border p-4 pb-20 shadow-2xl sm:mx-auto sm:max-w-5xl sm:rounded-3xl sm:p-6 sm:pb-24",
           lightTheme
             ? "border-amber-700/18 bg-[#f7eddc] text-stone-800 shadow-[0_22px_60px_rgba(60,44,20,0.18)]"
             : "border-ember-200/15 bg-ink-850",
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="mb-5 flex items-start gap-3">
           <div>
             <p className={clsx("text-sm", lightTheme ? "text-stone-500" : "text-stone-400")}>Setup активной партии</p>
             <h2 className={clsx("text-2xl font-bold", lightTheme ? "text-stone-800" : "text-stone-50")}>Редактирование</h2>
           </div>
-          <button type="button" onClick={onClose} className="secondary-button px-3">
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -450,14 +447,28 @@ function SetupEditorForm({ game, players, lightTheme = false, onClose, onSave }:
 
         {error ? <p className="mt-4 text-sm text-red-200">{error}</p> : null}
 
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="secondary-button">
-            Отмена
-          </button>
-          <button type="button" onClick={handleSave} disabled={saving} className="primary-button">
-            <Save className="h-4 w-4" />
-            {saving ? "Сохранение" : "Сохранить setup"}
-          </button>
+        <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] sm:bottom-5 sm:right-5">
+          <div className="pointer-events-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              aria-label={saving ? "Сохранение setup" : "Сохранить setup"}
+              title={saving ? "Сохранение setup" : "Сохранить setup"}
+              className="modal-save-button h-11 w-11"
+            >
+              <Save className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Закрыть"
+              title="Закрыть"
+              className="modal-close-button h-11 w-11"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  Flag,
   MoonStar,
   Play,
   RotateCcw,
@@ -10,6 +11,7 @@ import {
   SunMedium,
   Trash2,
   UserRound,
+  UserPlus,
   X,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -30,7 +32,10 @@ import type {
   Note,
   Phase,
   Player,
+  PlayerTeam,
   PlayerVoteAvailability,
+  TravellerMechanicsState,
+  TravellerVoteModifier,
   VoteDraft,
   VoteRecord,
   Winner,
@@ -77,6 +82,7 @@ const buildVotingNoteText = ({
   nomineeName,
   voterNames,
   deadVoterNames,
+  voteCount: weightedVoteCount,
   threshold,
   thresholdText,
 }: {
@@ -87,10 +93,11 @@ const buildVotingNoteText = ({
   nomineeName: string;
   voterNames: string[];
   deadVoterNames: string[];
+  voteCount?: number;
   threshold: number;
   thresholdText: string;
 }) => {
-  const voteCount = voterNames.length;
+  const voteCount = weightedVoteCount ?? voterNames.length;
   const outcome =
     voteCount >= threshold
       ? voteType === "traveller_exile"
@@ -132,6 +139,7 @@ type VoteAnalysis = {
 
 const STORYTELLER_EXECUTION_TARGET_ID = "__storyteller__";
 const STORYTELLER_EXECUTION_TARGET_NAME = "Ведущий";
+const MAX_REGULAR_PLAYERS = 15;
 
 const resolveVoteType = (voteRecord: VoteRecord) => voteRecord.voteType ?? "execution";
 
@@ -182,6 +190,46 @@ type SummaryItem =
       notes: Note[];
     };
 
+type TravellerMechanicsForm = {
+  beggarPlayerId: string;
+  beggarDonorId: string;
+  beggarDonorTeam: PlayerTeam;
+  voteModifierRoleId: "bureaucrat" | "thief";
+  voteModifierTravellerId: string;
+  voteModifierTargetId: string;
+  gunslingerTravellerId: string;
+  gunslingerTargetId: string;
+  judgePlayerId: string;
+  judgeVoteRecordId: string;
+  scapegoatPlayerId: string;
+  scapegoatVoteRecordId: string;
+  boneCollectorPlayerId: string;
+  boneCollectorTargetId: string;
+  baristaPlayerId: string;
+  baristaTargetId: string;
+  baristaMode: "sober_healthy_true_info" | "ability_twice";
+  harlotPlayerId: string;
+  harlotTargetId: string;
+  harlotAccepted: boolean;
+  harlotKillBoth: boolean;
+  deviantPlayerId: string;
+  apprenticePlayerId: string;
+  apprenticeAbilityRoleId: string;
+  apprenticeTeam: PlayerTeam;
+  matronAPlayerId: string;
+  matronBPlayerId: string;
+  cacklejackPlayerId: string;
+  cacklejackImmunePlayerId: string;
+  cacklejackChangedPlayerId: string;
+  cacklejackNewRoleId: string;
+  gangsterPlayerId: string;
+  gangsterTargetPlayerId: string;
+  gangsterConsentPlayerId: string;
+  gnomePlayerId: string;
+  gnomeAmigoPlayerId: string;
+  gnomeNominatorPlayerId: string;
+};
+
 const countVotesLabel = (count: number) =>
   `${count} ${count === 1 ? "голос" : count >= 2 && count <= 4 ? "голоса" : "голосов"}`;
 
@@ -195,7 +243,9 @@ const DAY_DEATH_ROLE_IDS = new Set([
   "gnome",
   "golem",
   "gunslinger",
+  "gangster",
   "harpy",
+  "harlot",
   "mutant",
   "psychopath",
   "riot",
@@ -205,6 +255,27 @@ const DAY_DEATH_ROLE_IDS = new Set([
   "virgin",
   "vizier",
   "witch",
+]);
+
+const TRAVELLER_MECHANIC_ROLE_IDS = new Set([
+  "apprentice",
+  "barista",
+  "beggar",
+  "bishop",
+  "bonecollector",
+  "bureaucrat",
+  "butcher",
+  "cacklejack",
+  "deviant",
+  "gangster",
+  "gnome",
+  "gunslinger",
+  "harlot",
+  "judge",
+  "matron",
+  "scapegoat",
+  "thief",
+  "voudon",
 ]);
 
 const EXECUTION_SURVIVAL_ROLE_IDS = new Set([
@@ -294,6 +365,50 @@ export default function GamePage() {
   const [specialFormOpen, setSpecialFormOpen] = useState(false);
   const [specialFormRoleType, setSpecialFormRoleType] = useState<"fabled" | "loric">("fabled");
   const [travellerFormOpen, setTravellerFormOpen] = useState(false);
+  const [playerFormOpen, setPlayerFormOpen] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [playerFormSaving, setPlayerFormSaving] = useState(false);
+  const [travellerMechanicsOpen, setTravellerMechanicsOpen] = useState(false);
+  const [travellerMechanicsSaving, setTravellerMechanicsSaving] = useState(false);
+  const [travellerMechanicsForm, setTravellerMechanicsForm] = useState<TravellerMechanicsForm>({
+    beggarPlayerId: "",
+    beggarDonorId: "",
+    beggarDonorTeam: "unknown",
+    voteModifierRoleId: "bureaucrat",
+    voteModifierTravellerId: "",
+    voteModifierTargetId: "",
+    gunslingerTravellerId: "",
+    gunslingerTargetId: "",
+    judgePlayerId: "",
+    judgeVoteRecordId: "",
+    scapegoatPlayerId: "",
+    scapegoatVoteRecordId: "",
+    boneCollectorPlayerId: "",
+    boneCollectorTargetId: "",
+    baristaPlayerId: "",
+    baristaTargetId: "",
+    baristaMode: "sober_healthy_true_info",
+    harlotPlayerId: "",
+    harlotTargetId: "",
+    harlotAccepted: false,
+    harlotKillBoth: false,
+    deviantPlayerId: "",
+    apprenticePlayerId: "",
+    apprenticeAbilityRoleId: "",
+    apprenticeTeam: "unknown",
+    matronAPlayerId: "",
+    matronBPlayerId: "",
+    cacklejackPlayerId: "",
+    cacklejackImmunePlayerId: "",
+    cacklejackChangedPlayerId: "",
+    cacklejackNewRoleId: "",
+    gangsterPlayerId: "",
+    gangsterTargetPlayerId: "",
+    gangsterConsentPlayerId: "",
+    gnomePlayerId: "",
+    gnomeAmigoPlayerId: "",
+    gnomeNominatorPlayerId: "",
+  });
   const [localMyPlayerId, setLocalMyPlayerId] = useState<string | null | undefined>();
   const [voteDraft, setVoteDraft] = useState<VoteDraft | null>(null);
   const [voteSaving, setVoteSaving] = useState(false);
@@ -544,6 +659,83 @@ export default function GamePage() {
         : null,
     [roleMentionEntries],
   );
+  const travellerMechanics = gameResult.game?.travellerMechanics ?? {};
+  const updateTravellerMechanicsForm = (patch: Partial<TravellerMechanicsForm>) => {
+    setTravellerMechanicsForm((current) => ({ ...current, ...patch }));
+  };
+  const playerHasRole = (player: Player | undefined, roleId: string) => {
+    if (!player) {
+      return false;
+    }
+
+    const normalizedRoleId = normalizeRoleId(roleId);
+    return [player.mainRole, player.travellerRole, ...(player.additionalRoles ?? [])].some(
+      (currentRoleId) => Boolean(currentRoleId) && normalizeRoleId(currentRoleId!) === normalizedRoleId,
+    );
+  };
+  const activeTravellerPlayersByRole = useMemo(() => {
+    const grouped = new Map<string, Player[]>();
+
+    players
+      .filter((player) => player.isTraveller && !player.leftPhaseId)
+      .forEach((player) => {
+        const roleId = normalizeRoleId(player.travellerRole ?? player.mainRole ?? "");
+
+        if (!roleId) {
+          return;
+        }
+
+        grouped.set(roleId, [...(grouped.get(roleId) ?? []), player]);
+      });
+
+    return grouped;
+  }, [players]);
+  const activeTravellerPlayers = useMemo(
+    () => Array.from(activeTravellerPlayersByRole.values()).flat(),
+    [activeTravellerPlayersByRole],
+  );
+  const travellerMechanicPlayers = useMemo(
+    () =>
+      activeTravellerPlayers.filter((player) =>
+        TRAVELLER_MECHANIC_ROLE_IDS.has(normalizeRoleId(player.travellerRole ?? player.mainRole ?? "")),
+      ),
+    [activeTravellerPlayers],
+  );
+  const getActiveTravellersByRole = (roleId: string) => activeTravellerPlayersByRole.get(normalizeRoleId(roleId)) ?? [];
+  const hasLivingTravellerRole = (roleId: string) =>
+    getActiveTravellersByRole(roleId).some((player) => player.alive);
+  const hasActiveVoudon = selectedPhase?.type === "day" && hasLivingTravellerRole("voudon");
+  const hasActiveBishop = selectedPhase?.type === "day" && hasLivingTravellerRole("bishop");
+  const getActiveVoteModifiersForPhase = (phaseId?: string): TravellerVoteModifier[] =>
+    phaseId
+      ? (travellerMechanics.voteModifiersByPhaseId?.[phaseId] ?? []).filter((modifier) => {
+          const traveller = playersById.get(modifier.travellerPlayerId);
+          return Boolean(traveller?.alive && !traveller.leftPhaseId && playerHasRole(traveller, modifier.roleId));
+        })
+      : [];
+  const getVoteValue = (playerId: string, phaseId: string, voteType: "execution" | "traveller_exile") => {
+    if (voteType === "traveller_exile") {
+      return 1;
+    }
+
+    const modifier = getActiveVoteModifiersForPhase(phaseId).find(
+      (currentModifier) => currentModifier.targetPlayerId === playerId,
+    );
+
+    return modifier?.voteValue ?? 1;
+  };
+  const calculateVoteCount = (voteRecord: VoteRecord) => {
+    const voteType = resolveVoteType(voteRecord);
+
+    if (voteType === "execution" && travellerMechanics.judgeForcedVoteRecordIds?.[voteRecord.id] === "fail") {
+      return 0;
+    }
+
+    return voteRecord.voterPlayerIds.reduce(
+      (sum, playerId) => sum + getVoteValue(playerId, voteRecord.phaseId, voteType),
+      0,
+    );
+  };
   const selectedPhaseVoteRecords = useMemo(
     () => voteRecords.filter((voteRecord) => voteRecord.phaseId === effectiveSelectedPhaseId),
     [voteRecords, effectiveSelectedPhaseId],
@@ -552,10 +744,7 @@ export default function GamePage() {
     () => selectedPhaseVoteRecords.filter((voteRecord) => resolveVoteType(voteRecord) === "execution"),
     [selectedPhaseVoteRecords],
   );
-  const isButcherPlayer = (player: Player) =>
-    [player.mainRole, player.travellerRole, ...(player.additionalRoles ?? [])].some(
-      (roleId) => roleId && normalizeRoleId(roleId) === "butcher",
-    );
+  const isButcherPlayer = (player: Player) => playerHasRole(player, "butcher");
   const executionNominatorCountById = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -574,12 +763,26 @@ export default function GamePage() {
       new Set(
         players
           .filter((player) => {
+            if (hasActiveBishop) {
+              return false;
+            }
+
+            if (hasActiveVoudon && !player.alive) {
+              return false;
+            }
+
             const nominationCount = executionNominatorCountById.get(player.id) ?? 0;
-            return isButcherPlayer(player) ? nominationCount < 2 : nominationCount < 1;
+            const butcherCanSecondNominate = selectedPhaseExecutionVoteRecords.some(
+              (voteRecord) => voteRecord.resultedInExecution,
+            );
+
+            return isButcherPlayer(player)
+              ? nominationCount < (butcherCanSecondNominate ? 2 : 1)
+              : nominationCount < 1;
           })
           .map((player) => player.id),
       ),
-    [executionNominatorCountById, players],
+    [executionNominatorCountById, hasActiveBishop, hasActiveVoudon, players, selectedPhaseExecutionVoteRecords],
   );
   const selectableTravellerExileNominatorIds = useMemo(
     () => new Set(players.map((player) => player.id)),
@@ -622,13 +825,16 @@ export default function GamePage() {
 
     return selectedVoteRecordsAsc.map((voteRecord, index) => {
       const voteType = resolveVoteType(voteRecord);
+      const voudonMode = voteType === "execution" && hasActiveVoudon;
       const threshold =
         voteType === "traveller_exile"
           ? getTravellerExileThreshold(participantCount)
+          : voudonMode
+            ? 1
           : getExecutionThreshold(alivePlayerCount);
       const previousHighestVotes = highestVotes;
       const previousBlockVoteRecordId = currentBlockVoteRecordId;
-      const voteCount = voteRecord.voterPlayerIds.length;
+      const voteCount = calculateVoteCount(voteRecord);
       const enoughVotes = voteCount >= threshold;
       let removedPreviousFromBlock = false;
 
@@ -689,7 +895,7 @@ export default function GamePage() {
         prognosisLabel = "Перебить уже не хватит голосов";
       }
 
-      return {
+      const analysis = {
         voteRecord,
         voteNumber: index + 1,
         voteCount,
@@ -697,6 +903,8 @@ export default function GamePage() {
         thresholdLabel:
           voteType === "traveller_exile"
             ? `Нужно ${threshold} ${threshold === 1 ? "голос" : threshold < 5 ? "голоса" : "голосов"} для изгнания`
+            : voudonMode
+              ? "Voudon: достаточно 1 голоса, побеждает максимум"
             : `Нужно ${threshold} ${threshold === 1 ? "голос" : threshold < 5 ? "голоса" : "голосов"} для казни`,
         voteCountLabel: countVotesLabel(voteCount),
         remainingAliveVotes,
@@ -711,8 +919,15 @@ export default function GamePage() {
         prognosisLabel,
         voteType,
       };
+
+      if (voteType === "execution" && voteRecord.resultedInExecution) {
+        highestVotes = 0;
+        currentBlockVoteRecordId = null;
+      }
+
+      return analysis;
     });
-  }, [players, selectedPhaseVoteRecords, voteRecords]);
+  }, [calculateVoteCount, hasActiveVoudon, players, selectedPhaseVoteRecords, voteRecords]);
   const selectedPhaseVoteAnalysesDesc = useMemo(
     () => [...selectedPhaseVoteAnalysesAsc].reverse(),
     [selectedPhaseVoteAnalysesAsc],
@@ -796,24 +1011,41 @@ export default function GamePage() {
   const voteAvailabilityByPlayerId = useMemo(
     (): ReadonlyMap<string, PlayerVoteAvailability> =>
       new Map<string, PlayerVoteAvailability>(
-        players.map((player) => [
-          player.id,
-          player.alive
-            ? "alive"
-            : (player.deadVoteAvailable ?? !deadVoteSpentPlayerIds.has(player.id))
-              ? "dead_available"
-              : "dead_spent",
-        ]),
+        players.map((player) => {
+          const voteType = voteDraft?.voteType ?? "execution";
+          const beggarTokens = travellerMechanics.beggarTokensByPlayerId?.[player.id] ?? 0;
+
+          if (playerHasRole(player, "beggar") && beggarTokens <= 0) {
+            return [player.id, "unavailable"];
+          }
+
+          if (voteType === "execution" && hasActiveVoudon) {
+            if (!player.alive || playerHasRole(player, "voudon")) {
+              return [player.id, player.alive ? "alive" : "dead_available"];
+            }
+
+            return [player.id, "unavailable"];
+          }
+
+          return [
+            player.id,
+            player.alive
+              ? "alive"
+              : (player.deadVoteAvailable ?? !deadVoteSpentPlayerIds.has(player.id))
+                ? "dead_available"
+                : "dead_spent",
+          ];
+        }),
       ),
-    [deadVoteSpentPlayerIds, players],
+    [deadVoteSpentPlayerIds, hasActiveVoudon, players, travellerMechanics.beggarTokensByPlayerId, voteDraft?.voteType],
   );
   const voteRequirementSummary = useMemo(() => {
     if (!voteDraft || !selectedPhase || selectedPhase.type !== "day") {
       return null;
     }
 
-    const aliveVotes = players.filter((player) => player.alive).length;
-    const deadVotes = players.filter((player) => !player.alive && voteAvailabilityByPlayerId.get(player.id) === "dead_available").length;
+    const aliveVotes = players.filter((player) => voteAvailabilityByPlayerId.get(player.id) === "alive").length;
+    const deadVotes = players.filter((player) => voteAvailabilityByPlayerId.get(player.id) === "dead_available").length;
     const totalVotes = aliveVotes + deadVotes;
 
     if ((voteDraft.voteType ?? "execution") === "traveller_exile") {
@@ -828,7 +1060,7 @@ export default function GamePage() {
       };
     }
 
-    const threshold = getExecutionThreshold(aliveVotes);
+    const threshold = hasActiveVoudon ? 1 : getExecutionThreshold(players.filter((player) => player.alive).length);
     let highestVotes = 0;
 
     [...selectedPhaseVoteRecords]
@@ -838,9 +1070,12 @@ export default function GamePage() {
           return;
         }
 
-        const voteCount = voteRecord.voterPlayerIds.length;
+        const voteCount = calculateVoteCount(voteRecord);
 
         if (voteCount < threshold) {
+          if (voteRecord.resultedInExecution) {
+            highestVotes = 0;
+          }
           return;
         }
 
@@ -852,11 +1087,17 @@ export default function GamePage() {
         if (voteCount === highestVotes) {
           highestVotes = voteCount;
         }
+
+        if (voteRecord.resultedInExecution) {
+          highestVotes = 0;
+        }
       });
 
     return {
       headline:
-        highestVotes === 0
+        hasActiveVoudon
+          ? "Voudon: нужен минимум 1 голос, побеждает максимум"
+          : highestVotes === 0
           ? `Нужно ${threshold} голосов, чтобы номинировать`
           : `Нужно ${highestVotes} голосов, чтобы сровнять, и ${highestVotes + 1} — чтобы номинировать`,
       requiredVotes: highestVotes === 0 ? threshold : highestVotes + 1,
@@ -864,7 +1105,7 @@ export default function GamePage() {
       deadVotes,
       totalVotes,
     };
-  }, [players, selectedPhase, selectedPhaseVoteRecords, voteAvailabilityByPlayerId, voteDraft]);
+  }, [calculateVoteCount, hasActiveVoudon, players, selectedPhase, selectedPhaseVoteRecords, voteAvailabilityByPlayerId, voteDraft]);
 
   useEffect(() => {
     if (!voteDraft) {
@@ -958,7 +1199,11 @@ export default function GamePage() {
       .where("[gameId+createdAt]")
       .between([gameId, ""], [gameId, "\uffff"])
       .toArray();
+    const currentGame = await db.games.get(gameId);
     const spentDeadVotes = new Set(allVoteRecords.flatMap((voteRecord) => voteRecord.deadVoterPlayerIds));
+    (currentGame?.travellerMechanics?.beggarDonations ?? []).forEach((donation) => {
+      spentDeadVotes.add(donation.donorPlayerId);
+    });
 
     await Promise.all(
       players.map((player) =>
@@ -1421,36 +1666,372 @@ export default function GamePage() {
     });
   };
 
-  const deleteTraveller = async (playerId: string) => {
-    if (!gameId) {
+  const addRegularPlayer = async () => {
+    if (!gameId || !gameResult.game) {
+      return;
+    }
+
+    const regularPlayers = players.filter((player) => !player.isTraveller);
+
+    if (regularPlayers.length >= MAX_REGULAR_PLAYERS) {
+      setPageError(`Нельзя добавить больше ${MAX_REGULAR_PLAYERS} обычных игроков.`);
       return;
     }
 
     const now = timestamp();
-    const traveller = players.find((player) => player.id === playerId);
+    const trimmedName = newPlayerName.trim();
+    const nextSeatIndex = players.reduce((maxSeat, player) => Math.max(maxSeat, player.seatIndex), -1) + 1;
+    const nextPlayerNumber = regularPlayers.length + 1;
 
-    await db.transaction("rw", db.players, db.games, async () => {
-      await db.players.delete(playerId);
+    setPlayerFormSaving(true);
 
-      if (effectiveMyPlayerId === playerId) {
-        await db.games.update(gameId, {
-          myPlayerId: undefined,
-          myRoleId: undefined,
-          myTeam: undefined,
+    try {
+      await db.transaction("rw", db.players, db.games, async () => {
+        await db.players.add({
+          id: createId(),
+          gameId,
+          name: trimmedName || `Игрок ${nextPlayerNumber}`,
+          seatIndex: nextSeatIndex,
+          alive: true,
+          deadVoteAvailable: true,
+          tokenTint: "default",
+          mainRole: undefined,
+          additionalRoles: ["", "", ""],
+          isTraveller: false,
+          createdAt: now,
           updatedAt: now,
         });
-        setLocalMyPlayerId(null);
-      } else {
-        await updateGameTimestamp(now);
-      }
-    });
+        await db.games.update(gameId, {
+          playerCount: regularPlayers.length + 1,
+          updatedAt: now,
+        });
+      });
+
+      setPlayerFormOpen(false);
+      setNewPlayerName("");
+      setPageError("");
+    } catch {
+      setPageError("Не удалось добавить игрока.");
+    } finally {
+      setPlayerFormSaving(false);
+    }
+  };
+
+  const deletePlayerToken = async (playerId: string) => {
+    if (!gameId || !gameResult.game) {
+      return;
+    }
+
+    const now = timestamp();
+    const playerToDelete = players.find((player) => player.id === playerId);
+
+    if (!playerToDelete) {
+      return;
+    }
+
+    const remainingPlayers = players
+      .filter((player) => player.id !== playerId)
+      .sort((a, b) => a.seatIndex - b.seatIndex);
+    const nextRegularPlayerCount = remainingPlayers.filter((player) => !player.isTraveller).length;
+    const voteRecordsToDelete = new Set(
+      voteRecords
+        .filter(
+          (voteRecord) =>
+            voteRecord.nominatorPlayerId === playerId ||
+            voteRecord.nomineePlayerId === playerId ||
+            voteRecord.executedPlayerId === playerId,
+        )
+        .map((voteRecord) => voteRecord.id),
+    );
+    const voteRecordIdsByPhaseAndCreatedAt = new Map(
+      voteRecords.map((voteRecord) => [`${voteRecord.phaseId}::${voteRecord.createdAt}`, voteRecord.id]),
+    );
+    const currentMechanics = gameResult.game.travellerMechanics;
+
+    try {
+      await db.transaction("rw", db.players, db.games, db.notes, db.voteRecords, async () => {
+        await Promise.all(
+          voteRecords.map(async (voteRecord) => {
+            const historyNote = notes.find(
+              (note) =>
+                note.phaseId === voteRecord.phaseId &&
+                note.kind === "vote_history" &&
+                note.createdAt === voteRecord.createdAt,
+            );
+
+            if (voteRecordsToDelete.has(voteRecord.id)) {
+              await db.voteRecords.delete(voteRecord.id);
+              if (historyNote) {
+                await db.notes.delete(historyNote.id);
+              }
+              return;
+            }
+
+            const nextVoterPlayerIds = voteRecord.voterPlayerIds.filter((id) => id !== playerId);
+            const nextDeadVoterPlayerIds = voteRecord.deadVoterPlayerIds.filter((id) => id !== playerId);
+
+            if (
+              nextVoterPlayerIds.length !== voteRecord.voterPlayerIds.length ||
+              nextDeadVoterPlayerIds.length !== voteRecord.deadVoterPlayerIds.length
+            ) {
+              await db.voteRecords.update(voteRecord.id, {
+                voterPlayerIds: nextVoterPlayerIds,
+                deadVoterPlayerIds: nextDeadVoterPlayerIds,
+                updatedAt: now,
+              });
+
+              if (historyNote) {
+                await db.notes.update(historyNote.id, {
+                  linkedPlayerIds: historyNote.linkedPlayerIds.filter((id) => id !== playerId),
+                  updatedAt: now,
+                });
+              }
+            }
+          }),
+        );
+
+        await Promise.all(
+          notes
+            .filter((note) => note.kind !== "vote_history")
+            .map(async (note) => {
+              const noteVoteRecordId = voteRecordIdsByPhaseAndCreatedAt.get(`${note.phaseId}::${note.createdAt}`);
+
+              if (noteVoteRecordId && voteRecordsToDelete.has(noteVoteRecordId)) {
+                return;
+              }
+
+              const nextLinkedPlayerIds = note.linkedPlayerIds.filter((id) => id !== playerId);
+              const referencesExecutionPlayer = note.executionPlayerId === playerId;
+              const shouldDeleteNote =
+                referencesExecutionPlayer && (note.kind === "execution" || note.kind === "day_death");
+
+              if (shouldDeleteNote) {
+                await db.notes.delete(note.id);
+                return;
+              }
+
+              if (
+                nextLinkedPlayerIds.length !== note.linkedPlayerIds.length ||
+                referencesExecutionPlayer
+              ) {
+                await db.notes.update(note.id, {
+                  linkedPlayerIds: nextLinkedPlayerIds,
+                  executionPlayerId: referencesExecutionPlayer ? undefined : note.executionPlayerId,
+                  updatedAt: now,
+                });
+              }
+            }),
+        );
+
+        await db.players.delete(playerId);
+
+        await Promise.all(
+          remainingPlayers.map((player, index) =>
+            db.players.update(player.id, {
+              seatIndex: index,
+              updatedAt: now,
+            }),
+          ),
+        );
+
+        const nextCustomTokenPositions = { ...(gameResult.game?.customTokenPositions ?? {}) };
+        delete nextCustomTokenPositions[playerId];
+
+        const nextTravellerMechanics = currentMechanics
+          ? {
+              ...currentMechanics,
+              beggarTokensByPlayerId: currentMechanics.beggarTokensByPlayerId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.beggarTokensByPlayerId).filter(([id]) => id !== playerId),
+                  )
+                : undefined,
+              beggarDonations: currentMechanics.beggarDonations?.filter(
+                (donation) => donation.beggarPlayerId !== playerId && donation.donorPlayerId !== playerId,
+              ),
+              voteModifiersByPhaseId: currentMechanics.voteModifiersByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.voteModifiersByPhaseId)
+                      .map(([phaseId, modifiers]) => [
+                        phaseId,
+                        modifiers.filter(
+                          (modifier) =>
+                            modifier.travellerPlayerId !== playerId && modifier.targetPlayerId !== playerId,
+                        ),
+                      ])
+                      .filter(([, modifiers]) => modifiers.length > 0),
+                  )
+                : undefined,
+              gunslingerShotsByPhaseId: currentMechanics.gunslingerShotsByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.gunslingerShotsByPhaseId).filter(
+                      ([, shot]) =>
+                        shot.travellerPlayerId !== playerId &&
+                        shot.targetPlayerId !== playerId &&
+                        !voteRecordsToDelete.has(shot.voteRecordId),
+                    ),
+                  )
+                : undefined,
+              judgeUsedByPlayerId: currentMechanics.judgeUsedByPlayerId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.judgeUsedByPlayerId).filter(([id, voteRecordId]) => {
+                      return id !== playerId && !voteRecordsToDelete.has(voteRecordId);
+                    }),
+                  )
+                : undefined,
+              judgeForcedVoteRecordIds: currentMechanics.judgeForcedVoteRecordIds
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.judgeForcedVoteRecordIds).filter(
+                      ([voteRecordId]) => !voteRecordsToDelete.has(voteRecordId),
+                    ),
+                  )
+                : undefined,
+              boneCollectorUsedByPlayerId: currentMechanics.boneCollectorUsedByPlayerId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.boneCollectorUsedByPlayerId).filter(
+                      ([id, value]) => id !== playerId && value.targetPlayerId !== playerId,
+                    ),
+                  )
+                : undefined,
+              boneCollectorEffectsByPhaseId: currentMechanics.boneCollectorEffectsByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.boneCollectorEffectsByPhaseId).filter(
+                      ([, effect]) =>
+                        effect.travellerPlayerId !== playerId && effect.targetPlayerId !== playerId,
+                    ),
+                  )
+                : undefined,
+              baristaEffectsByPhaseId: currentMechanics.baristaEffectsByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.baristaEffectsByPhaseId).filter(
+                      ([, effect]) =>
+                        effect.travellerPlayerId !== playerId && effect.targetPlayerId !== playerId,
+                    ),
+                  )
+                : undefined,
+              harlotVisitsByPhaseId: currentMechanics.harlotVisitsByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.harlotVisitsByPhaseId).filter(
+                      ([, visit]) => visit.travellerPlayerId !== playerId && visit.targetPlayerId !== playerId,
+                    ),
+                  )
+                : undefined,
+              apprenticeAbilityByPlayerId: currentMechanics.apprenticeAbilityByPlayerId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.apprenticeAbilityByPlayerId).filter(([id]) => id !== playerId),
+                  )
+                : undefined,
+              matronSwapsByPhaseId: currentMechanics.matronSwapsByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.matronSwapsByPhaseId)
+                      .map(([phaseId, swaps]) => [
+                        phaseId,
+                        swaps.filter((swap) => swap.aPlayerId !== playerId && swap.bPlayerId !== playerId),
+                      ])
+                      .filter(([, swaps]) => swaps.length > 0),
+                  )
+                : undefined,
+              cacklejackEffectsByPhaseId: currentMechanics.cacklejackEffectsByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.cacklejackEffectsByPhaseId).filter(
+                      ([, effect]) =>
+                        effect.travellerPlayerId !== playerId &&
+                        effect.immunePlayerId !== playerId &&
+                        effect.changedPlayerId !== playerId,
+                    ),
+                  )
+                : undefined,
+              gangsterKillsByPhaseId: currentMechanics.gangsterKillsByPhaseId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.gangsterKillsByPhaseId).filter(
+                      ([, kill]) =>
+                        kill.travellerPlayerId !== playerId &&
+                        kill.targetPlayerId !== playerId &&
+                        kill.consentingNeighborId !== playerId,
+                    ),
+                  )
+                : undefined,
+              gnomeAmigoByPlayerId: currentMechanics.gnomeAmigoByPlayerId
+                ? Object.fromEntries(
+                    Object.entries(currentMechanics.gnomeAmigoByPlayerId).filter(
+                      ([id, amigoPlayerId]) => id !== playerId && amigoPlayerId !== playerId,
+                    ),
+                  )
+                : undefined,
+              gnomeKills: currentMechanics.gnomeKills?.filter(
+                (kill) =>
+                  kill.travellerPlayerId !== playerId &&
+                  kill.amigoPlayerId !== playerId &&
+                  kill.nominatorPlayerId !== playerId,
+              ),
+            }
+          : undefined;
+
+        await db.games.update(gameId, {
+          playerCount: nextRegularPlayerCount,
+          myPlayerId: effectiveMyPlayerId === playerId ? undefined : gameResult.game?.myPlayerId,
+          myRoleId: effectiveMyPlayerId === playerId ? undefined : gameResult.game?.myRoleId,
+          myTeam: effectiveMyPlayerId === playerId ? undefined : gameResult.game?.myTeam,
+          customTokenPositions: nextCustomTokenPositions,
+          travellerMechanics: nextTravellerMechanics,
+          updatedAt: now,
+        });
+
+        await reconcileDeadVoteAvailability(now);
+      });
+      setPageError("");
+    } catch {
+      setPageError(playerToDelete.isTraveller ? "Не удалось удалить Traveller." : "Не удалось удалить игрока.");
+      return;
+    }
+
+    if (effectiveMyPlayerId === playerId) {
+      setLocalMyPlayerId(null);
+    }
 
     if (selectedPlayerId === playerId) {
       setSelectedPlayerId(null);
     }
 
-    if (traveller?.isTraveller && travellerFormOpen) {
+    setVoteDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      if (current.nominatorPlayerId === playerId || current.nomineePlayerId === playerId) {
+        return null;
+      }
+
+      return {
+        ...current,
+        selectedVoterIds: current.selectedVoterIds.filter((id) => id !== playerId),
+      };
+    });
+    setEditingVoteDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      if (current.nominatorPlayerId === playerId || current.nomineePlayerId === playerId) {
+        return null;
+      }
+
+      return {
+        ...current,
+        selectedVoterIds: current.selectedVoterIds.filter((id) => id !== playerId),
+      };
+    });
+    setExecutionPlayerId((current) => (current === playerId ? "" : current));
+    setNightDeathPlayerIds((current) => current.filter((id) => id !== playerId));
+    setNightResultCandidatePlayerIds((current) => current.filter((id) => id !== playerId));
+    setDayDeathPlayerIds((current) => current.filter((id) => id !== playerId));
+
+    if (playerToDelete.isTraveller && travellerFormOpen) {
       setTravellerFormOpen(false);
+    }
+
+    if (!playerToDelete.isTraveller && playerFormOpen) {
+      setPlayerFormOpen(false);
+      setNewPlayerName("");
     }
   };
 
@@ -1572,6 +2153,757 @@ export default function GamePage() {
       kind: "role_intel",
       roleId,
     });
+  };
+
+  const getTravellerTargetDayPhase = async (now = timestamp()) => {
+    if (!gameId || !selectedPhase) {
+      return undefined;
+    }
+
+    if (selectedPhase.type === "day") {
+      return selectedPhase;
+    }
+
+    return ensurePhaseExists(selectedPhase.number, "day", now);
+  };
+
+  const addTravellerMechanicsNote = async (
+    roleId: string,
+    text: string,
+    linkedPlayerIds: string[],
+    options?: { phaseId?: string; kind?: Note["kind"] },
+  ) => {
+    if (!gameId || !selectedPhase) {
+      return;
+    }
+
+    const now = timestamp();
+
+    await db.notes.add({
+      id: createId(),
+      gameId,
+      phaseId: options?.phaseId ?? selectedPhase.id,
+      kind: options?.kind ?? "role_intel",
+      roleId,
+      text,
+      linkedPlayerIds,
+      createdAt: now,
+      updatedAt: now,
+    });
+  };
+
+  const recordTravellerDeaths = async (roleId: string, targetPlayerIds: string[], text: string) => {
+    if (!gameId || !selectedPhase || targetPlayerIds.length === 0) {
+      return;
+    }
+
+    const now = timestamp();
+    const noteKind: Note["kind"] = selectedPhase.type === "day" ? "day_death" : "general";
+
+    await db.notes.add({
+      id: createId(),
+      gameId,
+      phaseId: selectedPhase.id,
+      kind: noteKind,
+      roleId: noteKind === "day_death" ? roleId : undefined,
+      text,
+      linkedPlayerIds: targetPlayerIds,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await Promise.all(
+      targetPlayerIds.map((playerId) =>
+        db.players.update(playerId, {
+          alive: false,
+          deadVoteAvailable: false,
+          updatedAt: now,
+        }),
+      ),
+    );
+  };
+
+  const runTravellerAction = async (action: () => Promise<void>, errorMessage: string) => {
+    setTravellerMechanicsSaving(true);
+    setPageError("");
+
+    try {
+      await action();
+    } catch {
+      setPageError(errorMessage);
+    } finally {
+      setTravellerMechanicsSaving(false);
+    }
+  };
+
+  const saveBeggarDonation = async () => {
+    const beggarId = travellerMechanicsForm.beggarPlayerId;
+    const donorId = travellerMechanicsForm.beggarDonorId;
+    const beggar = playersById.get(beggarId);
+    const donor = playersById.get(donorId);
+
+    if (!gameId || !selectedPhase || !beggar || !donor || donor.alive) {
+      setPageError("Выберите Beggar и мёртвого игрока-донатора.");
+      return;
+    }
+
+    if (donor.deadVoteAvailable === false) {
+      setPageError("У этого мёртвого игрока уже нет vote token для передачи Beggar.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+      const nextTokens = { ...(travellerMechanics.beggarTokensByPlayerId ?? {}) };
+      nextTokens[beggarId] = (nextTokens[beggarId] ?? 0) + 1;
+
+      await db.transaction("rw", db.games, db.notes, db.players, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            beggarTokensByPlayerId: nextTokens,
+            beggarDonations: [
+              ...(travellerMechanics.beggarDonations ?? []),
+              {
+                id: createId(),
+                phaseId: selectedPhase.id,
+                beggarPlayerId: beggarId,
+                donorPlayerId: donorId,
+                donorTeam: travellerMechanicsForm.beggarDonorTeam,
+                createdAt: now,
+              },
+            ],
+          },
+          updatedAt: now,
+        });
+        await db.players.update(donorId, {
+          deadVoteAvailable: false,
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote(
+          "beggar",
+          `${donor.name} отдал vote token Beggar. Alignment: ${personalTeamLabel(travellerMechanicsForm.beggarDonorTeam)}.`,
+          [beggarId, donorId],
+        );
+      });
+    }, "Не удалось сохранить donation для Beggar.");
+  };
+
+  const saveVoteModifier = async () => {
+    const roleId = travellerMechanicsForm.voteModifierRoleId;
+    const travellerId = travellerMechanicsForm.voteModifierTravellerId;
+    const targetId = travellerMechanicsForm.voteModifierTargetId;
+    const traveller = playersById.get(travellerId);
+    const target = playersById.get(targetId);
+
+    if (!gameId || !selectedPhase || !traveller || !target || traveller.id === target.id) {
+      setPageError("Выберите Traveller и другого игрока.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+      const targetDayPhase = await getTravellerTargetDayPhase(now);
+
+      if (!targetDayPhase) {
+        throw new Error("No target day phase");
+      }
+
+      const modifier: TravellerVoteModifier = {
+        id: createId(),
+        travellerPlayerId: traveller.id,
+        roleId,
+        targetPlayerId: target.id,
+        voteValue: roleId === "bureaucrat" ? 3 : -1,
+        createdAt: now,
+      };
+      const currentModifiers = travellerMechanics.voteModifiersByPhaseId?.[targetDayPhase.id] ?? [];
+      const nextModifiers = currentModifiers.filter(
+        (currentModifier) => !(currentModifier.travellerPlayerId === traveller.id && currentModifier.roleId === roleId),
+      );
+
+      await db.transaction("rw", db.games, db.notes, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            voteModifiersByPhaseId: {
+              ...(travellerMechanics.voteModifiersByPhaseId ?? {}),
+              [targetDayPhase.id]: [...nextModifiers, modifier],
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote(
+          roleId,
+          `${getRoleLabel(roleId, roleReferenceRoles)}: завтра голос ${target.name} считается за ${modifier.voteValue}.`,
+          [traveller.id, target.id],
+        );
+      });
+    }, `Не удалось сохранить эффект ${getRoleLabel(roleId, roleReferenceRoles)}.`);
+  };
+
+  const saveGunslingerShot = async () => {
+    const travellerId = travellerMechanicsForm.gunslingerTravellerId;
+    const targetId = travellerMechanicsForm.gunslingerTargetId;
+    const target = playersById.get(targetId);
+    const firstVote = [...selectedPhaseExecutionVoteRecords].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+
+    if (!gameId || !selectedPhase || selectedPhase.type !== "day" || !travellerId || !target || !firstVote) {
+      setPageError("Выберите Gunslinger shot после первого execution-vote.");
+      return;
+    }
+
+    if (!firstVote.voterPlayerIds.includes(target.id)) {
+      setPageError("Gunslinger может выбрать только игрока, который голосовал в первом execution-vote.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, db.players, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            gunslingerShotsByPhaseId: {
+              ...(travellerMechanics.gunslingerShotsByPhaseId ?? {}),
+              [selectedPhase.id]: {
+                travellerPlayerId: travellerId,
+                targetPlayerId: target.id,
+                voteRecordId: firstVote.id,
+                createdAt: now,
+              },
+            },
+          },
+          updatedAt: now,
+        });
+        await recordTravellerDeaths("gunslinger", [target.id], `Gunslinger shot: ${target.name} умер.`);
+      });
+    }, "Не удалось сохранить Gunslinger shot.");
+  };
+
+  const forceJudgeVote = async (mode: "pass" | "fail") => {
+    const judgeId = travellerMechanicsForm.judgePlayerId;
+    const voteRecordId = travellerMechanicsForm.judgeVoteRecordId;
+    const judge = playersById.get(judgeId);
+    const voteRecord = selectedPhaseVoteRecords.find((currentVoteRecord) => currentVoteRecord.id === voteRecordId);
+
+    if (!gameId || !selectedPhase || !judge || !voteRecord) {
+      setPageError("Выберите Judge и текущую номинацию.");
+      return;
+    }
+
+    if (voteRecord.nominatorPlayerId === judge.id) {
+      setPageError("Judge не может форсировать свою собственную номинацию.");
+      return;
+    }
+
+    if (travellerMechanics.judgeUsedByPlayerId?.[judge.id]) {
+      setPageError("Judge уже использовал способность в этой партии.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+      const nextMechanics: TravellerMechanicsState = {
+        ...travellerMechanics,
+        judgeUsedByPlayerId: {
+          ...(travellerMechanics.judgeUsedByPlayerId ?? {}),
+          [judge.id]: voteRecord.id,
+        },
+        judgeForcedVoteRecordIds: {
+          ...(travellerMechanics.judgeForcedVoteRecordIds ?? {}),
+          [voteRecord.id]: mode,
+        },
+      };
+
+      await db.games.update(gameId, { travellerMechanics: nextMechanics, updatedAt: now });
+      await addTravellerMechanicsNote(
+        "judge",
+        mode === "pass" ? "Judge force pass: казнь проходит немедленно." : "Judge force fail: номинация получает 0 голосов.",
+        [judge.id, voteRecord.nomineePlayerId].filter((playerId) => !isStorytellerExecutionTarget(playerId)),
+      );
+
+      if (mode === "pass") {
+        await markVoteRecordAsExecution(voteRecord.id);
+      }
+    }, "Не удалось применить Judge.");
+  };
+
+  const executeScapegoatInstead = async () => {
+    const scapegoatId = travellerMechanicsForm.scapegoatPlayerId;
+    const voteRecordId = travellerMechanicsForm.scapegoatVoteRecordId;
+    const scapegoat = playersById.get(scapegoatId);
+
+    if (!scapegoat || !voteRecordId) {
+      setPageError("Выберите Scapegoat и номинацию, которую он заменяет.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      await addTravellerMechanicsNote(
+        "scapegoat",
+        `Scapegoat executed instead: ${scapegoat.name}.`,
+        [scapegoat.id],
+      );
+      await markVoteRecordAsExecution(voteRecordId, { executedPlayerId: scapegoat.id });
+    }, "Не удалось казнить Scapegoat вместо номинанта.");
+  };
+
+  const saveBoneCollector = async () => {
+    const travellerId = travellerMechanicsForm.boneCollectorPlayerId;
+    const targetId = travellerMechanicsForm.boneCollectorTargetId;
+    const traveller = playersById.get(travellerId);
+    const target = playersById.get(targetId);
+
+    if (!gameId || !selectedPhase || selectedPhase.type !== "night" || selectedPhase.number <= 1 || !traveller || !target || target.alive) {
+      setPageError("Bone Collector выбирает мёртвого игрока ночью кроме первой.");
+      return;
+    }
+
+    if (travellerMechanics.boneCollectorUsedByPlayerId?.[traveller.id]) {
+      setPageError("Bone Collector уже использовал способность.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+      const targetDayPhase = await getTravellerTargetDayPhase(now);
+
+      if (!targetDayPhase) {
+        throw new Error("No target day phase");
+      }
+
+      await db.transaction("rw", db.games, db.notes, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            boneCollectorUsedByPlayerId: {
+              ...(travellerMechanics.boneCollectorUsedByPlayerId ?? {}),
+              [traveller.id]: { targetPlayerId: target.id, phaseId: selectedPhase.id, createdAt: now },
+            },
+            boneCollectorEffectsByPhaseId: {
+              ...(travellerMechanics.boneCollectorEffectsByPhaseId ?? {}),
+              [targetDayPhase.id]: { travellerPlayerId: traveller.id, targetPlayerId: target.id, createdAt: now },
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote("bonecollector", `Bone Collector: ${target.name} имеет способность до dusk.`, [
+          traveller.id,
+          target.id,
+        ]);
+      });
+    }, "Не удалось сохранить Bone Collector.");
+  };
+
+  const saveBarista = async () => {
+    const travellerId = travellerMechanicsForm.baristaPlayerId;
+    const targetId = travellerMechanicsForm.baristaTargetId;
+    const traveller = playersById.get(travellerId);
+    const target = playersById.get(targetId);
+
+    if (!gameId || !selectedPhase || !traveller || !target) {
+      setPageError("Выберите Barista и цель.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+      const targetDayPhase = await getTravellerTargetDayPhase(now);
+
+      if (!targetDayPhase) {
+        throw new Error("No target day phase");
+      }
+
+      const modeLabel =
+        travellerMechanicsForm.baristaMode === "ability_twice"
+          ? "ability works twice"
+          : "sober, healthy, true info";
+
+      await db.transaction("rw", db.games, db.notes, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            baristaEffectsByPhaseId: {
+              ...(travellerMechanics.baristaEffectsByPhaseId ?? {}),
+              [targetDayPhase.id]: {
+                travellerPlayerId: traveller.id,
+                targetPlayerId: target.id,
+                mode: travellerMechanicsForm.baristaMode,
+                createdAt: now,
+              },
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote("barista", `Barista: ${target.name} получил эффект "${modeLabel}" до dusk.`, [
+          traveller.id,
+          target.id,
+        ]);
+      });
+    }, "Не удалось сохранить Barista.");
+  };
+
+  const saveHarlot = async () => {
+    const travellerId = travellerMechanicsForm.harlotPlayerId;
+    const targetId = travellerMechanicsForm.harlotTargetId;
+    const traveller = playersById.get(travellerId);
+    const target = playersById.get(targetId);
+
+    if (!gameId || !selectedPhase || selectedPhase.type !== "night" || selectedPhase.number <= 1 || !traveller || !target || !target.alive) {
+      setPageError("Harlot выбирает живого игрока ночью кроме первой.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+      const revealedRoleId = target.isTraveller ? target.travellerRole ?? target.mainRole : target.mainRole;
+      const killedIds = travellerMechanicsForm.harlotKillBoth ? [traveller.id, target.id].filter((playerId) => playersById.get(playerId)?.alive) : [];
+
+      await db.transaction("rw", db.games, db.notes, db.players, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            harlotVisitsByPhaseId: {
+              ...(travellerMechanics.harlotVisitsByPhaseId ?? {}),
+              [selectedPhase.id]: {
+                travellerPlayerId: traveller.id,
+                targetPlayerId: target.id,
+                accepted: travellerMechanicsForm.harlotAccepted,
+                killBoth: travellerMechanicsForm.harlotKillBoth,
+                revealedRoleId: travellerMechanicsForm.harlotAccepted ? revealedRoleId : undefined,
+                createdAt: now,
+              },
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote(
+          "harlot",
+          travellerMechanicsForm.harlotAccepted
+            ? `Harlot: ${target.name} согласился. Роль: ${getRoleLabel(revealedRoleId, roleReferenceRoles)}.`
+            : `Harlot: ${target.name} отказался.`,
+          [traveller.id, target.id],
+        );
+
+        if (killedIds.length > 0) {
+          await recordTravellerDeaths("harlot", killedIds, `Harlot: ${traveller.name} и ${target.name} могут умереть.`);
+        }
+      });
+    }, "Не удалось сохранить Harlot.");
+  };
+
+  const saveDeviantFunny = async () => {
+    const travellerId = travellerMechanicsForm.deviantPlayerId;
+    const traveller = playersById.get(travellerId);
+
+    if (!gameId || !selectedPhase || selectedPhase.type !== "day" || !traveller) {
+      setPageError("Выберите Deviant в дневной фазе.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            deviantFunnyByPhaseId: {
+              ...(travellerMechanics.deviantFunnyByPhaseId ?? {}),
+              [selectedPhase.id]: true,
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote("deviant", `Deviant: ${traveller.name} был funny today; exile можно предотвратить.`, [
+          traveller.id,
+        ]);
+      });
+    }, "Не удалось отметить Deviant.");
+  };
+
+  const saveApprenticeAbility = async () => {
+    const travellerId = travellerMechanicsForm.apprenticePlayerId;
+    const traveller = playersById.get(travellerId);
+    const abilityRoleId = travellerMechanicsForm.apprenticeAbilityRoleId;
+
+    if (!gameId || !traveller || !abilityRoleId) {
+      setPageError("Выберите Apprentice и полученную способность.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            apprenticeAbilityByPlayerId: {
+              ...(travellerMechanics.apprenticeAbilityByPlayerId ?? {}),
+              [traveller.id]: {
+                abilityRoleId,
+                team: travellerMechanicsForm.apprenticeTeam,
+                createdAt: now,
+              },
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote(
+          "apprentice",
+          `Apprentice: получил способность ${getRoleLabel(abilityRoleId, roleReferenceRoles)} (${personalTeamLabel(travellerMechanicsForm.apprenticeTeam)}).`,
+          [traveller.id],
+        );
+      });
+    }, "Не удалось сохранить Apprentice.");
+  };
+
+  const saveMatronSwap = async () => {
+    const aPlayer = playersById.get(travellerMechanicsForm.matronAPlayerId);
+    const bPlayer = playersById.get(travellerMechanicsForm.matronBPlayerId);
+
+    if (!gameId || !selectedPhase || selectedPhase.type !== "day" || !aPlayer || !bPlayer || aPlayer.id === bPlayer.id) {
+      setPageError("Выберите двух разных игроков для Matron swap.");
+      return;
+    }
+
+    const currentSwaps = travellerMechanics.matronSwapsByPhaseId?.[selectedPhase.id] ?? [];
+
+    if (currentSwaps.length >= 3) {
+      setPageError("Matron уже сделал 3 swap seats в этот день.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, db.players, async () => {
+        await Promise.all([
+          db.players.update(aPlayer.id, { seatIndex: bPlayer.seatIndex, updatedAt: now }),
+          db.players.update(bPlayer.id, { seatIndex: aPlayer.seatIndex, updatedAt: now }),
+        ]);
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            matronSwapsByPhaseId: {
+              ...(travellerMechanics.matronSwapsByPhaseId ?? {}),
+              [selectedPhase.id]: [
+                ...currentSwaps,
+                { id: createId(), aPlayerId: aPlayer.id, bPlayerId: bPlayer.id, createdAt: now },
+              ],
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote("matron", `Matron swap: ${aPlayer.name} ↔ ${bPlayer.name}.`, [
+          aPlayer.id,
+          bPlayer.id,
+        ]);
+      });
+    }, "Не удалось переставить места Matron.");
+  };
+
+  const saveCacklejack = async () => {
+    const travellerId = travellerMechanicsForm.cacklejackPlayerId;
+    const immuneId = travellerMechanicsForm.cacklejackImmunePlayerId;
+    const changedId = travellerMechanicsForm.cacklejackChangedPlayerId;
+    const newRoleId = travellerMechanicsForm.cacklejackNewRoleId;
+    const traveller = playersById.get(travellerId);
+    const changedPlayer = playersById.get(changedId);
+
+    if (!gameId || !selectedPhase || !traveller) {
+      setPageError("Выберите Cacklejack.");
+      return;
+    }
+
+    if (changedId && (!changedPlayer || !newRoleId || changedId === immuneId)) {
+      setPageError("Для смены персонажа выберите другого игрока и новую роль.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, db.players, async () => {
+        if (changedPlayer && newRoleId) {
+          await db.players.update(changedPlayer.id, {
+            mainRole: changedPlayer.isTraveller ? changedPlayer.mainRole : newRoleId,
+            travellerRole: changedPlayer.isTraveller ? newRoleId : changedPlayer.travellerRole,
+            updatedAt: now,
+          });
+        }
+
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            cacklejackEffectsByPhaseId: {
+              ...(travellerMechanics.cacklejackEffectsByPhaseId ?? {}),
+              [selectedPhase.id]: {
+                travellerPlayerId: traveller.id,
+                immunePlayerId: immuneId || undefined,
+                changedPlayerId: changedId || undefined,
+                newRoleId: newRoleId || undefined,
+                createdAt: now,
+              },
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote(
+          "cacklejack",
+          [
+            immuneId ? `immune: ${playersById.get(immuneId)?.name ?? "игрок"}` : "",
+            changedPlayer && newRoleId
+              ? `changed: ${changedPlayer.name} -> ${getRoleLabel(newRoleId, roleReferenceRoles)}`
+              : "",
+          ].filter(Boolean).join("; "),
+          [traveller.id, immuneId, changedId].filter((playerId): playerId is string => Boolean(playerId)),
+        );
+      });
+    }, "Не удалось сохранить Cacklejack.");
+  };
+
+  const getLivingNeighborIds = (playerId: string) => {
+    const livingPlayers = [...players].filter((player) => player.alive).sort((a, b) => a.seatIndex - b.seatIndex);
+    const index = livingPlayers.findIndex((player) => player.id === playerId);
+
+    if (index < 0 || livingPlayers.length < 3) {
+      return [];
+    }
+
+    return [
+      livingPlayers[(index - 1 + livingPlayers.length) % livingPlayers.length].id,
+      livingPlayers[(index + 1) % livingPlayers.length].id,
+    ];
+  };
+
+  const saveGangsterKill = async () => {
+    const travellerId = travellerMechanicsForm.gangsterPlayerId;
+    const targetId = travellerMechanicsForm.gangsterTargetPlayerId;
+    const consentId = travellerMechanicsForm.gangsterConsentPlayerId;
+    const traveller = playersById.get(travellerId);
+    const target = playersById.get(targetId);
+    const consent = playersById.get(consentId);
+    const neighborIds = getLivingNeighborIds(travellerId);
+
+    if (!gameId || !selectedPhase || selectedPhase.type !== "day" || !traveller || !target || !consent) {
+      setPageError("Выберите Gangster, цель и соседнего игрока, который согласен.");
+      return;
+    }
+
+    if (!neighborIds.includes(target.id) || !neighborIds.includes(consent.id) || target.id === consent.id) {
+      setPageError("Gangster может убить живого соседа только если другой живой сосед согласен.");
+      return;
+    }
+
+    if (travellerMechanics.gangsterKillsByPhaseId?.[selectedPhase.id]) {
+      setPageError("Gangster уже использовал убийство сегодня.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, db.players, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            gangsterKillsByPhaseId: {
+              ...(travellerMechanics.gangsterKillsByPhaseId ?? {}),
+              [selectedPhase.id]: {
+                travellerPlayerId: traveller.id,
+                targetPlayerId: target.id,
+                consentingNeighborId: consent.id,
+                createdAt: now,
+              },
+            },
+          },
+          updatedAt: now,
+        });
+        await recordTravellerDeaths("gangster", [target.id], `Gangster: ${target.name} умер с согласием ${consent.name}.`);
+      });
+    }, "Не удалось сохранить Gangster kill.");
+  };
+
+  const saveGnomeAmigo = async () => {
+    const travellerId = travellerMechanicsForm.gnomePlayerId;
+    const amigoId = travellerMechanicsForm.gnomeAmigoPlayerId;
+    const traveller = playersById.get(travellerId);
+    const amigo = playersById.get(amigoId);
+
+    if (!gameId || !traveller || !amigo || traveller.id === amigo.id) {
+      setPageError("Выберите Gnome и amigo.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            gnomeAmigoByPlayerId: {
+              ...(travellerMechanics.gnomeAmigoByPlayerId ?? {}),
+              [traveller.id]: amigo.id,
+            },
+          },
+          updatedAt: now,
+        });
+        await addTravellerMechanicsNote("gnome", `Gnome amigo: ${amigo.name}.`, [traveller.id, amigo.id]);
+      });
+    }, "Не удалось сохранить Gnome amigo.");
+  };
+
+  const saveGnomeKill = async () => {
+    const travellerId = travellerMechanicsForm.gnomePlayerId;
+    const nominatorId = travellerMechanicsForm.gnomeNominatorPlayerId;
+    const amigoId = travellerMechanics.gnomeAmigoByPlayerId?.[travellerId] ?? travellerMechanicsForm.gnomeAmigoPlayerId;
+    const traveller = playersById.get(travellerId);
+    const amigo = playersById.get(amigoId);
+    const nominator = playersById.get(nominatorId);
+
+    if (!gameId || !selectedPhase || selectedPhase.type !== "day" || !traveller || !amigo || !nominator) {
+      setPageError("Выберите Gnome, amigo и номинатора.");
+      return;
+    }
+
+    const nominationExists = selectedPhaseExecutionVoteRecords.some(
+      (voteRecord) => voteRecord.nomineePlayerId === amigo.id && voteRecord.nominatorPlayerId === nominator.id,
+    );
+
+    if (!nominationExists) {
+      setPageError("Gnome может убить только номинатора своего amigo.");
+      return;
+    }
+
+    await runTravellerAction(async () => {
+      const now = timestamp();
+
+      await db.transaction("rw", db.games, db.notes, db.players, async () => {
+        await db.games.update(gameId, {
+          travellerMechanics: {
+            ...travellerMechanics,
+            gnomeKills: [
+              ...(travellerMechanics.gnomeKills ?? []),
+              {
+                id: createId(),
+                phaseId: selectedPhase.id,
+                travellerPlayerId: traveller.id,
+                amigoPlayerId: amigo.id,
+                nominatorPlayerId: nominator.id,
+                createdAt: now,
+              },
+            ],
+          },
+          updatedAt: now,
+        });
+        await recordTravellerDeaths("gnome", [nominator.id], `Gnome: ${nominator.name} умер за номинацию amigo ${amigo.name}.`);
+      });
+    }, "Не удалось применить Gnome kill.");
   };
 
   const deleteNote = async (noteId: string) => {
@@ -1775,7 +3107,7 @@ export default function GamePage() {
       return;
     }
 
-    if (voteType === "execution" && selectableExecutionNominatorIds.size === 0) {
+    if (voteType === "execution" && selectableExecutionNominatorIds.size === 0 && !hasActiveBishop) {
       setPageError("В этой дневной фазе больше некому номинировать на казнь.");
       return;
     }
@@ -1842,6 +3174,28 @@ export default function GamePage() {
     setPageError("");
   };
 
+  const selectStorytellerAsVoteNominator = () => {
+    setVoteDraft((current) => {
+      if (
+        !current ||
+        current.stage !== "select_nominator" ||
+        (current.voteType ?? "execution") !== "execution" ||
+        !hasActiveBishop
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        nominatorPlayerId: STORYTELLER_EXECUTION_TARGET_ID,
+        nomineePlayerId: undefined,
+        selectedVoterIds: [],
+        stage: "select_nominee",
+      };
+    });
+    setPageError("");
+  };
+
   const selectStorytellerAsVoteNominee = () => {
     setVoteDraft((current) => {
       if (
@@ -1866,7 +3220,7 @@ export default function GamePage() {
   const toggleVoteDraftVoter = (playerId: string) => {
     const availability = voteAvailabilityByPlayerId.get(playerId);
 
-    if (availability === "dead_spent") {
+    if (availability === "dead_spent" || availability === "unavailable") {
       return;
     }
 
@@ -1903,7 +3257,13 @@ export default function GamePage() {
 
   const markVoteRecordAsExecution = async (
     voteRecordId: string,
-    options?: { finishAfterExecution?: boolean; stayInDay?: boolean; executedPlayerDied?: boolean; protectionRoleId?: string },
+    options?: {
+      finishAfterExecution?: boolean;
+      stayInDay?: boolean;
+      executedPlayerDied?: boolean;
+      protectionRoleId?: string;
+      executedPlayerId?: string;
+    },
   ) => {
     if (!gameId || !effectiveSelectedPhaseId || !selectedPhase) {
       return false;
@@ -1918,6 +3278,9 @@ export default function GamePage() {
 
     const nextWillExecute = !currentVoteRecord.resultedInExecution;
     const executedPlayerDied = options?.executedPlayerDied ?? true;
+    const nextExecutedPlayerId = options?.executedPlayerId ?? currentVoteRecord.nomineePlayerId;
+    const currentVoteType = resolveVoteType(currentVoteRecord);
+    const isTravellerExile = currentVoteType === "traveller_exile";
 
     try {
       await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
@@ -1927,7 +3290,7 @@ export default function GamePage() {
               resultedInExecution: voteRecord.id === voteRecordId ? !voteRecord.resultedInExecution : false,
               executedPlayerId:
                 voteRecord.id === voteRecordId && !voteRecord.resultedInExecution
-                  ? voteRecord.nomineePlayerId
+                  ? nextExecutedPlayerId
                   : undefined,
               executedPlayerDied:
                 voteRecord.id === voteRecordId && !voteRecord.resultedInExecution
@@ -1945,11 +3308,12 @@ export default function GamePage() {
         if (
           !currentVoteRecord.resultedInExecution &&
           executedPlayerDied &&
-          !isStorytellerExecutionTarget(currentVoteRecord.nomineePlayerId)
+          !isStorytellerExecutionTarget(nextExecutedPlayerId)
         ) {
-          await db.players.update(currentVoteRecord.nomineePlayerId, {
+          await db.players.update(nextExecutedPlayerId, {
             alive: false,
-            deadVoteAvailable: false,
+            deadVoteAvailable: isTravellerExile ? true : false,
+            leftPhaseId: isTravellerExile ? selectedPhase.id : undefined,
             updatedAt: now,
           });
         }
@@ -1973,6 +3337,7 @@ export default function GamePage() {
             await db.players.update(currentVoteRecord.executedPlayerId, {
               alive: true,
               deadVoteAvailable: true,
+              leftPhaseId: isTravellerExile ? undefined : playersById.get(currentVoteRecord.executedPlayerId)?.leftPhaseId,
               updatedAt: now,
             });
           }
@@ -1984,7 +3349,7 @@ export default function GamePage() {
 
         await updateGameTimestamp(now);
       });
-      if (nextWillExecute && !options?.finishAfterExecution && !options?.stayInDay) {
+      if (nextWillExecute && !isTravellerExile && !options?.finishAfterExecution && !options?.stayInDay) {
         await advanceToNextPhase("day_to_night");
       }
       setPageError("");
@@ -2049,6 +3414,39 @@ export default function GamePage() {
       if (finishAfterExecution && executionFinishPromptOutcome === "died") {
         openFinishForm();
       }
+    } finally {
+      setExecutionFinishPromptSaving(false);
+    }
+  };
+
+  const confirmNominatorExecution = async () => {
+    if (!executionFinishPromptVoteRecordId) {
+      return;
+    }
+
+    const voteRecord = selectedPhaseVoteRecords.find(
+      (currentVoteRecord) => currentVoteRecord.id === executionFinishPromptVoteRecordId,
+    );
+
+    if (!voteRecord || isStorytellerExecutionTarget(voteRecord.nominatorPlayerId)) {
+      return;
+    }
+
+    setExecutionFinishPromptSaving(true);
+
+    try {
+      const saved = await markVoteRecordAsExecution(voteRecord.id, {
+        executedPlayerDied: true,
+        executedPlayerId: voteRecord.nominatorPlayerId,
+      });
+
+      if (!saved) {
+        return;
+      }
+
+      setExecutionFinishPromptVoteRecordId(null);
+      setExecutionFinishPromptOutcome("died");
+      setExecutionFinishPromptProtectionRoleId("");
     } finally {
       setExecutionFinishPromptSaving(false);
     }
@@ -2163,9 +3561,10 @@ export default function GamePage() {
 
     const nominator = playersById.get(voteDraft.nominatorPlayerId);
     const nominee = playersById.get(voteDraft.nomineePlayerId);
+    const nominatorIsStoryteller = isStorytellerExecutionTarget(voteDraft.nominatorPlayerId);
     const nomineeIsStoryteller = isStorytellerExecutionTarget(voteDraft.nomineePlayerId);
 
-    if (!nominator || (!nominee && !nomineeIsStoryteller)) {
+    if ((!nominator && !nominatorIsStoryteller) || (!nominee && !nomineeIsStoryteller)) {
       setPageError("Не удалось найти игроков для голосования.");
       return;
     }
@@ -2173,16 +3572,38 @@ export default function GamePage() {
     const voteType = voteDraft.voteType ?? "execution";
     const alivePlayerCount = players.filter((player) => player.alive).length;
     const participantCount = players.length;
+    const invalidVoter = voteDraft.selectedVoterIds.find((playerId) => {
+      const availability = voteAvailabilityByPlayerId.get(playerId);
+      return availability === "dead_spent" || availability === "unavailable";
+    });
+
+    if (invalidVoter) {
+      setPageError(`${playersById.get(invalidVoter)?.name ?? "Игрок"} сейчас не может голосовать.`);
+      return;
+    }
 
     if (voteType === "execution") {
+      if (nominatorIsStoryteller && !hasActiveBishop) {
+        setPageError("Ведущий может номинировать только при активном Bishop.");
+        return;
+      }
+
+      if (nominator && hasActiveBishop) {
+        setPageError("При Bishop номинировать может только ведущий.");
+        return;
+      }
+
       if (nominee?.isTraveller) {
         setPageError("Traveller нельзя номинировать на казнь. Используйте изгнание.");
         return;
       }
 
-      const nominationCount = executionNominatorCountById.get(nominator.id) ?? 0;
+      const nominationCount = nominator ? executionNominatorCountById.get(nominator.id) ?? 0 : 0;
+      const butcherCanSecondNominate = selectedPhaseExecutionVoteRecords.some(
+        (voteRecord) => voteRecord.resultedInExecution,
+      );
 
-      if (isButcherPlayer(nominator) ? nominationCount >= 2 : nominationCount >= 1) {
+      if (nominator && (isButcherPlayer(nominator) ? nominationCount >= (butcherCanSecondNominate ? 2 : 1) : nominationCount >= 1)) {
         setPageError(
           isButcherPlayer(nominator)
             ? "Мясник уже номинировал два раза в текущий день."
@@ -2202,30 +3623,56 @@ export default function GamePage() {
       return;
     }
 
-    const deadVoterPlayerIds = voteDraft.selectedVoterIds.filter((playerId) => !playersById.get(playerId)?.alive);
+    const beggarVoterIds = voteDraft.selectedVoterIds.filter((playerId) => {
+      const player = playersById.get(playerId);
+      return playerHasRole(player, "beggar");
+    });
+    const beggarWithoutTokens = beggarVoterIds.find(
+      (playerId) => (travellerMechanics.beggarTokensByPlayerId?.[playerId] ?? 0) <= 0,
+    );
+
+    if (beggarWithoutTokens) {
+      setPageError(`${playersById.get(beggarWithoutTokens)?.name ?? "Beggar"} не может голосовать без vote token.`);
+      return;
+    }
+
+    const isVoudonExecutionVote = voteType === "execution" && hasActiveVoudon;
+    const deadVoterPlayerIds = isVoudonExecutionVote
+      ? []
+      : voteDraft.selectedVoterIds.filter((playerId) => !playersById.get(playerId)?.alive);
+    const displayedDeadVoterPlayerIds = voteDraft.selectedVoterIds.filter((playerId) => !playersById.get(playerId)?.alive);
     const voterNames = voteDraft.selectedVoterIds
       .map((playerId) => playersById.get(playerId)?.name)
       .filter((name): name is string => Boolean(name));
-    const deadVoterNames = deadVoterPlayerIds
+    const deadVoterNames = displayedDeadVoterPlayerIds
       .map((playerId) => playersById.get(playerId)?.name)
       .filter((name): name is string => Boolean(name));
     const threshold =
       voteType === "traveller_exile"
         ? getTravellerExileThreshold(participantCount)
+        : hasActiveVoudon
+          ? 1
         : getExecutionThreshold(alivePlayerCount);
+    const voteCount = voteDraft.selectedVoterIds.reduce(
+      (sum, playerId) => sum + getVoteValue(playerId, voteDraft.phaseId, voteType),
+      0,
+    );
     const now = timestamp();
     const noteText = buildVotingNoteText({
       voteNumber: selectedPhaseVoteRecords.length + 1,
       voteType,
       phaseTitleText: selectedPhase?.title ?? "Дневная фаза",
-      nominatorName: nominator.name,
+      nominatorName: getPlayerOrStorytellerName(voteDraft.nominatorPlayerId),
       nomineeName: getPlayerOrStorytellerName(voteDraft.nomineePlayerId),
       voterNames,
       deadVoterNames,
+      voteCount,
       threshold,
       thresholdText:
         voteType === "traveller_exile"
           ? `${threshold} из ${participantCount} всех участников`
+          : hasActiveVoudon
+            ? "Voudon: минимум 1 голос, побеждает максимум"
           : `${threshold} из ${alivePlayerCount} живых`,
     });
     const note: Note = {
@@ -2260,8 +3707,25 @@ export default function GamePage() {
       await db.transaction("rw", db.voteRecords, db.notes, db.games, db.players, async () => {
         await db.voteRecords.add(voteRecord);
         await db.notes.add(note);
+        if (beggarVoterIds.length > 0) {
+          const nextTokens = { ...(travellerMechanics.beggarTokensByPlayerId ?? {}) };
+
+          beggarVoterIds.forEach((playerId) => {
+            nextTokens[playerId] = Math.max(0, (nextTokens[playerId] ?? 0) - 1);
+          });
+
+          await db.games.update(gameId, {
+            travellerMechanics: {
+              ...travellerMechanics,
+              beggarTokensByPlayerId: nextTokens,
+            },
+            updatedAt: now,
+          });
+        }
         await reconcileDeadVoteAvailability(now);
-        await updateGameTimestamp(now);
+        if (beggarVoterIds.length === 0) {
+          await updateGameTimestamp(now);
+        }
       });
       setVoteDraft(null);
     } catch {
@@ -2456,6 +3920,20 @@ export default function GamePage() {
           await db.notes.delete(historyNote.id);
         }
 
+        if (
+          resolveVoteType(voteRecord) === "traveller_exile" &&
+          voteRecord.resultedInExecution &&
+          voteRecord.executedPlayerId &&
+          !isStorytellerExecutionTarget(voteRecord.executedPlayerId)
+        ) {
+          await db.players.update(voteRecord.executedPlayerId, {
+            alive: true,
+            deadVoteAvailable: true,
+            leftPhaseId: undefined,
+            updatedAt: now,
+          });
+        }
+
         await reconcileDeadVoteAvailability(now);
         await updateGameTimestamp(now);
       });
@@ -2614,13 +4092,16 @@ export default function GamePage() {
                 : "";
   const isDayPhase = !selectedPhase || selectedPhase.type === "day";
   const contentModalIsBottomSheet = contentTab === "summaryDeaths" || contentTab === "summaryRoles";
+  const referenceLightTheme = isDayPhase || !gameHasStarted;
   const contentModalShellClass = contentTab === "reference"
-    ? "w-screen min-h-[100dvh] max-h-[100dvh] rounded-none bg-[linear-gradient(180deg,rgba(255,251,244,0.995),rgba(246,232,208,0.995))] px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-none sm:mx-auto sm:h-[96dvh] sm:min-h-0 sm:max-h-[96dvh] sm:max-w-6xl sm:rounded-3xl sm:px-5 sm:pb-5 sm:pt-5 sm:shadow-[0_24px_60px_rgba(76,48,22,0.2)]"
+    ? referenceLightTheme
+      ? "w-screen min-h-[100dvh] max-h-[100dvh] rounded-none bg-[linear-gradient(180deg,rgba(255,251,244,0.995),rgba(246,232,208,0.995))] px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] text-stone-900 shadow-none sm:mx-auto sm:h-[96dvh] sm:min-h-0 sm:max-h-[96dvh] sm:max-w-6xl sm:rounded-3xl sm:px-5 sm:pb-5 sm:pt-5 sm:shadow-[0_24px_60px_rgba(76,48,22,0.2)]"
+      : "w-screen min-h-[100dvh] max-h-[100dvh] rounded-none border-0 bg-ink-850 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] text-stone-100 shadow-none sm:mx-auto sm:h-[96dvh] sm:min-h-0 sm:max-h-[96dvh] sm:max-w-6xl sm:rounded-3xl sm:border sm:border-ember-200/15 sm:px-5 sm:pb-5 sm:pt-5 sm:shadow-2xl"
     : isDayPhase
       ? "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 shadow-[0_24px_60px_rgba(76,48,22,0.2)] sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6"
       : "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6";
   const grimoireActionButtonClass = (active: boolean) =>
-    `grimoire-action-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0 ${active ? "grimoire-action-button-active" : ""}`;
+    `grimoire-action-button h-8 min-h-0 w-8 shrink-0 gap-0 px-0 py-0 sm:h-9 sm:w-9 ${active ? "grimoire-action-button-active" : ""}`;
   const stripLeadingSummaryRoleLabel = (text: string, roleId?: string) => {
     if (!roleId) {
       return text;
@@ -2771,6 +4252,13 @@ export default function GamePage() {
   const executionPromptNomineeName = executionPromptVoteRecord
     ? getPlayerOrStorytellerName(executionPromptVoteRecord.nomineePlayerId)
     : "";
+  const executionPromptNominatorName = executionPromptVoteRecord
+    ? getPlayerOrStorytellerName(executionPromptVoteRecord.nominatorPlayerId)
+    : "";
+  const canExecuteNominator = Boolean(
+    executionPromptVoteRecord &&
+      !isStorytellerExecutionTarget(executionPromptVoteRecord.nominatorPlayerId),
+  );
   const selectedPhaseVoteItems = selectedPhaseVoteAnalysesDesc.map((analysis) => ({
     id: analysis.voteRecord.id,
     createdAt: analysis.voteRecord.createdAt,
@@ -2779,12 +4267,29 @@ export default function GamePage() {
     voteRecord: analysis.voteRecord,
     analysis,
   }));
+  const firstExecutionVoteRecord = [...selectedPhaseExecutionVoteRecords].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  const firstExecutionVoteVoters = firstExecutionVoteRecord
+    ? firstExecutionVoteRecord.voterPlayerIds
+        .map((playerId) => playersById.get(playerId))
+        .filter((player): player is Player => Boolean(player))
+    : [];
+  const currentVoteModifiers = getActiveVoteModifiersForPhase(selectedPhase?.id);
+  const matronSwapCount = selectedPhase ? travellerMechanics.matronSwapsByPhaseId?.[selectedPhase.id]?.length ?? 0 : 0;
+  const characterRoleOptions = roleReferenceRoles.filter(
+    (role) => role.type !== "fabled" && role.type !== "loric" && role.type !== "unknown",
+  );
+  const travellerMechanicsSectionClass =
+    "rounded-2xl border border-amber-900/12 bg-black/5 p-3 sm:p-4";
+  const travellerMechanicsLabelClass =
+    "text-[11px] font-bold uppercase tracking-[0.18em] text-amber-900/70";
+  const travellerMechanicsButtonClass = "secondary-button min-h-10 px-3 text-sm";
   const renderSummaryItem = (item: SummaryItem) => {
     if (item.kind === "vote") {
       const voteRecord = item.voteRecord;
       const isEditingVote = editingVoteRecordId === voteRecord.id;
       const nominatorName = getPlayerOrStorytellerName(voteRecord.nominatorPlayerId);
       const nomineeName = getPlayerOrStorytellerName(voteRecord.nomineePlayerId);
+      const executedName = getPlayerOrStorytellerName(voteRecord.executedPlayerId ?? voteRecord.nomineePlayerId);
       const phaseVoteRecords = voteRecords
         .filter((currentVoteRecord) => currentVoteRecord.phaseId === voteRecord.phaseId)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -2793,8 +4298,8 @@ export default function GamePage() {
         .filter((name): name is string => Boolean(name));
       const voteOutcomeText = voteRecord.resultedInExecution
         ? voteRecord.executedPlayerDied === false
-          ? buildExecutionSurvivalSummaryText(nomineeName)
-          : `${resolveVoteType(voteRecord) === "traveller_exile" ? "Изгнали" : "Казнили"}: ${nomineeName}`
+          ? buildExecutionSurvivalSummaryText(executedName)
+          : `${resolveVoteType(voteRecord) === "traveller_exile" ? "Изгнали" : "Казнили"}: ${executedName}`
         : null;
       const showNoExecutionBadge =
         !voteOutcomeText &&
@@ -2924,7 +4429,7 @@ export default function GamePage() {
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                 <p className="font-medium">{`${nominatorName} -> ${nomineeName}`}</p>
                 <div className="flex min-w-0 max-w-full items-start gap-2 text-xs sm:text-sm">
-                  <span className="font-semibold">{voteRecord.voterPlayerIds.length}</span>
+                  <span className="font-semibold">{item.analysis?.voteCount ?? calculateVoteCount(voteRecord)}</span>
                   <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
                   <p className="min-w-0 break-words whitespace-normal">
                     {voterNames.length > 0 ? voterNames.join(", ") : "никто"}
@@ -3140,120 +4645,37 @@ export default function GamePage() {
     <main className={`page-shell ${isDayPhase ? "day-phase-theme" : ""}`}>
       <div className="content-shell min-w-0 space-y-4 sm:space-y-5">
         <header className="panel p-3 sm:p-4">
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-start gap-2 sm:gap-3">
             <Link to="/" className="secondary-button min-h-10 shrink-0 px-3">
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs text-ember-100/75 sm:text-sm">{formatDate(game.date)}</p>
-              <h1 className="truncate pr-1 text-base font-bold leading-tight text-stone-50 sm:text-xl">
-                {gameDisplayTitle(game)}
-              </h1>
-            </div>
-            <button
-              type="button"
-              onClick={() => setGameInfoOpen((current) => !current)}
-              className={`secondary-button min-h-10 shrink-0 px-3 ${gameInfoOpen ? "border-ember-200/45 bg-ember-200/10 text-ember-100" : ""}`}
-              aria-label={gameInfoOpen ? "Скрыть информацию о партии" : "Показать информацию о партии"}
-              title={gameInfoOpen ? "Скрыть информацию о партии" : "Показать информацию о партии"}
-            >
-              <Settings className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={openFinishForm} className="secondary-button w-full sm:w-auto">
-              <CheckCircle2 className="h-4 w-4" />
-              {game.status === "finished" ? "Итог партии" : "Завершить партию"}
-            </button>
-          </div>
-
-          {gameInfoOpen ? (
-            <div className="mt-4 space-y-4 border-t border-ember-200/10 pt-4">
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                {game.storyteller ? <span className="chip">Ведущий: {game.storyteller}</span> : null}
-                {game.scriptName ? <span className="chip">Сценарий: {game.scriptName}</span> : null}
-                <span className="chip">{game.playerCount} игроков</span>
-                <span className="chip">
-                  {game.status === "finished" ? `Завершена: ${winnerLabel(game.winner)}` : "Активная"}
-                </span>
-                {game.myRoleId ? (
-                  <span className="chip">Мой жетон: {getRoleLabel(game.myRoleId, game.scriptRoles)}</span>
-                ) : null}
-                {game.myTeam ? <span className="chip">Моя команда: {personalTeamLabel(game.myTeam)}</span> : null}
-                {game.status === "finished" ? (
-                  <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${personalResultClass}`}>
-                    {personalResult}
-                  </span>
-                ) : null}
-              </div>
-
-              <div
-                className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${
-                  game.status === "finished" ? "xl:grid-cols-3" : "xl:grid-cols-2"
-                }`}
+              <button
+                type="button"
+                onClick={() => {
+                  setGameInfoOpen(false);
+                  setSetupOpen(true);
+                }}
+                aria-label="Редактировать setup"
+                title="Редактировать setup"
+                className="block max-w-full truncate pr-1 text-left text-base font-bold leading-tight text-stone-50 transition hover:text-ember-100 focus:outline-none focus-visible:text-ember-100 sm:text-xl"
               >
-                <button type="button" onClick={() => setSetupOpen(true)} className="secondary-button w-full">
-                  <Settings className="h-4 w-4" />
-                  Setup
-                </button>
-                <button type="button" onClick={duplicateSetup} className="secondary-button w-full">
-                  <Save className="h-4 w-4" />
-                  Дублировать setup
-                </button>
-                {game.status === "finished" ? (
-                  <button type="button" onClick={reopenGame} className="secondary-button w-full">
-                    <ArrowLeft className="h-4 w-4" />
-                    Сделать активной
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="rounded-2xl border border-ember-200/10 bg-black/10 p-3">
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setTravellerFormOpen(true)}
-                    className="secondary-button min-h-12 min-w-12 px-3"
-                    aria-label="Добавить Traveller"
-                    title="Добавить Traveller"
-                  >
-                    <img src="/token-images/Travellers.png" alt="" className="h-9 w-9 object-contain" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSpecialFormRoleType("fabled");
-                      setSpecialFormOpen(true);
-                    }}
-                    className="secondary-button min-h-12 min-w-12 px-3"
-                    aria-label="Добавить Fabled"
-                    title="Добавить Fabled"
-                  >
-                    <img src="/token-images/Fabled.png" alt="" className="h-9 w-9 object-contain" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSpecialFormRoleType("loric");
-                      setSpecialFormOpen(true);
-                    }}
-                    className="secondary-button min-h-12 min-w-12 px-3"
-                    aria-label="Добавить Loric"
-                    title="Добавить Loric"
-                  >
-                    <img src="/token-images/Loric.png" alt="" className="h-9 w-9 object-contain" />
-                  </button>
-                </div>
-              </div>
-
-              {game.finalNotes ? (
-                <p className="rounded-2xl border border-ember-200/10 bg-black/18 p-4 text-sm leading-6 text-stone-300">
-                  {game.finalNotes}
-                </p>
-              ) : null}
+                {gameDisplayTitle(game)}
+              </button>
             </div>
-          ) : null}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={openFinishForm}
+                aria-label={game.status === "finished" ? "Итог" : "Финиш"}
+                title={game.status === "finished" ? "Итог" : "Финиш"}
+                className="secondary-button h-10 w-10 min-h-0 shrink-0 px-0 py-0"
+              >
+                <Flag className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </header>
 
         {pageError ? (
@@ -3384,6 +4806,17 @@ export default function GamePage() {
                   </button>
                   {gameHasStarted ? (
                     <>
+                    {travellerMechanicPlayers.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setTravellerMechanicsOpen(true)}
+                        className={grimoireActionButtonClass(travellerMechanicsOpen)}
+                        title="Механики Traveller"
+                        aria-label="Механики Traveller"
+                      >
+                        <UserRound className="h-5 w-5" />
+                      </button>
+                    ) : null}
                     {selectedPhase?.type === "day" ? (
                       <button
                         type="button"
@@ -3528,13 +4961,26 @@ export default function GamePage() {
                       {voteDraft.stage === "select_nominator"
                         ? voteDraft.voteType === "traveller_exile"
                           ? "На круге выберите игрока, который номинировал изгнание Traveller."
+                          : hasActiveBishop
+                            ? "Bishop активен: номинирует ведущий."
                           : "На круге выберите игрока, который номинировал."
                         : voteDraft.stage === "select_nominee"
                           ? voteDraft.voteType === "traveller_exile"
                             ? "Теперь выберите Traveller, которого изгоняют."
                             : "Теперь выберите игрока, которого номинировали."
-                          : "На круге отметьте всех, кто голосовал, затем сохраните результат."}
+                        : "На круге отметьте всех, кто голосовал, затем сохраните результат."}
                     </p>
+                    {voteDraft.stage === "select_nominator" &&
+                    (voteDraft.voteType ?? "execution") === "execution" &&
+                    hasActiveBishop ? (
+                      <button
+                        type="button"
+                        onClick={selectStorytellerAsVoteNominator}
+                        className="secondary-button mt-3 min-h-10 px-3"
+                      >
+                        Номинирует ведущий
+                      </button>
+                    ) : null}
                     {voteDraft.stage === "select_nominee" &&
                     (voteDraft.voteType ?? "execution") === "execution" &&
                     selectableExecutionNomineeIds.has(STORYTELLER_EXECUTION_TARGET_ID) ? (
@@ -3596,8 +5042,19 @@ export default function GamePage() {
                               {item.analysis ? <span className="chip">{item.analysis.statusLabel}</span> : null}
                               {item.voteRecord.resultedInExecution ? (
                                 <span className="summary-day-result-badge inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold leading-5">
-                                  <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-4 w-4" />
-                                  <span>{item.voteRecord.executedPlayerDied === false ? "Казнь пережита" : "Казнь отмечена"}</span>
+                                  <img
+                                    src={item.analysis?.voteType === "traveller_exile" ? "/button-icons/door-open.svg" : "/button-icons/guillotine.svg"}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                  />
+                                  <span>
+                                    {item.analysis?.voteType === "traveller_exile"
+                                      ? "Изгнание отмечено"
+                                      : item.voteRecord.executedPlayerDied === false
+                                        ? "Казнь пережита"
+                                        : "Казнь отмечена"}
+                                  </span>
                                 </span>
                               ) : null}
                             </div>
@@ -3606,11 +5063,21 @@ export default function GamePage() {
                             </p>
                           </div>
                           <div className="absolute right-3 top-3 flex flex-wrap gap-2">
-                            {item.analysis?.voteType !== "traveller_exile" ? (
+                            {item.analysis?.voteType === "traveller_exile" ? (
+                              <button
+                                type="button"
+                                onClick={() => void markVoteRecordAsExecution(item.voteRecord.id, { stayInDay: true })}
+                                className={item.voteRecord.resultedInExecution ? "primary-button min-h-10 px-3" : "secondary-button min-h-10 px-3"}
+                                title={item.voteRecord.resultedInExecution ? "Убрать изгнание Traveller" : "Отметить изгнание Traveller"}
+                                aria-label={item.voteRecord.resultedInExecution ? "Убрать изгнание Traveller" : "Отметить изгнание Traveller"}
+                              >
+                                <img src="/button-icons/door-open.svg" alt="" aria-hidden="true" className="h-6 w-6" />
+                              </button>
+                            ) : (
                               <button type="button" onClick={() => void promptVoteRecordExecution(item.voteRecord.id)} className={item.voteRecord.resultedInExecution ? "primary-button min-h-10 px-3" : "secondary-button min-h-10 px-3"}>
                                 <img src="/button-icons/guillotine.svg" alt="" aria-hidden="true" className="h-6 w-6" />
                               </button>
-                            ) : null}
+                            )}
                             <button type="button" onClick={() => startEditingVoteRecord(item.voteRecord)} className="secondary-button min-h-10 px-3">
                               <img src="/button-icons/pencil.svg" alt="" aria-hidden="true" className="h-5 w-5" />
                             </button>
@@ -3623,7 +5090,7 @@ export default function GamePage() {
                             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                               <p className="font-medium">{`${nominatorName} -> ${nomineeName}`}</p>
                               <div className="flex min-w-0 max-w-full items-start gap-2 text-xs sm:text-sm">
-                                <span className="font-semibold">{item.voteRecord.voterPlayerIds.length}</span>
+                                <span className="font-semibold">{item.analysis?.voteCount ?? calculateVoteCount(item.voteRecord)}</span>
                                 <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
                                 <p className="min-w-0 break-words whitespace-normal">{voterNames.length > 0 ? voterNames.join(", ") : "никто"}</p>
                               </div>
@@ -3654,22 +5121,19 @@ export default function GamePage() {
                 onClick={closeContentModal}
               >
                 <section
-                  className={contentModalShellClass}
+                  className={`${contentModalShellClass} relative`}
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <div className={contentTab === "summaryRoles" ? "mb-3 flex items-start justify-between gap-3" : "mb-4 flex items-start justify-between gap-3"}>
+                  <div className={contentTab === "summaryRoles" ? "mb-3" : "mb-4"}>
                     <div>
                       {contentTab === "summaryRoles" ? null : (
-                        <p className="text-sm text-stone-400">{selectedPhase?.title ?? "Партия"}</p>
+                        <p className={`text-sm ${contentTab === "reference" ? (referenceLightTheme ? "text-stone-500" : "text-stone-400") : "text-stone-400"}`}>{selectedPhase?.title ?? "Партия"}</p>
                       )}
-                      {contentModalTitle ? <h2 className={contentTab === "summaryRoles" ? "text-2xl font-bold leading-tight text-stone-50" : "text-2xl font-bold text-stone-50"}>{contentModalTitle}</h2> : null}
+                      {contentModalTitle ? <h2 className={contentTab === "summaryRoles" ? "text-2xl font-bold leading-tight text-stone-50" : `text-2xl font-bold ${contentTab === "reference" ? (referenceLightTheme ? "text-stone-900" : "text-stone-50") : "text-stone-50"}`}>{contentModalTitle}</h2> : null}
                     </div>
-                    <button type="button" onClick={closeContentModal} className="secondary-button px-3">
-                      <X className="h-5 w-5" />
-                    </button>
                   </div>
 
-                  <div className={contentTab === "reference" ? "h-[calc(100dvh-6rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 sm:h-[calc(96dvh-5.5rem)] sm:pr-1" : "max-h-[calc(100dvh-9rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 sm:max-h-[84vh] sm:pr-1"}>
+                  <div className={contentTab === "reference" ? "h-[calc(100dvh-6rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 pb-20 sm:h-[calc(96dvh-5.5rem)] sm:pr-1 sm:pb-16" : "max-h-[calc(100dvh-9rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto pr-0 pb-20 sm:max-h-[84vh] sm:pr-1 sm:pb-16"}>
             {gameHasStarted && contentTab === "notes" ? (
               <PhaseNotes
                 phase={selectedPhase}
@@ -3716,6 +5180,7 @@ export default function GamePage() {
                     roles={roleReferenceRoles}
                     nightOrder={referenceData?.nightOrder ?? null}
                     referenceMap={referenceData?.roleMap ?? new Map()}
+                    lightTheme={referenceLightTheme}
                   />
                 ) : (
                   <RoleReferencePanel
@@ -3724,6 +5189,7 @@ export default function GamePage() {
                     scriptName={game.scriptName}
                     scriptVersion={game.scriptVersion}
                     scriptAuthor={game.scriptAuthor}
+                    lightTheme={referenceLightTheme}
                   />
                 )}
               </section>
@@ -3792,6 +5258,20 @@ export default function GamePage() {
         </div>
       </div>
 
+      {contentTab ? (
+        <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] sm:bottom-5 sm:right-5">
+          <button
+            type="button"
+            onClick={closeContentModal}
+            className="pointer-events-auto modal-close-button h-11 min-h-0 w-11 shrink-0 gap-0 px-0 py-0"
+            aria-label="Закрыть"
+            title="Закрыть"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      ) : null}
+
       <PlayerDetailModal
         player={selectedPlayer}
         isMyToken={Boolean(selectedPlayer && effectiveMyPlayerId === selectedPlayer.id)}
@@ -3805,24 +5285,780 @@ export default function GamePage() {
         onClose={() => setSelectedPlayerId(null)}
         onSave={savePlayer}
         onAddNote={addNoteToPhase}
-        onDeleteTraveller={deleteTraveller}
+        onDeletePlayer={deletePlayerToken}
         onDeleteNote={deleteNote}
         onUpdateNote={updateNote}
       />
 
+      {playerFormOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end bg-black/50 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={() => {
+            if (!playerFormSaving) {
+              setPlayerFormOpen(false);
+              setNewPlayerName("");
+            }
+          }}
+        >
+          <section
+            className="w-full rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 pb-20 text-stone-900 shadow-[0_24px_60px_rgba(76,48,22,0.24)] sm:mx-auto sm:max-w-lg sm:rounded-3xl sm:p-6 sm:pb-24"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div>
+                <p className="text-sm text-stone-600">Гримуар</p>
+                <h2 className="text-2xl font-bold text-stone-950">Добавить игрока</h2>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <label className="space-y-2">
+                <span className="text-sm font-semibold text-stone-700">Имя игрока</span>
+                <input
+                  value={newPlayerName}
+                  onChange={(event) => setNewPlayerName(event.target.value)}
+                  placeholder={`Игрок ${players.filter((player) => !player.isTraveller).length + 1}`}
+                  className="field bg-white/80 text-stone-900 placeholder:text-stone-400"
+                  maxLength={40}
+                  autoFocus
+                />
+              </label>
+              <p className="text-sm text-stone-600">
+                Обычных игроков после добавления будет: {players.filter((player) => !player.isTraveller).length + 1}
+              </p>
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setPlayerFormOpen(false);
+                  setNewPlayerName("");
+                }}
+                disabled={playerFormSaving}
+                className="secondary-button"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => void addRegularPlayer()}
+                disabled={playerFormSaving}
+                className="primary-button"
+              >
+                <UserPlus className="h-4 w-4" />
+                Добавить игрока
+              </button>
+            </div>
+
+            <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] sm:bottom-5 sm:right-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setPlayerFormOpen(false);
+                  setNewPlayerName("");
+                }}
+                disabled={playerFormSaving}
+                className="pointer-events-auto modal-close-button h-11 w-11"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {gameInfoOpen ? (
+        <div
+          className="fixed inset-0 z-[65] flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={() => setGameInfoOpen(false)}
+        >
+          <section
+            className={`relative w-full rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-2xl sm:rounded-3xl sm:p-6 ${
+              isDayPhase || !gameHasStarted
+                ? "border-amber-700/16 bg-[#f7eddc] text-stone-900 shadow-[0_22px_60px_rgba(60,44,20,0.18)]"
+                : "border-ember-200/15 bg-ink-850 text-stone-100"
+            } ${isDayPhase || !gameHasStarted ? "day-phase-theme" : ""}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div>
+              <p className={`text-sm ${isDayPhase || !gameHasStarted ? "text-stone-500" : "text-stone-400"}`}>{formatDate(game.date)}</p>
+              <h2 className={`text-2xl font-bold ${isDayPhase || !gameHasStarted ? "text-stone-900" : "text-stone-50"}`}>{gameDisplayTitle(game)}</h2>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-1.5 sm:gap-2">
+              {game.storyteller ? <span className="chip">Ведущий: {game.storyteller}</span> : null}
+              {game.scriptName ? <span className="chip">Сценарий: {game.scriptName}</span> : null}
+              <span className="chip">{game.playerCount} игроков</span>
+              <span className="chip">
+                {game.status === "finished" ? `Завершена: ${winnerLabel(game.winner)}` : "Активная"}
+              </span>
+              {game.myRoleId ? (
+                <span className="chip">Мой жетон: {getRoleLabel(game.myRoleId, game.scriptRoles)}</span>
+              ) : null}
+              {game.myTeam ? <span className="chip">Моя команда: {personalTeamLabel(game.myTeam)}</span> : null}
+              {game.status === "finished" ? (
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${personalResultClass}`}>
+                  {personalResult}
+                </span>
+              ) : null}
+            </div>
+
+            <div
+              className={`mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 ${
+                game.status === "finished" ? "xl:grid-cols-3" : "xl:grid-cols-2"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setGameInfoOpen(false);
+                  setSetupOpen(true);
+                }}
+                className="secondary-button w-full"
+              >
+                <Settings className="h-4 w-4" />
+                Setup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGameInfoOpen(false);
+                  duplicateSetup();
+                }}
+                className="secondary-button w-full"
+              >
+                <Save className="h-4 w-4" />
+                Дублировать setup
+              </button>
+              {game.status === "finished" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGameInfoOpen(false);
+                    reopenGame();
+                  }}
+                  className="secondary-button w-full"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Сделать активной
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-ember-200/10 bg-black/10 p-3">
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGameInfoOpen(false);
+                    setNewPlayerName("");
+                    setPlayerFormOpen(true);
+                  }}
+                  className="secondary-button h-14 w-14 shrink-0 gap-0 px-0 py-0"
+                  aria-label="Добавить игрока"
+                  title="Добавить игрока"
+                >
+                  <UserPlus className="h-7 w-7" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGameInfoOpen(false);
+                    setTravellerFormOpen(true);
+                  }}
+                  className="secondary-button h-14 w-14 shrink-0 gap-0 px-0 py-0"
+                  aria-label="Добавить Traveller"
+                  title="Добавить Traveller"
+                >
+                  <img src="/token-images/Travellers.png" alt="" className="h-[3.15rem] w-[3.15rem] object-contain" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGameInfoOpen(false);
+                    setSpecialFormRoleType("fabled");
+                    setSpecialFormOpen(true);
+                  }}
+                  className="secondary-button h-14 w-14 shrink-0 gap-0 px-0 py-0"
+                  aria-label="Добавить Fabled"
+                  title="Добавить Fabled"
+                >
+                  <img src="/token-images/Fabled.png" alt="" className="h-[3.15rem] w-[3.15rem] object-contain" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGameInfoOpen(false);
+                    setSpecialFormRoleType("loric");
+                    setSpecialFormOpen(true);
+                  }}
+                  className="secondary-button h-14 w-14 shrink-0 gap-0 px-0 py-0"
+                  aria-label="Добавить Loric"
+                  title="Добавить Loric"
+                >
+                  <img src="/token-images/Loric.png" alt="" className="h-[3.15rem] w-[3.15rem] object-contain" />
+                </button>
+              </div>
+            </div>
+
+            {game.finalNotes ? (
+              <p className={`mt-4 rounded-2xl border p-4 pr-4 text-sm leading-6 ${
+                isDayPhase || !gameHasStarted
+                  ? "border-amber-700/14 bg-white/55 text-stone-700"
+                  : "border-ember-200/10 bg-black/18 text-stone-300"
+              }`}>
+                {game.finalNotes}
+              </p>
+            ) : null}
+
+            <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] sm:bottom-5 sm:right-5">
+              <button
+                type="button"
+                onClick={() => setGameInfoOpen(false)}
+                className="pointer-events-auto modal-close-button h-11 min-h-0 w-11 shrink-0 gap-0 px-0 py-0"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {travellerMechanicsOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end overflow-y-auto bg-black/50 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={() => setTravellerMechanicsOpen(false)}
+        >
+          <section
+            className="w-full max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 pb-20 text-stone-900 shadow-[0_24px_60px_rgba(76,48,22,0.24)] sm:mx-auto sm:max-h-[92vh] sm:max-w-5xl sm:rounded-3xl sm:p-6 sm:pb-24"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div>
+                <p className="text-sm text-stone-600">{selectedPhase?.title ?? "Партия"}</p>
+                <h2 className="text-2xl font-bold text-stone-950">Механики Traveller</h2>
+              </div>
+            </div>
+
+            {travellerMechanicPlayers.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-amber-900/20 bg-black/5 p-5 text-center text-sm text-stone-600">
+                Добавьте Traveller на гримуар, чтобы появились действия его роли.
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {getActiveTravellersByRole("beggar").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Beggar</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select
+                        value={travellerMechanicsForm.beggarPlayerId}
+                        onChange={(event) => updateTravellerMechanicsForm({ beggarPlayerId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Кто Beggar?</option>
+                        {getActiveTravellersByRole("beggar").map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name} · tokens {travellerMechanics.beggarTokensByPlayerId?.[player.id] ?? 0}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={travellerMechanicsForm.beggarDonorId}
+                        onChange={(event) => updateTravellerMechanicsForm({ beggarDonorId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Кто отдал dead vote?</option>
+                        {players.filter((player) => !player.alive).map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={travellerMechanicsForm.beggarDonorTeam}
+                        onChange={(event) => updateTravellerMechanicsForm({ beggarDonorTeam: event.target.value as PlayerTeam })}
+                        className="field"
+                      >
+                        <option value="unknown">Alignment неизвестен</option>
+                        <option value="good">Good</option>
+                        <option value="evil">Evil</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void saveBeggarDonation()}
+                        className={travellerMechanicsButtonClass}
+                        disabled={travellerMechanicsSaving}
+                      >
+                        Donate dead vote
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("bureaucrat").length > 0 || getActiveTravellersByRole("thief").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Bureaucrat / Thief</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      <select
+                        value={travellerMechanicsForm.voteModifierRoleId}
+                        onChange={(event) =>
+                          updateTravellerMechanicsForm({
+                            voteModifierRoleId: event.target.value as "bureaucrat" | "thief",
+                            voteModifierTravellerId: "",
+                          })
+                        }
+                        className="field"
+                      >
+                        {getActiveTravellersByRole("bureaucrat").length > 0 ? <option value="bureaucrat">Bureaucrat: 3 votes</option> : null}
+                        {getActiveTravellersByRole("thief").length > 0 ? <option value="thief">Thief: -1 vote</option> : null}
+                      </select>
+                      <select
+                        value={travellerMechanicsForm.voteModifierTravellerId}
+                        onChange={(event) => updateTravellerMechanicsForm({ voteModifierTravellerId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Traveller</option>
+                        {getActiveTravellersByRole(travellerMechanicsForm.voteModifierRoleId).map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={travellerMechanicsForm.voteModifierTargetId}
+                        onChange={(event) => updateTravellerMechanicsForm({ voteModifierTargetId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Цель</option>
+                        {players.map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => void saveVoteModifier()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Сохранить голос
+                      </button>
+                      {currentVoteModifiers.length > 0 ? (
+                        <div className="sm:col-span-2 flex flex-wrap gap-1.5 text-xs">
+                          {currentVoteModifiers.map((modifier) => (
+                            <span key={modifier.id} className="chip">
+                              {playersById.get(modifier.targetPlayerId)?.name ?? "Игрок"}: {modifier.voteValue}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("butcher").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Butcher</p>
+                    <button
+                      type="button"
+                      onClick={() => beginVoteDraft("execution")}
+                      className={travellerMechanicsButtonClass}
+                      disabled={travellerMechanicsSaving || selectedPhase?.type !== "day" || !selectedPhaseExecutionVoteRecords.some((voteRecord) => voteRecord.resultedInExecution)}
+                    >
+                      Butcher nomination
+                    </button>
+                    <p className="mt-2 text-xs text-stone-600">
+                      Доступно только после первой казни в текущем дне.
+                    </p>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("gunslinger").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Gunslinger</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      <select
+                        value={travellerMechanicsForm.gunslingerTravellerId}
+                        onChange={(event) => updateTravellerMechanicsForm({ gunslingerTravellerId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Gunslinger</option>
+                        {getActiveTravellersByRole("gunslinger").map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={travellerMechanicsForm.gunslingerTargetId}
+                        onChange={(event) => updateTravellerMechanicsForm({ gunslingerTargetId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Кого застрелить?</option>
+                        {firstExecutionVoteVoters.map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void saveGunslingerShot()}
+                        className={travellerMechanicsButtonClass}
+                        disabled={travellerMechanicsSaving || !firstExecutionVoteRecord || Boolean(selectedPhase && travellerMechanics.gunslingerShotsByPhaseId?.[selectedPhase.id])}
+                      >
+                        Gunslinger shot
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("judge").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Judge</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select
+                        value={travellerMechanicsForm.judgePlayerId}
+                        onChange={(event) => updateTravellerMechanicsForm({ judgePlayerId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Judge</option>
+                        {getActiveTravellersByRole("judge").map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={travellerMechanicsForm.judgeVoteRecordId}
+                        onChange={(event) => updateTravellerMechanicsForm({ judgeVoteRecordId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Номинация</option>
+                        {selectedPhaseExecutionVoteRecords.map((voteRecord) => (
+                          <option key={voteRecord.id} value={voteRecord.id}>
+                            {getPlayerOrStorytellerName(voteRecord.nominatorPlayerId)} {"->"} {getPlayerOrStorytellerName(voteRecord.nomineePlayerId)}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => void forceJudgeVote("pass")} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Force pass
+                      </button>
+                      <button type="button" onClick={() => void forceJudgeVote("fail")} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Force fail
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("scapegoat").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Scapegoat</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      <select
+                        value={travellerMechanicsForm.scapegoatPlayerId}
+                        onChange={(event) => updateTravellerMechanicsForm({ scapegoatPlayerId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Scapegoat</option>
+                        {getActiveTravellersByRole("scapegoat").map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {player.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={travellerMechanicsForm.scapegoatVoteRecordId}
+                        onChange={(event) => updateTravellerMechanicsForm({ scapegoatVoteRecordId: event.target.value })}
+                        className="field"
+                      >
+                        <option value="">Вместо какой казни?</option>
+                        {selectedPhaseExecutionVoteRecords.map((voteRecord) => (
+                          <option key={voteRecord.id} value={voteRecord.id}>
+                            {getPlayerOrStorytellerName(voteRecord.nomineePlayerId)}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => void executeScapegoatInstead()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Execute Scapegoat instead
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("voudon").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Voudon</p>
+                    <p className="mt-2 text-sm text-stone-700">
+                      Режим активен: за execution голосуют только мёртвые игроки и Voudon, dead votes не тратятся, нужен минимум 1 голос.
+                    </p>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("bishop").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Bishop</p>
+                    <p className="mt-2 text-sm text-stone-700">
+                      Номинации игроков заблокированы. В режиме номинации нажмите “Номинирует ведущий”.
+                    </p>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("bonecollector").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Bone Collector</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      <select value={travellerMechanicsForm.boneCollectorPlayerId} onChange={(event) => updateTravellerMechanicsForm({ boneCollectorPlayerId: event.target.value })} className="field">
+                        <option value="">Bone Collector</option>
+                        {getActiveTravellersByRole("bonecollector").map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <select value={travellerMechanicsForm.boneCollectorTargetId} onChange={(event) => updateTravellerMechanicsForm({ boneCollectorTargetId: event.target.value })} className="field">
+                        <option value="">Мёртвый игрок</option>
+                        {players.filter((player) => !player.alive).map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => void saveBoneCollector()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Ability until dusk
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("barista").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Barista</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select value={travellerMechanicsForm.baristaPlayerId} onChange={(event) => updateTravellerMechanicsForm({ baristaPlayerId: event.target.value })} className="field">
+                        <option value="">Barista</option>
+                        {getActiveTravellersByRole("barista").map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <select value={travellerMechanicsForm.baristaTargetId} onChange={(event) => updateTravellerMechanicsForm({ baristaTargetId: event.target.value })} className="field">
+                        <option value="">Цель</option>
+                        {players.map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <select value={travellerMechanicsForm.baristaMode} onChange={(event) => updateTravellerMechanicsForm({ baristaMode: event.target.value as TravellerMechanicsForm["baristaMode"] })} className="field">
+                        <option value="sober_healthy_true_info">Sober, healthy, true info</option>
+                        <option value="ability_twice">Ability works twice</option>
+                      </select>
+                      <button type="button" onClick={() => void saveBarista()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Сохранить эффект
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("harlot").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Harlot</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select value={travellerMechanicsForm.harlotPlayerId} onChange={(event) => updateTravellerMechanicsForm({ harlotPlayerId: event.target.value })} className="field">
+                        <option value="">Harlot</option>
+                        {getActiveTravellersByRole("harlot").map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <select value={travellerMechanicsForm.harlotTargetId} onChange={(event) => updateTravellerMechanicsForm({ harlotTargetId: event.target.value })} className="field">
+                        <option value="">Живой игрок</option>
+                        {players.filter((player) => player.alive).map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <label className="inline-flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" checked={travellerMechanicsForm.harlotAccepted} onChange={(event) => updateTravellerMechanicsForm({ harlotAccepted: event.target.checked })} />
+                        Игрок согласился
+                      </label>
+                      <label className="inline-flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" checked={travellerMechanicsForm.harlotKillBoth} onChange={(event) => updateTravellerMechanicsForm({ harlotKillBoth: event.target.checked })} />
+                        Убить обоих
+                      </label>
+                      <button type="button" onClick={() => void saveHarlot()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Сохранить Harlot
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("deviant").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Deviant</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select value={travellerMechanicsForm.deviantPlayerId} onChange={(event) => updateTravellerMechanicsForm({ deviantPlayerId: event.target.value })} className="field">
+                        <option value="">Deviant</option>
+                        {getActiveTravellersByRole("deviant").map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => void saveDeviantFunny()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Funny today
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("apprentice").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Apprentice</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select value={travellerMechanicsForm.apprenticePlayerId} onChange={(event) => updateTravellerMechanicsForm({ apprenticePlayerId: event.target.value })} className="field">
+                        <option value="">Apprentice</option>
+                        {getActiveTravellersByRole("apprentice").map((player) => (
+                          <option key={player.id} value={player.id}>{player.name}</option>
+                        ))}
+                      </select>
+                      <select value={travellerMechanicsForm.apprenticeAbilityRoleId} onChange={(event) => updateTravellerMechanicsForm({ apprenticeAbilityRoleId: event.target.value })} className="field">
+                        <option value="">Полученная способность</option>
+                        {characterRoleOptions.filter((role) => role.type === "townsfolk" || role.type === "minion").map((role) => (
+                          <option key={role.id} value={role.id}>{getRoleLabel(role.id, roleReferenceRoles)}</option>
+                        ))}
+                      </select>
+                      <select value={travellerMechanicsForm.apprenticeTeam} onChange={(event) => updateTravellerMechanicsForm({ apprenticeTeam: event.target.value as PlayerTeam })} className="field">
+                        <option value="unknown">Alignment неизвестен</option>
+                        <option value="good">Good</option>
+                        <option value="evil">Evil</option>
+                      </select>
+                      <button type="button" onClick={() => void saveApprenticeAbility()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Сохранить ability
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("matron").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Matron · {matronSwapCount}/3</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      <select value={travellerMechanicsForm.matronAPlayerId} onChange={(event) => updateTravellerMechanicsForm({ matronAPlayerId: event.target.value })} className="field">
+                        <option value="">Игрок A</option>
+                        {players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <select value={travellerMechanicsForm.matronBPlayerId} onChange={(event) => updateTravellerMechanicsForm({ matronBPlayerId: event.target.value })} className="field">
+                        <option value="">Игрок B</option>
+                        {players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <button type="button" onClick={() => void saveMatronSwap()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving || matronSwapCount >= 3}>
+                        Swap seats
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-stone-600">Private talks restricted: только соседи.</p>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("cacklejack").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Cacklejack</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select value={travellerMechanicsForm.cacklejackPlayerId} onChange={(event) => updateTravellerMechanicsForm({ cacklejackPlayerId: event.target.value })} className="field">
+                        <option value="">Cacklejack</option>
+                        {getActiveTravellersByRole("cacklejack").map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <select value={travellerMechanicsForm.cacklejackImmunePlayerId} onChange={(event) => updateTravellerMechanicsForm({ cacklejackImmunePlayerId: event.target.value })} className="field">
+                        <option value="">Immune today</option>
+                        {players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <select value={travellerMechanicsForm.cacklejackChangedPlayerId} onChange={(event) => updateTravellerMechanicsForm({ cacklejackChangedPlayerId: event.target.value })} className="field">
+                        <option value="">Кого изменить ночью?</option>
+                        {players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <select value={travellerMechanicsForm.cacklejackNewRoleId} onChange={(event) => updateTravellerMechanicsForm({ cacklejackNewRoleId: event.target.value })} className="field">
+                        <option value="">Новая роль</option>
+                        {characterRoleOptions.map((role) => <option key={role.id} value={role.id}>{getRoleLabel(role.id, roleReferenceRoles)}</option>)}
+                      </select>
+                      <button type="button" onClick={() => void saveCacklejack()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Сохранить Cacklejack
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("gangster").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Gangster</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select value={travellerMechanicsForm.gangsterPlayerId} onChange={(event) => updateTravellerMechanicsForm({ gangsterPlayerId: event.target.value })} className="field">
+                        <option value="">Gangster</option>
+                        {getActiveTravellersByRole("gangster").map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <select value={travellerMechanicsForm.gangsterTargetPlayerId} onChange={(event) => updateTravellerMechanicsForm({ gangsterTargetPlayerId: event.target.value })} className="field">
+                        <option value="">Кого убить?</option>
+                        {getLivingNeighborIds(travellerMechanicsForm.gangsterPlayerId).map((playerId) => (
+                          <option key={playerId} value={playerId}>{playersById.get(playerId)?.name ?? "Игрок"}</option>
+                        ))}
+                      </select>
+                      <select value={travellerMechanicsForm.gangsterConsentPlayerId} onChange={(event) => updateTravellerMechanicsForm({ gangsterConsentPlayerId: event.target.value })} className="field">
+                        <option value="">Кто согласился?</option>
+                        {getLivingNeighborIds(travellerMechanicsForm.gangsterPlayerId).map((playerId) => (
+                          <option key={playerId} value={playerId}>{playersById.get(playerId)?.name ?? "Игрок"}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => void saveGangsterKill()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving || Boolean(selectedPhase && travellerMechanics.gangsterKillsByPhaseId?.[selectedPhase.id])}>
+                        Kill neighbor
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {getActiveTravellersByRole("gnome").length > 0 ? (
+                  <section className={travellerMechanicsSectionClass}>
+                    <p className={travellerMechanicsLabelClass}>Gnome</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <select value={travellerMechanicsForm.gnomePlayerId} onChange={(event) => updateTravellerMechanicsForm({ gnomePlayerId: event.target.value })} className="field">
+                        <option value="">Gnome</option>
+                        {getActiveTravellersByRole("gnome").map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <select value={travellerMechanicsForm.gnomeAmigoPlayerId} onChange={(event) => updateTravellerMechanicsForm({ gnomeAmigoPlayerId: event.target.value })} className="field">
+                        <option value="">Amigo</option>
+                        {players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <button type="button" onClick={() => void saveGnomeAmigo()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Public amigo
+                      </button>
+                      <select value={travellerMechanicsForm.gnomeNominatorPlayerId} onChange={(event) => updateTravellerMechanicsForm({ gnomeNominatorPlayerId: event.target.value })} className="field">
+                        <option value="">Убить номинатора</option>
+                        {players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                      </select>
+                      <button type="button" onClick={() => void saveGnomeKill()} className={travellerMechanicsButtonClass} disabled={travellerMechanicsSaving}>
+                        Kill nominator
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+            )}
+
+            {pageError ? <p className="mt-3 text-sm text-rose-700">{pageError}</p> : null}
+            <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] sm:bottom-5 sm:right-5">
+              <button
+                type="button"
+                onClick={() => setTravellerMechanicsOpen(false)}
+                className="pointer-events-auto modal-close-button h-11 w-11"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {nightResultModalOpen && selectedPhase?.type === "night" ? (
         <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={closeNightResultModal}>
           <section className="w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-2xl sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
+            <div>
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">Результат ночи</h2>
                 <p className="mt-1 text-sm text-stone-200">
                   Выберите всех игроков, которые умерли этой ночью. Можно никого не выбирать.
                 </p>
               </div>
-              <button type="button" onClick={closeNightResultModal} className="secondary-button px-3" disabled={nightResultSaving}>
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="mt-4 rounded-2xl border border-ember-200/12 bg-black/15 p-3 sm:p-4">
@@ -3886,7 +6122,7 @@ export default function GamePage() {
       {dayDeathModalOpen && phasesById.get(dayDeathPhaseId ?? selectedPhase?.id ?? "")?.type === "day" ? (
         <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={closeDayDeathModal}>
           <section className="day-death-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-4xl sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
+            <div>
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">
                   {dayDeathEditingNoteId ? "Изменить дневную смерть" : "Человек умер"}
@@ -3895,9 +6131,6 @@ export default function GamePage() {
                   Выберите всех игроков, которые умерли днём, и роль, по которой это могло произойти.
                 </p>
               </div>
-              <button type="button" onClick={closeDayDeathModal} className="secondary-button px-3">
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="mt-4 space-y-4">
@@ -4012,21 +6245,13 @@ export default function GamePage() {
       {executionFinishPromptVoteRecordId && selectedPhase?.type === "day" ? (
         <div className="fixed inset-0 z-40 flex items-end bg-black/55 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={closeExecutionFinishPrompt}>
           <section className="execution-finish-prompt-modal w-full rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:max-w-3xl sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
+            <div>
               <div>
                 <h2 className="text-lg font-semibold text-stone-50">Результат казни</h2>
                 <p className="mt-1 text-sm text-stone-200">
                   Выберите, умер ли игрок по казни, или казнь состоялась, но он остался жить.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeExecutionFinishPrompt}
-                className="secondary-button px-3"
-                disabled={executionFinishPromptSaving}
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
             {executionPromptNomineeName ? (
@@ -4120,6 +6345,16 @@ export default function GamePage() {
                   >
                     Казнить и остаться во дне
                   </button>
+                  {canExecuteNominator ? (
+                    <button
+                      type="button"
+                      onClick={() => void confirmNominatorExecution()}
+                      className="secondary-button min-h-12 w-full px-4 sm:col-span-2"
+                      disabled={executionFinishPromptSaving}
+                    >
+                      Казнить номинатора: {executionPromptNominatorName}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void confirmVoteRecordExecution(true)}
@@ -4152,14 +6387,11 @@ export default function GamePage() {
             className="w-full rounded-t-3xl border border-amber-900/15 bg-[linear-gradient(180deg,rgba(255,251,244,0.99),rgba(246,232,208,0.99))] p-4 text-stone-900 shadow-[0_24px_60px_rgba(76,48,22,0.2)] sm:mx-auto sm:max-w-md sm:rounded-3xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div>
               <div>
                 <h2 className="text-lg font-semibold text-stone-900">Казнь без номинации</h2>
                 <p className="mt-1 text-sm text-stone-600">Выберите, кто был казнён в этой дневной фазе.</p>
               </div>
-              <button type="button" onClick={closeExecutionWithoutNominationModal} className="secondary-button px-3">
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="mt-4 space-y-3">
@@ -4177,6 +6409,9 @@ export default function GamePage() {
               </select>
 
               <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={closeExecutionWithoutNominationModal} className="secondary-button">
+                  Закрыть
+                </button>
                 <button
                   type="button"
                   onClick={() => void saveExecutionWithoutNomination()}
@@ -4192,9 +6427,6 @@ export default function GamePage() {
                     Удалить
                   </button>
                 ) : null}
-                <button type="button" onClick={closeExecutionWithoutNominationModal} className="secondary-button">
-                  Отмена
-                </button>
               </div>
             </div>
           </section>
@@ -4212,24 +6444,21 @@ export default function GamePage() {
       {finishOpen ? (
         <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-0 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:items-center sm:p-6" onClick={() => setFinishOpen(false)}>
           <section
-            className={`w-full rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-xl sm:rounded-3xl sm:p-6 ${
+            className={`relative w-full rounded-t-3xl border p-4 shadow-2xl sm:mx-auto sm:max-w-xl sm:rounded-3xl sm:p-6 ${
               isDayPhase || !gameHasStarted
                 ? "border-amber-700/16 bg-[#f7eddc] shadow-[0_22px_60px_rgba(60,44,20,0.18)]"
                 : "border-ember-200/15 bg-ink-850"
             }`}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-5 flex items-start justify-between gap-3">
+            <div className="mb-5">
               <div>
                 <p className={`text-sm ${isDayPhase || !gameHasStarted ? "text-stone-500" : "text-stone-400"}`}>Завершение партии</p>
                 <h2 className={`text-2xl font-bold ${isDayPhase || !gameHasStarted ? "text-stone-800" : "text-stone-50"}`}>Итог</h2>
               </div>
-              <button type="button" onClick={() => setFinishOpen(false)} className="secondary-button px-3">
-                <X className="h-5 w-5" />
-              </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 pb-20 sm:pb-16">
               <label className="block space-y-2">
                 <span className="label">Победитель</span>
                 <select
@@ -4266,10 +6495,26 @@ export default function GamePage() {
                   placeholder="Что важно запомнить по партии?"
                 />
               </label>
+            </div>
 
-              <button type="button" onClick={finishGame} className="primary-button w-full">
-                <CheckCircle2 className="h-4 w-4" />
-                Сохранить итог
+            <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] flex items-center gap-2 sm:bottom-5 sm:right-5">
+              <button
+                type="button"
+                onClick={() => setFinishOpen(false)}
+                className="pointer-events-auto modal-close-button h-11 min-h-0 w-11 shrink-0 gap-0 px-0 py-0"
+                aria-label="Закрыть"
+                title="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={finishGame}
+                className="pointer-events-auto modal-save-button h-11 min-h-0 w-11 shrink-0 gap-0 px-0 py-0"
+                aria-label="Сохранить итог"
+                title="Сохранить итог"
+              >
+                <CheckCircle2 className="h-5 w-5" />
               </button>
             </div>
           </section>

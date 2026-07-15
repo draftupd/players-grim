@@ -36,6 +36,121 @@ export type GrimoireStyle = {
   lockTokens?: boolean;
 };
 
+export type TravellerVoteModifier = {
+  id: string;
+  travellerPlayerId: string;
+  roleId: "bureaucrat" | "thief";
+  targetPlayerId: string;
+  voteValue: 3 | -1;
+  createdAt: string;
+};
+
+export type TravellerMechanicsState = {
+  beggarTokensByPlayerId?: Record<string, number>;
+  beggarDonations?: Array<{
+    id: string;
+    phaseId: string;
+    beggarPlayerId: string;
+    donorPlayerId: string;
+    donorTeam: PlayerTeam;
+    createdAt: string;
+  }>;
+  voteModifiersByPhaseId?: Record<string, TravellerVoteModifier[]>;
+  gunslingerShotsByPhaseId?: Record<
+    string,
+    {
+      travellerPlayerId: string;
+      targetPlayerId: string;
+      voteRecordId: string;
+      createdAt: string;
+    }
+  >;
+  judgeUsedByPlayerId?: Record<string, string>;
+  judgeForcedVoteRecordIds?: Record<string, "pass" | "fail">;
+  deviantFunnyByPhaseId?: Record<string, boolean>;
+  boneCollectorUsedByPlayerId?: Record<
+    string,
+    {
+      targetPlayerId: string;
+      phaseId: string;
+      createdAt: string;
+    }
+  >;
+  boneCollectorEffectsByPhaseId?: Record<
+    string,
+    {
+      travellerPlayerId: string;
+      targetPlayerId: string;
+      createdAt: string;
+    }
+  >;
+  baristaEffectsByPhaseId?: Record<
+    string,
+    {
+      travellerPlayerId: string;
+      targetPlayerId: string;
+      mode: "sober_healthy_true_info" | "ability_twice";
+      createdAt: string;
+    }
+  >;
+  harlotVisitsByPhaseId?: Record<
+    string,
+    {
+      travellerPlayerId: string;
+      targetPlayerId: string;
+      accepted: boolean;
+      killBoth: boolean;
+      revealedRoleId?: string;
+      createdAt: string;
+    }
+  >;
+  apprenticeAbilityByPlayerId?: Record<
+    string,
+    {
+      abilityRoleId: string;
+      team: PlayerTeam;
+      createdAt: string;
+    }
+  >;
+  matronSwapsByPhaseId?: Record<
+    string,
+    Array<{
+      id: string;
+      aPlayerId: string;
+      bPlayerId: string;
+      createdAt: string;
+    }>
+  >;
+  cacklejackEffectsByPhaseId?: Record<
+    string,
+    {
+      travellerPlayerId: string;
+      immunePlayerId?: string;
+      changedPlayerId?: string;
+      newRoleId?: string;
+      createdAt: string;
+    }
+  >;
+  gangsterKillsByPhaseId?: Record<
+    string,
+    {
+      travellerPlayerId: string;
+      targetPlayerId: string;
+      consentingNeighborId: string;
+      createdAt: string;
+    }
+  >;
+  gnomeAmigoByPlayerId?: Record<string, string>;
+  gnomeKills?: Array<{
+    id: string;
+    phaseId: string;
+    travellerPlayerId: string;
+    amigoPlayerId: string;
+    nominatorPlayerId: string;
+    createdAt: string;
+  }>;
+};
+
 export type Game = {
   id: string;
   title: string;
@@ -62,6 +177,7 @@ export type Game = {
   trashedAt?: string;
   customTokenPositions?: Record<string, TokenPosition>;
   grimoireStyle?: GrimoireStyle;
+  travellerMechanics?: TravellerMechanicsState;
   createdAt: string;
   updatedAt: string;
 };
@@ -127,7 +243,7 @@ export type VoteRecord = {
   updatedAt: string;
 };
 
-export type PlayerVoteAvailability = "alive" | "dead_available" | "dead_spent";
+export type PlayerVoteAvailability = "alive" | "dead_available" | "dead_spent" | "unavailable";
 
 export type VoteDraft = {
   phaseId: string;

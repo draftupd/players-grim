@@ -176,6 +176,7 @@ const roleTypes: Record<RoleType, string[]> = {
     "bonecollector",
     "bureaucrat",
     "butcher",
+    "cacklejack",
     "deviant",
     "gangster",
     "gnome",

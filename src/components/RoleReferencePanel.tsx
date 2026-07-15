@@ -9,9 +9,17 @@ type RoleReferencePanelProps = {
   scriptName?: string;
   scriptVersion?: string;
   scriptAuthor?: string;
+  lightTheme?: boolean;
 };
 
-export default function RoleReferencePanel({ roles, referenceMap, scriptName, scriptVersion, scriptAuthor }: RoleReferencePanelProps) {
+export default function RoleReferencePanel({
+  roles,
+  referenceMap,
+  scriptName,
+  scriptVersion,
+  scriptAuthor,
+  lightTheme = false,
+}: RoleReferencePanelProps) {
   const roleGroups = groupRolesByType(roles);
   const title = scriptName?.trim() || "Сценарий";
   const byline = [
@@ -24,12 +32,12 @@ export default function RoleReferencePanel({ roles, referenceMap, scriptName, sc
   return (
     <section className="space-y-2 px-0 py-0 sm:space-y-3">
       <div className="mb-1">
-        <h2 className="text-[15px] font-semibold leading-tight text-stone-800 sm:text-lg">{title}</h2>
-        {byline ? <p className="text-[10px] leading-tight text-stone-500 sm:text-xs">{byline}</p> : null}
+        <h2 className={`text-[15px] font-semibold leading-tight sm:text-lg ${lightTheme ? "text-stone-800" : "text-stone-100"}`}>{title}</h2>
+        {byline ? <p className={`text-[10px] leading-tight sm:text-xs ${lightTheme ? "text-stone-500" : "text-stone-400"}`}>{byline}</p> : null}
       </div>
 
       {roleGroups.length === 0 ? (
-        <div className="rounded-2xl bg-black/10 p-4 text-center text-sm text-stone-400">
+        <div className={`rounded-2xl p-4 text-center text-sm ${lightTheme ? "bg-black/10 text-stone-400" : "bg-black/20 text-stone-400"}`}>
           Загрузите JSON сценария, чтобы увидеть роли и их способности.
         </div>
       ) : (
@@ -37,9 +45,9 @@ export default function RoleReferencePanel({ roles, referenceMap, scriptName, sc
           {roleGroups.map((group, groupIndex) => (
             <section
               key={group.type}
-              className={groupIndex === 0 ? "space-y-1" : "space-y-1 border-t border-amber-900/18 pt-2"}
+              className={groupIndex === 0 ? "space-y-1" : `space-y-1 border-t pt-2 ${lightTheme ? "border-amber-900/18" : "border-ember-200/12"}`}
             >
-              <h3 className="role-reference-group-label text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-700 sm:text-xs">
+              <h3 className={`role-reference-group-label text-[10px] font-semibold uppercase tracking-[0.18em] sm:text-xs ${lightTheme ? "text-stone-700" : "text-stone-300"}`}>
                 {group.label}
               </h3>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -48,23 +56,23 @@ export default function RoleReferencePanel({ roles, referenceMap, scriptName, sc
 
                   return (
                     <article key={role.id} className="min-w-0 px-0 py-0.5">
-                      <div className="flex items-start gap-1.5">
-                        <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
+                      <div className="flex items-start gap-2">
+                        <div className="flex w-12 shrink-0 flex-col items-center pt-0.5">
                           <RoleTokenImage
                             roleId={role.id}
                             roles={roles}
-                            className="h-8 w-8 overflow-hidden rounded-full border-0 bg-transparent sm:h-9 sm:w-9"
+                            className="h-10 w-10 overflow-hidden rounded-full border-0 bg-transparent sm:h-11 sm:w-11"
                             imageClassName="h-full w-full object-cover"
                           />
-                          <p className="mt-0.5 text-center text-[7px] font-medium leading-[0.56rem] text-stone-700 sm:text-[8px] sm:leading-[0.62rem]">
+                          <p className={`mt-0.5 text-center text-[6px] font-medium leading-[0.5rem] sm:text-[7px] sm:leading-[0.56rem] ${lightTheme ? "text-stone-700" : "text-stone-300"}`}>
                             {reference?.name ?? role.name}
                           </p>
                         </div>
                         <div className="min-w-0 flex-1 pt-0.5">
                           {reference?.ability ? (
-                            <p className="text-[9px] leading-[0.86rem] text-stone-700 sm:text-[10px] sm:leading-[0.95rem]">{reference.ability}</p>
+                            <p className={`text-[8px] leading-[0.78rem] sm:text-[9px] sm:leading-[0.86rem] ${lightTheme ? "text-stone-700" : "text-stone-200"}`}>{reference.ability}</p>
                           ) : (
-                            <p className="text-[9px] leading-[0.86rem] text-stone-500 sm:text-[10px] sm:leading-[0.95rem]">
+                            <p className={`text-[8px] leading-[0.78rem] sm:text-[9px] sm:leading-[0.86rem] ${lightTheme ? "text-stone-500" : "text-stone-400"}`}>
                               Для этой роли пока нет загруженного текста способности.
                             </p>
                           )}
