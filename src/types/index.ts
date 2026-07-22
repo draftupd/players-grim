@@ -21,6 +21,7 @@ export type ScriptRole = {
   id: string;
   name: string;
   type: RoleType;
+  image?: string;
 };
 
 export type TokenPosition = {

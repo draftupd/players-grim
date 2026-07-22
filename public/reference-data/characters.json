@@ -13,7 +13,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player: if they are or become drunk or poisoned tonight, you die.",
-        "image": "/build/img/icons/townsfolk/acrobat.webp"
+        "image": "/build/img/roles/acrobat_g.webp"
     },
     {
         "id": "alchemist",
@@ -36,7 +36,7 @@
         ],
         "setup": false,
         "ability": "You have a Minion ability. When using this, the Storyteller may prompt you to choose differently.",
-        "image": "/build/img/icons/townsfolk/alchemist.webp"
+        "image": "/build/img/roles/alchemist_g.webp"
     },
     {
         "id": "alhadikhia",
@@ -56,7 +56,7 @@
         ],
         "setup": false,
         "ability": "Each night*, you may choose 3 players (all players learn who): each silently chooses to live or die, but if all live, all die.",
-        "image": "/build/img/icons/demon/alhadikhia.webp"
+        "image": "/build/img/roles/alhadikhia_e.webp"
     },
     {
         "id": "alsaahir",
@@ -70,7 +70,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each day, if you publicly guess which players are Minion(s) and which are Demon(s), good wins.",
-        "image": "/build/img/icons/townsfolk/alsaahir.webp"
+        "image": "/build/img/roles/alsaahir_g.webp"
     },
     {
         "id": "amnesiac",
@@ -86,7 +86,7 @@
         ],
         "setup": false,
         "ability": "You do not know what your ability is. Each day, privately guess what it is: you learn how accurate you are.",
-        "image": "/build/img/icons/townsfolk/amnesiac.webp"
+        "image": "/build/img/roles/amnesiac_g.webp"
     },
     {
         "id": "angel",
@@ -100,7 +100,7 @@
         "name": "Angel",
         "team": "fabled",
         "ability": "Something bad might happen to whoever is most responsible for the death of a new player.",
-        "image": "/build/img/icons/fabled/angel.webp"
+        "image": "/build/img/roles/angel.webp"
     },
     {
         "id": "apprentice",
@@ -116,7 +116,7 @@
         ],
         "setup": false,
         "ability": "On your 1st night, you gain a Townsfolk ability (if good), or a Minion ability (if evil).",
-        "image": "/build/img/icons/traveller/apprentice.webp"
+        "image": "/build/img/roles/apprentice.webp"
     },
     {
         "id": "artist",
@@ -132,7 +132,7 @@
         ],
         "setup": false,
         "ability": "Once per game, during the day, privately ask the Storyteller any yes/no question.",
-        "image": "/build/img/icons/townsfolk/artist.webp"
+        "image": "/build/img/roles/artist_g.webp"
     },
     {
         "id": "assassin",
@@ -149,7 +149,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night*, choose a player: they die, even if for some reason they could not.",
-        "image": "/build/img/icons/minion/assassin.webp"
+        "image": "/build/img/roles/assassin_e.webp"
     },
     {
         "id": "atheist",
@@ -163,7 +163,7 @@
         "reminders": [],
         "setup": true,
         "ability": "The Storyteller can break the game rules, and if executed, good wins, even if you are dead. [No evil characters]",
-        "image": "/build/img/icons/townsfolk/atheist.webp"
+        "image": "/build/img/roles/atheist_g.webp"
     },
     {
         "id": "balloonist",
@@ -183,7 +183,7 @@
         ],
         "setup": true,
         "ability": "Each night, you learn a player of a different character type than last night. [+0 or +1 Outsider]",
-        "image": "/build/img/icons/townsfolk/balloonist.webp"
+        "image": "/build/img/roles/balloonist_g.webp"
     },
     {
         "id": "banshee",
@@ -199,7 +199,7 @@
         ],
         "setup": false,
         "ability": "If the Demon kills you, all players learn this. From now on, you may nominate twice per day and vote twice per nomination.",
-        "image": "/build/img/icons/townsfolk/banshee.webp"
+        "image": "/build/img/roles/banshee_g.webp"
     },
     {
         "id": "banxian",
@@ -246,7 +246,7 @@
         ],
         "setup": false,
         "ability": "If you died today or tonight, the Demon may choose 2 players (not another Demon) to swap characters.",
-        "image": "/build/img/icons/outsider/barber.webp"
+        "image": "/build/img/roles/barber_g.webp"
     },
     {
         "id": "barista",
@@ -263,7 +263,7 @@
         ],
         "setup": false,
         "ability": "Each night, until dusk, 1) a player becomes sober, healthy & gets true info, or 2) their ability works twice. They learn which.",
-        "image": "/build/img/icons/traveller/barista.webp"
+        "image": "/build/img/roles/barista.webp"
     },
     {
         "id": "baron",
@@ -277,7 +277,7 @@
         "reminders": [],
         "setup": true,
         "ability": "There are extra Outsiders in play. [+2 Outsiders]",
-        "image": "/build/img/icons/minion/baron.webp"
+        "image": "/build/img/roles/baron_e.webp"
     },
     {
         "id": "beggar",
@@ -291,7 +291,7 @@
         "reminders": [],
         "setup": false,
         "ability": "You must use a vote token to vote. If a dead player gives you theirs, you learn their alignment. You are sober & healthy.",
-        "image": "/build/img/icons/traveller/beggar.webp"
+        "image": "/build/img/roles/beggar.webp"
     },
     {
         "id": "bianlianshi",
@@ -311,6 +311,18 @@
         "setup": false,
         "ability": "每个白天，如果你“疯狂”地证明自己是一个善良角色（与之前不同），你会在当晚获得那个角色的能力，直到下个黄昏。",
         "image": "/build/img/icons/townsfolk/bianlianshi.webp"
+    },
+    {
+        "id": "bigwig",
+        "name": "Big Wig",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "",
+        "reminders": [],
+        "setup": false,
+        "ability": "Each nominee chooses a player: until voting, only they may speak & they are mad the nominee is good or they might die.",
+        "image": "/build/img/roles/bigwig.webp"
     },
     {
         "id": "bingbi",
@@ -342,7 +354,7 @@
         ],
         "setup": false,
         "ability": "Only the Storyteller can nominate. At least 1 opposing player must be nominated each day.",
-        "image": "/build/img/icons/traveller/bishop.webp"
+        "image": "/build/img/roles/bishop.webp"
     },
     {
         "id": "boffin",
@@ -356,7 +368,7 @@
         "reminders": [],
         "setup": false,
         "ability": "The Demon (even if drunk or poisoned) has a not-in-play good character’s ability. You both know which.",
-        "image": "/build/img/icons/minion/boffin.webp"
+        "image": "/build/img/roles/boffin_e.webp"
     },
     {
         "id": "bonecollector",
@@ -373,7 +385,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night*, choose a dead player: they regain their ability until dusk.",
-        "image": "/build/img/icons/traveller/bonecollector.webp"
+        "image": "/build/img/roles/bonecollector.webp"
     },
     {
         "id": "boomdandy",
@@ -387,7 +399,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If you are executed, all but 3 players die. After a 10 to 1 countdown, the player with the most players pointing at them, dies.",
-        "image": "/build/img/icons/minion/boomdandy.webp"
+        "image": "/build/img/roles/boomdandy_e.webp"
     },
     {
         "id": "bootlegger",
@@ -396,9 +408,9 @@
         "reminders": [],
         "setup": false,
         "name": "Bootlegger",
-        "team": "fabled",
+        "team": "loric",
         "ability": "This script has homebrew characters or rules.",
-        "image": "/build/img/icons/fabled/bootlegger.webp"
+        "image": "/build/img/roles/bootlegger.webp"
     },
     {
         "id": "bountyhunter",
@@ -414,7 +426,7 @@
         ],
         "setup": true,
         "ability": "You start knowing 1 evil player. If the player you know dies, you learn another evil player tonight. [1 Townsfolk is evil]",
-        "image": "/build/img/icons/townsfolk/bountyhunter.webp"
+        "image": "/build/img/roles/bountyhunter_g.webp"
     },
     {
         "id": "buddhist",
@@ -425,7 +437,7 @@
         "name": "Buddhist",
         "team": "fabled",
         "ability": "For the first 2 minutes of each day, veteran players may not talk.",
-        "image": "/build/img/icons/fabled/buddhist.webp"
+        "image": "/build/img/roles/buddhist.webp"
     },
     {
         "id": "bureaucrat",
@@ -441,7 +453,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player (not yourself): their vote counts as 3 votes tomorrow.",
-        "image": "/build/img/icons/traveller/bureaucrat.webp"
+        "image": "/build/img/roles/bureaucrat.webp"
     },
     {
         "id": "butcher",
@@ -455,7 +467,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each day, after the 1st execution, you may nominate again.",
-        "image": "/build/img/icons/traveller/butcher.webp"
+        "image": "/build/img/roles/butcher.webp"
     },
     {
         "id": "butler",
@@ -471,7 +483,23 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player (not yourself): tomorrow, you may only vote if they are voting too.",
-        "image": "/build/img/icons/outsider/butler.webp"
+        "image": "/build/img/roles/butler_g.webp"
+    },
+    {
+        "id": "cacklejack",
+        "name": "Cacklejack",
+        "edition": "",
+        "team": "traveller",
+        "firstNight": 0,
+        "firstNightReminder": "",
+        "otherNight": 2,
+        "otherNightReminder": "Replace the character token of any player (besides the player the Cacklejack chose today) with a different character token. Wake that player and show them the 'You are' card and their new character token.",
+        "reminders": [
+            "Not Me"
+        ],
+        "setup": false,
+        "ability": "Each day, choose a player: a different player changes character tonight",
+        "image": "/build/img/roles/cacklejack.webp"
     },
     {
         "id": "cannibal",
@@ -488,7 +516,7 @@
         ],
         "setup": false,
         "ability": "You have the ability of the recently killed executee. If they are evil, you are poisoned until a good player dies by execution.",
-        "image": "/build/img/icons/townsfolk/cannibal.webp"
+        "image": "/build/img/roles/cannibal_g.webp"
     },
     {
         "id": "cerenovus",
@@ -504,7 +532,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player & a good character: they are “mad” they are this character tomorrow, or might be executed.",
-        "image": "/build/img/icons/minion/cerenovus.webp"
+        "image": "/build/img/roles/cerenovus_e.webp"
     },
     {
         "id": "chambermaid",
@@ -518,7 +546,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, choose 2 alive players (not yourself): you learn how many woke tonight due to their ability.",
-        "image": "/build/img/icons/townsfolk/chambermaid.webp"
+        "image": "/build/img/roles/chambermaid_g.webp"
     },
     {
         "id": "chef",
@@ -532,7 +560,7 @@
         "reminders": [],
         "setup": false,
         "ability": "You start knowing how many pairs of evil players there are.",
-        "image": "/build/img/icons/townsfolk/chef.webp"
+        "image": "/build/img/roles/chef_g.webp"
     },
     {
         "id": "chimei",
@@ -560,7 +588,7 @@
         "reminders": [],
         "setup": true,
         "ability": "If the Demon kills the King, you learn which player is the Demon. [+the King]",
-        "image": "/build/img/icons/townsfolk/choirboy.webp"
+        "image": "/build/img/roles/choirboy_g.webp"
     },
     {
         "id": "chongfei",
@@ -590,7 +618,7 @@
         "reminders": [],
         "setup": false,
         "ability": "You start knowing how many steps from the Demon to its nearest Minion.",
-        "image": "/build/img/icons/townsfolk/clockmaker.webp"
+        "image": "/build/img/roles/clockmaker_g.webp"
     },
     {
         "id": "courtier",
@@ -609,7 +637,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night, choose a character: they are drunk for 3 nights & 3 days.",
-        "image": "/build/img/icons/townsfolk/courtier.webp"
+        "image": "/build/img/roles/courtier_g.webp"
     },
     {
         "id": "cultleader",
@@ -623,7 +651,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, you become the alignment of an alive neighbor. If all good players choose to join your cult, your team wins.",
-        "image": "/build/img/icons/townsfolk/cultleader.webp"
+        "image": "/build/img/roles/cultleader_g.webp"
     },
     {
         "id": "dagengren",
@@ -656,7 +684,7 @@
         ],
         "setup": false,
         "ability": "All Minions know a Damsel is in play. If a Minion publicly guesses you (once), your team loses.",
-        "image": "/build/img/icons/outsider/damsel.webp"
+        "image": "/build/img/roles/damsel_g.webp"
     },
     {
         "id": "daoke",
@@ -703,7 +731,7 @@
         "name": "Deus ex Fiasco",
         "team": "fabled",
         "ability": "At least once per game, the Storyteller will make a mistake, correct it, and publicly admit to it",
-        "image": "/build/img/icons/fabled/deusexfiasco.webp"
+        "image": "/build/img/roles/deusexfiasco.webp"
     },
     {
         "id": "deviant",
@@ -717,7 +745,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If you were funny today, you cannot die by exile.",
-        "image": "/build/img/icons/traveller/deviant.webp"
+        "image": "/build/img/roles/deviant.webp"
     },
     {
         "id": "devilsadvocate",
@@ -733,7 +761,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a living player (different to last night): if executed tomorrow, they don't die.",
-        "image": "/build/img/icons/minion/devilsadvocate.webp"
+        "image": "/build/img/roles/devilsadvocate_e.webp"
     },
     {
         "id": "dianxiaoer",
@@ -796,7 +824,7 @@
         "name": "Djinn",
         "team": "fabled",
         "ability": "Use the Djinn's special rule. All players know what it is.",
-        "image": "/build/img/icons/fabled/djinn.webp"
+        "image": "/build/img/roles/djinn.webp"
     },
     {
         "id": "doomsayer",
@@ -807,7 +835,7 @@
         "name": "Doomsayer",
         "team": "fabled",
         "ability": "If 4 or more players live, each living player may publicly choose (once per game) that a player of their own alignment dies.",
-        "image": "/build/img/icons/fabled/doomsayer.webp"
+        "image": "/build/img/roles/doomsayer.webp"
     },
     {
         "id": "dreamer",
@@ -821,7 +849,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, choose a player (not yourself or Travellers): you learn 1 good & 1 evil character, 1 of which is correct.",
-        "image": "/build/img/icons/townsfolk/dreamer.webp"
+        "image": "/build/img/roles/dreamer_g.webp"
     },
     {
         "id": "drunk",
@@ -848,7 +876,7 @@
         ],
         "setup": true,
         "ability": "You do not know you are the Drunk. You think you are a Townsfolk character, but you are not.",
-        "image": "/build/img/icons/outsider/drunk.webp"
+        "image": "/build/img/roles/drunk_g.webp"
     },
     {
         "id": "duchess",
@@ -863,7 +891,7 @@
         "name": "Duchess",
         "team": "fabled",
         "ability": "Each day, 3 players may choose to visit you. At night*, each visitor learns how many visitors are evil, but 1 gets false info.",
-        "image": "/build/img/icons/fabled/duchess.webp"
+        "image": "/build/img/roles/duchess.webp"
     },
     {
         "id": "empath",
@@ -877,7 +905,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, you learn how many of your 2 alive neighbors are evil.",
-        "image": "/build/img/icons/townsfolk/empath.webp"
+        "image": "/build/img/roles/empath_g.webp"
     },
     {
         "id": "engineer",
@@ -893,7 +921,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night, choose which Minions or which Demon is in play.",
-        "image": "/build/img/icons/townsfolk/engineer.webp"
+        "image": "/build/img/roles/engineer_g.webp"
     },
     {
         "id": "eviltwin",
@@ -909,7 +937,7 @@
         ],
         "setup": false,
         "ability": "You & an opposing player know each other. If the good player is executed, evil wins. Good can't win if you both live.",
-        "image": "/build/img/icons/minion/eviltwin.webp"
+        "image": "/build/img/roles/eviltwin_e.webp"
     },
     {
         "id": "exorcist",
@@ -925,7 +953,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player (different to last night): the Demon, if chosen, learns who you are then doesn't wake tonight.",
-        "image": "/build/img/icons/townsfolk/exorcist.webp"
+        "image": "/build/img/roles/exorcist_g.webp"
     },
     {
         "id": "fanggu",
@@ -942,7 +970,7 @@
         ],
         "setup": true,
         "ability": "Each night*, choose a player: they die. The 1st Outsider this kills becomes an evil Fang Gu & you die instead. [+1 Outsider]",
-        "image": "/build/img/icons/demon/fanggu.webp"
+        "image": "/build/img/roles/fanggu_e.webp"
     },
     {
         "id": "fangshi",
@@ -972,7 +1000,7 @@
         "reminders": [],
         "setup": false,
         "ability": "When you die at night, an alive good player becomes a Farmer.",
-        "image": "/build/img/icons/townsfolk/farmer.webp"
+        "image": "/build/img/roles/farmer_g.webp"
     },
     {
         "id": "fearmonger",
@@ -988,7 +1016,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player: if you nominate & execute them, their team loses. All players know if you choose a new player.",
-        "image": "/build/img/icons/minion/fearmonger.webp"
+        "image": "/build/img/roles/fearmonger_e.webp"
     },
     {
         "id": "fengshuishi",
@@ -1015,7 +1043,7 @@
         "name": "Ferryman",
         "team": "fabled",
         "ability": "On the final day, all dead players regain their vote token.",
-        "image": "/build/img/icons/fabled/ferryman.webp"
+        "image": "/build/img/roles/ferryman.webp"
     },
     {
         "id": "fibbin",
@@ -1028,7 +1056,7 @@
         "name": "Fibbin",
         "team": "fabled",
         "ability": "Once per game, 1 good player might get incorrect information.",
-        "image": "/build/img/icons/fabled/fibbin.webp"
+        "image": "/build/img/roles/fibbin.webp"
     },
     {
         "id": "fiddler",
@@ -1039,7 +1067,7 @@
         "name": "Fiddler",
         "team": "fabled",
         "ability": "Once per game, the Demon secretly chooses an opposing player: all players choose which of these 2 players win.",
-        "image": "/build/img/icons/fabled/fiddler.webp"
+        "image": "/build/img/roles/fiddler.webp"
     },
     {
         "id": "fisherman",
@@ -1055,7 +1083,7 @@
         ],
         "setup": false,
         "ability": "Once per game, during the day, visit the Storyteller for some advice to help your team win.",
-        "image": "/build/img/icons/townsfolk/fisherman.webp"
+        "image": "/build/img/roles/fisherman_g.webp"
     },
     {
         "id": "flowergirl",
@@ -1072,7 +1100,7 @@
         ],
         "setup": false,
         "ability": "Each night*, you learn if a Demon voted today.",
-        "image": "/build/img/icons/townsfolk/flowergirl.webp"
+        "image": "/build/img/roles/flowergirl_g.webp"
     },
     {
         "id": "fool",
@@ -1088,7 +1116,7 @@
         ],
         "setup": false,
         "ability": "The 1st time you die, you don't.",
-        "image": "/build/img/icons/townsfolk/fool.webp"
+        "image": "/build/img/roles/fool_g.webp"
     },
     {
         "id": "fortuneteller",
@@ -1104,7 +1132,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose 2 players: you learn if either is a Demon. There is a good player that registers as a Demon to you.",
-        "image": "/build/img/icons/townsfolk/fortuneteller.webp"
+        "image": "/build/img/roles/fortuneteller_g.webp"
     },
     {
         "id": "gambler",
@@ -1120,7 +1148,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player & guess their character: if you guess wrong, you die.",
-        "image": "/build/img/icons/townsfolk/gambler.webp"
+        "image": "/build/img/roles/gambler_g.webp"
     },
     {
         "id": "gangster",
@@ -1134,7 +1162,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Once per day, you may choose to kill an alive neighbor, if your other alive neighbor agrees.",
-        "image": "/build/img/icons/traveller/gangster.webp"
+        "image": "/build/img/roles/gangster.webp"
     },
     {
         "id": "ganshiren",
@@ -1159,9 +1187,9 @@
         "reminders": [],
         "setup": false,
         "name": "Gardener",
-        "team": "fabled",
+        "team": "loric",
         "ability": "The Storyteller assigns 1 or more players' characters.",
-        "image": "/build/img/icons/fabled/gardener.webp"
+        "image": "/build/img/roles/gardener.webp"
     },
     {
         "id": "geling",
@@ -1193,7 +1221,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, you learn which alignment the Storyteller believes is winning: good, evil, or neither.",
-        "image": "/build/img/icons/townsfolk/general.webp"
+        "image": "/build/img/roles/general_g.webp"
     },
     {
         "id": "gnome",
@@ -1209,7 +1237,7 @@
         ],
         "setup": false,
         "ability": "All players start knowing a player of your alignment. You may choose to kill anyone who nominates them.",
-        "image": "/build/img/icons/traveller/gnome.webp"
+        "image": "/build/img/roles/gnome.webp"
     },
     {
         "id": "goblin",
@@ -1225,7 +1253,7 @@
         ],
         "setup": false,
         "ability": "If you publicly claim to be the Goblin when nominated & are executed that day, your team wins.",
-        "image": "/build/img/icons/minion/goblin.webp"
+        "image": "/build/img/roles/goblin_e.webp"
     },
     {
         "id": "godfather",
@@ -1242,7 +1270,21 @@
         ],
         "setup": true,
         "ability": "You start knowing which Outsiders are in play. If 1 died today, choose a player tonight: they die. [-1 or +1 Outsider]",
-        "image": "/build/img/icons/minion/godfather.webp"
+        "image": "/build/img/roles/godfather_e.webp"
+    },
+    {
+        "id": "godofug",
+        "name": "God of Ug",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "",
+        "reminders": [
+            "Hat"
+        ],
+        "setup": false,
+        "ability": "One Ug hat. When wear Ug hat, must speak one sound at a time but vote twice. If fail, pass Ug hat.",
+        "image": "/build/img/roles/godofug.webp"
     },
     {
         "id": "golem",
@@ -1258,7 +1300,7 @@
         ],
         "setup": false,
         "ability": "You may only nominate once per game. When you do, if the nominee is not the Demon, they die.",
-        "image": "/build/img/icons/outsider/golem.webp"
+        "image": "/build/img/roles/golem_g.webp"
     },
     {
         "id": "goon",
@@ -1274,7 +1316,7 @@
         ],
         "setup": false,
         "ability": "Each night, the 1st player to choose you with their ability is drunk until dusk. You become their alignment.",
-        "image": "/build/img/icons/outsider/goon.webp"
+        "image": "/build/img/roles/goon_g.webp"
     },
     {
         "id": "gossip",
@@ -1290,7 +1332,7 @@
         ],
         "setup": false,
         "ability": "Each day, you may make a public statement. Tonight, if it was true, a player dies.",
-        "image": "/build/img/icons/townsfolk/gossip.webp"
+        "image": "/build/img/roles/gossip_g.webp"
     },
     {
         "id": "grandmother",
@@ -1306,7 +1348,7 @@
         ],
         "setup": false,
         "ability": "You start knowing a good player & their character. If the Demon kills them, you die too.",
-        "image": "/build/img/icons/townsfolk/grandmother.webp"
+        "image": "/build/img/roles/grandmother_g.webp"
     },
     {
         "id": "gudiao",
@@ -1353,7 +1395,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each day, after the 1st vote has been tallied, you may choose a player that voted: they die.",
-        "image": "/build/img/icons/traveller/gunslinger.webp"
+        "image": "/build/img/roles/gunslinger.webp"
     },
     {
         "id": "harlot",
@@ -1369,7 +1411,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a living player: if they agree, you learn their character, but you both might die.",
-        "image": "/build/img/icons/traveller/harlot.webp"
+        "image": "/build/img/roles/harlot.webp"
     },
     {
         "id": "harpy",
@@ -1386,7 +1428,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose 2 players: tomorrow, the 1st player is mad that the 2nd is evil, or one or both might die.",
-        "image": "/build/img/icons/minion/harpy.webp"
+        "image": "/build/img/roles/harpy_e.webp"
     },
     {
         "id": "hatter",
@@ -1402,7 +1444,7 @@
         ],
         "setup": false,
         "ability": "If you died today or tonight, the Minion & Demon players may choose new Minion & Demon characters to be.",
-        "image": "/build/img/icons/outsider/hatter.webp"
+        "image": "/build/img/roles/hatter_g.webp"
     },
     {
         "id": "hebo",
@@ -1431,7 +1473,7 @@
         "name": "Hell's Librarian",
         "team": "fabled",
         "ability": "Something bad might happen to whoever talks when the Storyteller has asked for silence.",
-        "image": "/build/img/icons/fabled/hellslibrarian.webp"
+        "image": "/build/img/roles/hellslibrarian.webp"
     },
     {
         "id": "heretic",
@@ -1445,7 +1487,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Whoever wins, loses & whoever loses, wins, even if you are dead.",
-        "image": "/build/img/icons/outsider/heretic.webp"
+        "image": "/build/img/roles/heretic_g.webp"
     },
     {
         "id": "hermit",
@@ -1456,10 +1498,14 @@
         "firstNightReminder": "",
         "otherNight": 0,
         "otherNightReminder": "",
-        "reminders": ["1", "2", "3"],
+        "reminders": [
+            "1",
+            "2",
+            "3"
+        ],
         "setup": true,
         "ability": "You have all Outsider abilities. [-0 or -1 Outsider]",
-        "image": "/build/img/icons/outsider/hermit.webp"
+        "image": "/build/img/roles/hermit_g.webp"
     },
     {
         "id": "heshang",
@@ -1489,7 +1535,19 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, learn which player the Storyteller believes you should talk to most.",
-        "image": "/build/img/icons/townsfolk/highpriestess.webp"
+        "image": "/build/img/roles/highpriestess_g.webp"
+    },
+    {
+        "id": "hindu",
+        "name": "Hindu",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "",
+        "reminders": [],
+        "setup": false,
+        "ability": "The first 4 players to die are immediately reincarnated as Travellers of the same alignment.",
+        "image": "/build/img/roles/hindu.webp"
     },
     {
         "id": "huapi",
@@ -1555,7 +1613,7 @@
         ],
         "setup": true,
         "ability": "Once per game, at night, choose a living player: the Damsel, if chosen, becomes a not-in-play Townsfolk. [+the Damsel]",
-        "image": "/build/img/icons/townsfolk/huntsman.webp"
+        "image": "/build/img/roles/huntsman_g.webp"
     },
     {
         "id": "imp",
@@ -1571,7 +1629,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player: they die. If you kill yourself this way, a Minion becomes the Imp.",
-        "image": "/build/img/icons/demon/imp.webp"
+        "image": "/build/img/roles/imp_e.webp"
     },
     {
         "id": "innkeeper",
@@ -1588,7 +1646,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose 2 players: they can't die tonight, but 1 is drunk until dusk.",
-        "image": "/build/img/icons/townsfolk/innkeeper.webp"
+        "image": "/build/img/roles/innkeeper_g.webp"
     },
     {
         "id": "investigator",
@@ -1605,7 +1663,7 @@
         ],
         "setup": false,
         "ability": "You start knowing that 1 of 2 players is a particular Minion.",
-        "image": "/build/img/icons/townsfolk/investigator.webp"
+        "image": "/build/img/roles/investigator_g.webp"
     },
     {
         "id": "jianning",
@@ -1720,7 +1778,7 @@
         ],
         "setup": false,
         "ability": "Once per game, if another player nominated, you may choose to force the current execution to pass or fail.",
-        "image": "/build/img/icons/traveller/judge.webp"
+        "image": "/build/img/roles/judge.webp"
     },
     {
         "id": "juggler",
@@ -1736,13 +1794,13 @@
         ],
         "setup": false,
         "ability": "On your 1st day, publicly guess up to 5 players' characters. That night, you learn how many you got correct.",
-        "image": "/build/img/icons/townsfolk/juggler.webp"
+        "image": "/build/img/roles/juggler_g.webp"
     },
     {
         "id": "kazali",
         "name": "Kazali",
         "team": "demon",
-        "image": "/build/img/icons/demon/kazali.webp",
+        "image": "/build/img/roles/kazali_e.webp",
         "ability": "Each night*, choose a player: they die. [You choose which players are which Minions. -? to +? Outsiders]",
         "setup": true,
         "firstNight": 2,
@@ -1765,7 +1823,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, if the dead equal or outnumber the living, you learn 1 alive character. The Demon knows you are the King.",
-        "image": "/build/img/icons/townsfolk/king.webp"
+        "image": "/build/img/roles/king_g.webp"
     },
     {
         "id": "klutz",
@@ -1779,7 +1837,19 @@
         "reminders": [],
         "setup": false,
         "ability": "When you learn that you died, publicly choose 1 alive player: if they are evil, your team loses.",
-        "image": "/build/img/icons/outsider/klutz.webp"
+        "image": "/build/img/roles/klutz_g.webp"
+    },
+    {
+        "id": "knaves",
+        "name": "Knaves",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "",
+        "reminders": [],
+        "setup": false,
+        "ability": "There are 2 Storytellers: one lies & one tells the truth. Once per game, at dusk, they might switch.",
+        "image": "/build/img/roles/knaves.webp"
     },
     {
         "id": "knight",
@@ -1796,7 +1866,7 @@
         ],
         "setup": false,
         "ability": "You start knowing 2 players that are not the Demon.",
-        "image": "/build/img/icons/townsfolk/knight.webp"
+        "image": "/build/img/roles/knight_g.webp"
     },
     {
         "id": "langzhong",
@@ -1843,7 +1913,7 @@
         ],
         "setup": true,
         "ability": "Each night*, a player might die. Executions fail if only evil voted. You register as a Minion too. [Most players are Legion]",
-        "image": "/build/img/icons/demon/legion.webp"
+        "image": "/build/img/roles/legion_e.webp"
     },
     {
         "id": "leviathan",
@@ -1864,7 +1934,7 @@
         ],
         "setup": false,
         "ability": "If more than 1 good player is executed, evil wins. All players know you are in play. After day 5, evil wins.",
-        "image": "/build/img/icons/demon/leviathan.webp"
+        "image": "/build/img/roles/leviathan_e.webp"
     },
     {
         "id": "librarian",
@@ -1881,7 +1951,7 @@
         ],
         "setup": false,
         "ability": "You start knowing that 1 of 2 players is a particular Outsider. (Or that zero are in play.)",
-        "image": "/build/img/icons/townsfolk/librarian.webp"
+        "image": "/build/img/roles/librarian_g.webp"
     },
     {
         "id": "lilmonsta",
@@ -1909,7 +1979,7 @@
         ],
         "setup": true,
         "ability": "Each night, Minions choose who babysits Lil' Monsta & \"is the Demon\". Each night*, a player might die. [+1 Minion]",
-        "image": "/build/img/icons/demon/lilmonsta.webp"
+        "image": "/build/img/roles/lilmonsta_e.webp"
     },
     {
         "id": "limao",
@@ -1944,7 +2014,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player: they die. You start by choosing a player: they are poisoned. You die if & only if they are dead.",
-        "image": "/build/img/icons/demon/lleech.webp"
+        "image": "/build/img/roles/lleech_e.webp"
     },
     {
         "id": "lordoftyphon",
@@ -1960,7 +2030,7 @@
         ],
         "setup": true,
         "ability": "Each night*, choose a player: they die. [Evil characters are in a line. You are in the middle. +1 Minion. -? to +? Outsiders]",
-        "image": "/build/img/icons/demon/lordoftyphon.webp"
+        "image": "/build/img/roles/lordoftyphon_e.webp"
     },
     {
         "id": "lunatic",
@@ -1978,7 +2048,7 @@
         ],
         "setup": false,
         "ability": "You think you are a Demon, but you are not. The Demon knows who you are & who you choose at night.",
-        "image": "/build/img/icons/outsider/lunatic.webp"
+        "image": "/build/img/roles/lunatic_g.webp"
     },
     {
         "id": "lycanthrope",
@@ -1995,7 +2065,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose an alive player. If good, they die & the Demon doesn’t kill tonight. One good player registers as evil.",
-        "image": "/build/img/icons/townsfolk/lycanthrope.webp"
+        "image": "/build/img/roles/lycanthrope_g.webp"
     },
     {
         "id": "magician",
@@ -2009,7 +2079,7 @@
         "reminders": [],
         "setup": false,
         "ability": "The Demon thinks you are a Minion. Minions think you are a Demon.",
-        "image": "/build/img/icons/townsfolk/magician.webp"
+        "image": "/build/img/roles/magician_g.webp"
     },
     {
         "id": "marionette",
@@ -2036,7 +2106,7 @@
         ],
         "setup": true,
         "ability": "You think you are a good character, but you are not. The Demon knows who you are. [You neighbor the Demon]",
-        "image": "/build/img/icons/minion/marionette.webp"
+        "image": "/build/img/roles/marionette_e.webp"
     },
     {
         "id": "mastermind",
@@ -2050,7 +2120,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If the Demon dies by execution (ending the game), play for 1 more day. If a player is then executed, their team loses.",
-        "image": "/build/img/icons/minion/mastermind.webp"
+        "image": "/build/img/roles/mastermind_e.webp"
     },
     {
         "id": "mathematician",
@@ -2066,7 +2136,7 @@
         ],
         "setup": false,
         "ability": "Each night, you learn how many players’ abilities worked abnormally (since dawn) due to another character's ability.",
-        "image": "/build/img/icons/townsfolk/mathematician.webp"
+        "image": "/build/img/roles/mathematician_g.webp"
     },
     {
         "id": "matron",
@@ -2080,7 +2150,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each day, you may choose up to 3 sets of 2 players to swap seats. Players may not leave their seats to talk in private.",
-        "image": "/build/img/icons/traveller/matron.webp"
+        "image": "/build/img/roles/matron.webp"
     },
     {
         "id": "mayor",
@@ -2094,7 +2164,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If only 3 players live & no execution occurs, your team wins. If you die at night, another player might die instead.",
-        "image": "/build/img/icons/townsfolk/mayor.webp"
+        "image": "/build/img/roles/mayor_g.webp"
     },
     {
         "id": "mengpo",
@@ -2129,7 +2199,7 @@
         ],
         "setup": false,
         "ability": "You start knowing a secret word. The 1st good player to say this word becomes evil that night.",
-        "image": "/build/img/icons/minion/mezepheles.webp"
+        "image": "/build/img/roles/mezepheles_e.webp"
     },
     {
         "id": "minstrel",
@@ -2145,7 +2215,7 @@
         ],
         "setup": false,
         "ability": "When a Minion dies by execution, all other players (except Travellers) are drunk until dusk tomorrow.",
-        "image": "/build/img/icons/townsfolk/minstrel.webp"
+        "image": "/build/img/roles/minstrel_g.webp"
     },
     {
         "id": "monk",
@@ -2161,7 +2231,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player (not yourself): they are safe from the Demon tonight.",
-        "image": "/build/img/icons/townsfolk/monk.webp"
+        "image": "/build/img/roles/monk_g.webp"
     },
     {
         "id": "moonchild",
@@ -2177,7 +2247,7 @@
         ],
         "setup": false,
         "ability": "When you learn that you died, publicly choose 1 alive player. Tonight, if it was a good player, they die.",
-        "image": "/build/img/icons/outsider/moonchild.webp"
+        "image": "/build/img/roles/moonchild_g.webp"
     },
     {
         "id": "mutant",
@@ -2191,7 +2261,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If you are “mad” about being an Outsider, you might be executed.",
-        "image": "/build/img/icons/outsider/mutant.webp"
+        "image": "/build/img/roles/mutant_g.webp"
     },
     {
         "id": "niangjiushi",
@@ -2239,7 +2309,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night, choose a player: they learn you are the Nightwatchman.",
-        "image": "/build/img/icons/townsfolk/nightwatchman.webp"
+        "image": "/build/img/roles/nightwatchman_g.webp"
     },
     {
         "id": "noble",
@@ -2255,7 +2325,7 @@
         ],
         "setup": false,
         "ability": "You start knowing 3 players, 1 and only 1 of which is evil.",
-        "image": "/build/img/icons/townsfolk/noble.webp"
+        "image": "/build/img/roles/noble_g.webp"
     },
     {
         "id": "nodashii",
@@ -2272,7 +2342,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player: they die. Your 2 Townsfolk neighbors are poisoned.",
-        "image": "/build/img/icons/demon/nodashii.webp"
+        "image": "/build/img/roles/nodashii_e.webp"
     },
     {
         "id": "ogre",
@@ -2288,7 +2358,7 @@
         ],
         "setup": false,
         "ability": "On your 1st night, choose a player (not yourself): you become their alignment (you don't know which) even if drunk or poisoned.",
-        "image": "/build/img/icons/outsider/ogre.webp"
+        "image": "/build/img/roles/ogre_g.webp"
     },
     {
         "id": "ojo",
@@ -2304,7 +2374,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a character: they die. If they are not in play, the Storyteller chooses who dies.",
-        "image": "/build/img/icons/demon/ojo.webp"
+        "image": "/build/img/roles/ojo_e.webp"
     },
     {
         "id": "oracle",
@@ -2318,7 +2388,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night*, you learn how many dead players are evil.",
-        "image": "/build/img/icons/townsfolk/oracle.webp"
+        "image": "/build/img/roles/oracle_g.webp"
     },
     {
         "id": "organgrinder",
@@ -2335,7 +2405,7 @@
         ],
         "setup": false,
         "ability": "All players keep their eyes closed when voting and the vote tally is secret. Each night, choose if you are drunk until dusk.",
-        "image": "/build/img/icons/minion/organgrinder.webp"
+        "image": "/build/img/roles/organgrinder_e.webp"
     },
     {
         "id": "pacifist",
@@ -2349,7 +2419,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Executed good players might not die.",
-        "image": "/build/img/icons/townsfolk/pacifist.webp"
+        "image": "/build/img/roles/pacifist_g.webp"
     },
     {
         "id": "panguan",
@@ -2389,7 +2459,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night, choose a good character: gain that ability. If this character is in play, they are drunk.",
-        "image": "/build/img/icons/townsfolk/philosopher.webp"
+        "image": "/build/img/roles/philosopher_g.webp"
     },
     {
         "id": "pithag",
@@ -2403,7 +2473,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night*, choose a player & a character they become (if not in play). If a Demon is made, deaths tonight are arbitrary.",
-        "image": "/build/img/icons/minion/pithag.webp"
+        "image": "/build/img/roles/pithag_e.webp"
     },
     {
         "id": "pixie",
@@ -2420,7 +2490,7 @@
         ],
         "setup": false,
         "ability": "You start knowing 1 in-play Townsfolk. If you were mad that you were this character, you gain their ability when they die.",
-        "image": "/build/img/icons/townsfolk/pixie.webp"
+        "image": "/build/img/roles/pixie_g.webp"
     },
     {
         "id": "plaguedoctor",
@@ -2436,7 +2506,7 @@
         ],
         "setup": false,
         "ability": "When you die, the Storyteller gains a Minion ability.",
-        "image": "/build/img/icons/outsider/plaguedoctor.webp"
+        "image": "/build/img/roles/plaguedoctor_g.webp"
     },
     {
         "id": "po",
@@ -2453,7 +2523,7 @@
         ],
         "setup": false,
         "ability": "Each night*, you may choose a player: they die. If your last choice was no-one, choose 3 players tonight.",
-        "image": "/build/img/icons/demon/po.webp"
+        "image": "/build/img/roles/po_e.webp"
     },
     {
         "id": "poisoner",
@@ -2469,7 +2539,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player: they are poisoned tonight and tomorrow day.",
-        "image": "/build/img/icons/minion/poisoner.webp"
+        "image": "/build/img/roles/poisoner_e.webp"
     },
     {
         "id": "politician",
@@ -2483,7 +2553,19 @@
         "reminders": [],
         "setup": false,
         "ability": "If you were the player most responsible for your team losing, you change alignment & win, even if dead.",
-        "image": "/build/img/icons/outsider/politician.webp"
+        "image": "/build/img/roles/politician_g.webp"
+    },
+    {
+        "id": "pope",
+        "name": "Pope",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "",
+        "reminders": [],
+        "setup": true,
+        "ability": "There are duplicate good characters in play. They might also be bluffs.",
+        "image": "/build/img/roles/pope.webp"
     },
     {
         "id": "poppygrower",
@@ -2499,7 +2581,7 @@
         ],
         "setup": false,
         "ability": "Minions & Demons do not know each other. If you die, they learn who each other are that night.",
-        "image": "/build/img/icons/townsfolk/poppygrower.webp"
+        "image": "/build/img/roles/poppygrower_g.webp"
     },
     {
         "id": "preacher",
@@ -2515,7 +2597,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player: a Minion, if chosen, learns this. All chosen Minions have no ability.",
-        "image": "/build/img/icons/townsfolk/preacher.webp"
+        "image": "/build/img/roles/preacher_g.webp"
     },
     {
         "id": "princess",
@@ -2531,7 +2613,7 @@
         ],
         "setup": false,
         "ability": "On your 1st day, if you nominated & executed a player, the Demon doesn't kill tonight.",
-        "image": "/build/img/icons/townsfolk/princess.webp"
+        "image": "/build/img/roles/princess_g.webp"
     },
     {
         "id": "professor",
@@ -2548,7 +2630,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night*, choose a dead player: if they are a Townsfolk, they are resurrected.",
-        "image": "/build/img/icons/townsfolk/professor.webp"
+        "image": "/build/img/roles/professor_g.webp"
     },
     {
         "id": "psychopath",
@@ -2562,7 +2644,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each day, before nominations, you may publicly choose a player: they die. If executed, you only die if you lose roshambo.",
-        "image": "/build/img/icons/minion/psychopath.webp"
+        "image": "/build/img/roles/psychopath_e.webp"
     },
     {
         "id": "pukka",
@@ -2579,7 +2661,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player: they are poisoned. The previously poisoned player dies then becomes healthy.",
-        "image": "/build/img/icons/demon/pukka.webp"
+        "image": "/build/img/roles/pukka_e.webp"
     },
     {
         "id": "puzzlemaster",
@@ -2596,7 +2678,7 @@
         ],
         "setup": false,
         "ability": "1 player is drunk, even if you die. If you guess (once) who it is, learn the Demon player, but guess wrong & get false info.",
-        "image": "/build/img/icons/outsider/puzzlemaster.webp"
+        "image": "/build/img/roles/puzzlemaster_g.webp"
     },
     {
         "id": "qianke",
@@ -2690,7 +2772,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If you die at night, you are woken to choose a player: you learn their character.",
-        "image": "/build/img/icons/townsfolk/ravenkeeper.webp"
+        "image": "/build/img/roles/ravenkeeper_g.webp"
     },
     {
         "id": "recluse",
@@ -2704,7 +2786,7 @@
         "reminders": [],
         "setup": false,
         "ability": "You might register as evil & as a Minion or Demon, even if dead.",
-        "image": "/build/img/icons/outsider/recluse.webp"
+        "image": "/build/img/roles/recluse_g.webp"
     },
     {
         "id": "revolutionary",
@@ -2717,7 +2799,7 @@
         "name": "Revolutionary",
         "team": "fabled",
         "ability": "2 neighboring players are known to be the same alignment. Once per game, 1 of them registers falsely.",
-        "image": "/build/img/icons/fabled/revolutionary.webp"
+        "image": "/build/img/roles/revolutionary.webp"
     },
     {
         "id": "riot",
@@ -2731,7 +2813,7 @@
         "reminders": [],
         "setup": true,
         "ability": "On day 3, Minions become Riot & nominees die but nominate an alive player immediately. This must happen.",
-        "image": "/build/img/icons/demon/riot.webp"
+        "image": "/build/img/roles/riot_e.webp"
     },
     {
         "id": "rulianshi",
@@ -2761,7 +2843,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If the Demon kills you, you learn that it is 1 of 2 players.",
-        "image": "/build/img/icons/townsfolk/sage.webp"
+        "image": "/build/img/roles/sage_g.webp"
     },
     {
         "id": "sailor",
@@ -2777,7 +2859,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose an alive player: either you or they are drunk until dusk. You can't die.",
-        "image": "/build/img/icons/townsfolk/sailor.webp"
+        "image": "/build/img/roles/sailor_g.webp"
     },
     {
         "id": "saint",
@@ -2791,7 +2873,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If you die by execution, your team loses.",
-        "image": "/build/img/icons/outsider/saint.webp"
+        "image": "/build/img/roles/saint_g.webp"
     },
     {
         "id": "savant",
@@ -2805,7 +2887,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each day, you may visit the Storyteller to learn 2 things in private: 1 is true & 1 is false.",
-        "image": "/build/img/icons/townsfolk/savant.webp"
+        "image": "/build/img/roles/savant_g.webp"
     },
     {
         "id": "scapegoat",
@@ -2819,7 +2901,7 @@
         "reminders": [],
         "setup": false,
         "ability": "If a player of your alignment is executed, you might be executed instead.",
-        "image": "/build/img/icons/traveller/scapegoat.webp"
+        "image": "/build/img/roles/scapegoat.webp"
     },
     {
         "id": "scarletwoman",
@@ -2835,7 +2917,7 @@
         ],
         "setup": false,
         "ability": "If there are 5 or more players alive & the Demon dies, you become the Demon. (Travellers don't count.)",
-        "image": "/build/img/icons/minion/scarletwoman.webp"
+        "image": "/build/img/roles/scarletwoman_e.webp"
     },
     {
         "id": "seamstress",
@@ -2851,7 +2933,7 @@
         ],
         "setup": false,
         "ability": "Once per game, at night, choose 2 players (not yourself): you learn if they are the same alignment.",
-        "image": "/build/img/icons/townsfolk/seamstress.webp"
+        "image": "/build/img/roles/seamstress_g.webp"
     },
     {
         "id": "sentinel",
@@ -2862,7 +2944,7 @@
         "name": "Sentinel",
         "team": "fabled",
         "ability": "There might be 1 extra or 1 fewer Outsider in play.",
-        "image": "/build/img/icons/fabled/sentinel.webp"
+        "image": "/build/img/roles/sentinel.webp"
     },
     {
         "id": "shabaloth",
@@ -2879,7 +2961,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose 2 players: they die. A dead player you chose last night might be regurgitated.",
-        "image": "/build/img/icons/demon/shabaloth.webp"
+        "image": "/build/img/roles/shabaloth_e.webp"
     },
     {
         "id": "shaxing",
@@ -2971,7 +3053,7 @@
         "reminders": [],
         "setup": false,
         "ability": "You start knowing if your closest evil player is clockwise or anti-clockwise. If equidistant, this info is arbitrary.",
-        "image": "/build/img/icons/townsfolk/shugenja.webp"
+        "image": "/build/img/roles/shugenja_g.webp"
     },
     {
         "id": "shusheng",
@@ -3023,7 +3105,7 @@
         ],
         "setup": false,
         "ability": "Once per game, during the day, publicly choose a player: if they are the Demon, they die.",
-        "image": "/build/img/icons/townsfolk/slayer.webp"
+        "image": "/build/img/roles/slayer_g.webp"
     },
     {
         "id": "snakecharmer",
@@ -3039,7 +3121,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose an alive player: a chosen Demon swaps characters & alignments with you & is then poisoned.",
-        "image": "/build/img/icons/townsfolk/snakecharmer.webp"
+        "image": "/build/img/roles/snakecharmer_g.webp"
     },
     {
         "id": "snitch",
@@ -3053,7 +3135,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each Minion gets 3 bluffs.",
-        "image": "/build/img/icons/outsider/snitch.webp"
+        "image": "/build/img/roles/snitch_g.webp"
     },
     {
         "id": "soldier",
@@ -3067,7 +3149,7 @@
         "reminders": [],
         "setup": false,
         "ability": "You are safe from the Demon.",
-        "image": "/build/img/icons/townsfolk/soldier.webp"
+        "image": "/build/img/roles/soldier_g.webp"
     },
     {
         "id": "spiritofivory",
@@ -3080,7 +3162,7 @@
         "name": "Spirit of Ivory",
         "team": "fabled",
         "ability": "There can't be more than 1 extra evil player.",
-        "image": "/build/img/icons/fabled/spiritofivory.webp"
+        "image": "/build/img/roles/spiritofivory.webp"
     },
     {
         "id": "spy",
@@ -3094,7 +3176,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Each night, you see the Grimoire. You might register as good & as a Townsfolk or Outsider, even if dead.",
-        "image": "/build/img/icons/minion/spy.webp"
+        "image": "/build/img/roles/spy_e.webp"
     },
     {
         "id": "steward",
@@ -3110,7 +3192,7 @@
         ],
         "setup": false,
         "ability": "You start knowing 1 good player.",
-        "image": "/build/img/icons/townsfolk/steward.webp"
+        "image": "/build/img/roles/steward_g.webp"
     },
     {
         "id": "stormcatcher",
@@ -3122,9 +3204,9 @@
         ],
         "setup": false,
         "name": "Storm Catcher",
-        "team": "fabled",
+        "team": "loric",
         "ability": "Name a good character. If in play, they can only die by execution, but evil players learn which player it is.",
-        "image": "/build/img/icons/fabled/stormcatcher.webp"
+        "image": "/build/img/roles/stormcatcher.webp"
     },
     {
         "id": "summoner",
@@ -3142,7 +3224,7 @@
         ],
         "setup": true,
         "ability": "You get 3 bluffs. On the 3rd night, choose a player: they become an evil Demon of your choice. [No Demon]",
-        "image": "/build/img/icons/minion/summoner.webp"
+        "image": "/build/img/roles/summoner_e.webp"
     },
     {
         "id": "sweetheart",
@@ -3158,7 +3240,7 @@
         ],
         "setup": false,
         "ability": "When you die, 1 player is drunk from now on.",
-        "image": "/build/img/icons/outsider/sweetheart.webp"
+        "image": "/build/img/roles/sweetheart_g.webp"
     },
     {
         "id": "taotie",
@@ -3206,7 +3288,7 @@
         ],
         "setup": false,
         "ability": "If both your alive neighbors are good, they can't die.",
-        "image": "/build/img/icons/townsfolk/tealady.webp"
+        "image": "/build/img/roles/tealady_g.webp"
     },
     {
         "id": "thief",
@@ -3222,7 +3304,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player (not yourself): their vote counts negatively tomorrow.",
-        "image": "/build/img/icons/traveller/thief.webp"
+        "image": "/build/img/roles/thief.webp"
     },
     {
         "id": "tinker",
@@ -3238,7 +3320,7 @@
         ],
         "setup": false,
         "ability": "You might die at any time.",
-        "image": "/build/img/icons/outsider/tinker.webp"
+        "image": "/build/img/roles/tinker_g.webp"
     },
     {
         "id": "tixingguan",
@@ -3257,6 +3339,18 @@
         "image": "/build/img/icons/townsfolk/tixingguan.webp"
     },
     {
+        "id": "tor",
+        "name": "Tor",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "If a player died tonight, show the *YOU ARE* info token, their character token, & a thumbs up or thumbs down.",
+        "reminders": [],
+        "setup": true,
+        "ability": "Players don't know their character or alignment. They learn them when they die.",
+        "image": "/build/img/roles/tor.webp"
+    },
+    {
         "id": "towncrier",
         "name": "Town Crier",
         "edition": "snv",
@@ -3271,7 +3365,7 @@
         ],
         "setup": false,
         "ability": "Each night*, you learn if a Minion nominated today.",
-        "image": "/build/img/icons/townsfolk/towncrier.webp"
+        "image": "/build/img/roles/towncrier_g.webp"
     },
     {
         "id": "toymaker",
@@ -3285,7 +3379,7 @@
         "name": "Toymaker",
         "team": "fabled",
         "ability": "The Demon may choose not to attack & must do this at least once per game. Evil players get normal starting info.",
-        "image": "/build/img/icons/fabled/toymaker.webp"
+        "image": "/build/img/roles/toymaker.webp"
     },
     {
         "id": "undertaker",
@@ -3301,7 +3395,21 @@
         ],
         "setup": false,
         "ability": "Each night*, you learn which character died by execution today.",
-        "image": "/build/img/icons/townsfolk/undertaker.webp"
+        "image": "/build/img/roles/undertaker_g.webp"
+    },
+    {
+        "id": "ventriloquist",
+        "name": "Ventriloquist",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "",
+        "reminders": [
+            "Mad"
+        ],
+        "setup": false,
+        "ability": "If a player is mad as a fresh character during their nomination, they might not die if executed today.",
+        "image": "/build/img/roles/ventriloquist.webp"
     },
     {
         "id": "vigormortis",
@@ -3319,7 +3427,7 @@
         ],
         "setup": true,
         "ability": "Each night*, choose a player: they die. Minions you kill keep their ability & poison 1 Townsfolk neighbor. [-1 Outsider]",
-        "image": "/build/img/icons/demon/vigormortis.webp"
+        "image": "/build/img/roles/vigormortis_e.webp"
     },
     {
         "id": "villageidiot",
@@ -3335,7 +3443,7 @@
         ],
         "setup": true,
         "ability": "Each night, choose a player: you learn their alignment. [+0 to +2 Village Idiots. 1 of the extras is drunk]",
-        "image": "/build/img/icons/townsfolk/villageidiot.webp"
+        "image": "/build/img/roles/villageidiot_g.webp"
     },
     {
         "id": "virgin",
@@ -3351,7 +3459,7 @@
         ],
         "setup": false,
         "ability": "The 1st time you are nominated, if the nominator is a Townsfolk, they are executed immediately.",
-        "image": "/build/img/icons/townsfolk/virgin.webp"
+        "image": "/build/img/roles/virgin_g.webp"
     },
     {
         "id": "vizier",
@@ -3365,7 +3473,7 @@
         "reminders": [],
         "setup": false,
         "ability": "All players know you are the Vizier. You cannot die during the day. If good voted, you may choose to execute immediately.",
-        "image": "/build/img/icons/minion/vizier.webp"
+        "image": "/build/img/roles/vizier_e.webp"
     },
     {
         "id": "vortox",
@@ -3381,7 +3489,7 @@
         ],
         "setup": false,
         "ability": "Each night*, choose a player: they die. Townsfolk abilities yield false info. Each day, if no-one is executed, evil wins.",
-        "image": "/build/img/icons/demon/vortox.webp"
+        "image": "/build/img/roles/vortox_e.webp"
     },
     {
         "id": "voudon",
@@ -3395,7 +3503,7 @@
         "reminders": [],
         "setup": false,
         "ability": "Only you & the dead can vote. They don't need a vote token to do so. A 50% majority isn't required.",
-        "image": "/build/img/icons/traveller/voudon.webp"
+        "image": "/build/img/roles/voudon.webp"
     },
     {
         "id": "washerwoman",
@@ -3412,7 +3520,7 @@
         ],
         "setup": false,
         "ability": "You start knowing that 1 of 2 players is a particular Townsfolk.",
-        "image": "/build/img/icons/townsfolk/washerwoman.webp"
+        "image": "/build/img/roles/washerwoman_g.webp"
     },
     {
         "id": "widow",
@@ -3431,7 +3539,7 @@
         ],
         "setup": false,
         "ability": "On your 1st night, look at the Grimoire & choose a player: they are poisoned. 1 good player knows a Widow is in play.",
-        "image": "/build/img/icons/minion/widow.webp"
+        "image": "/build/img/roles/widow_e.webp"
     },
     {
         "id": "witch",
@@ -3447,7 +3555,7 @@
         ],
         "setup": false,
         "ability": "Each night, choose a player: if they nominate tomorrow, they die. If just 3 players live, you lose this ability.",
-        "image": "/build/img/icons/minion/witch.webp"
+        "image": "/build/img/roles/witch_e.webp"
     },
     {
         "id": "wizard",
@@ -3463,7 +3571,21 @@
         ],
         "setup": false,
         "ability": "Once per game, choose to make a wish. If granted, it might have a price & leave a clue as to its nature.",
-        "image": "/build/img/icons/minion/wizard.webp"
+        "image": "/build/img/roles/wizard_e.webp"
+    },
+    {
+        "id": "wraith",
+        "name": "Wraith",
+        "edition": "",
+        "team": "minion",
+        "firstNight": 1,
+        "firstNightReminder": "Wake the Wraith whenever other evil players wake.",
+        "otherNight": 1,
+        "otherNightReminder": "Wake the Wraith whenever other evil players wake.",
+        "reminders": [],
+        "setup": false,
+        "ability": "You may choose to open your eyes at night. You wake when other evil players do.",
+        "image": "/build/img/roles/wraith_e.webp"
     },
     {
         "id": "wudaozhe",
@@ -3515,7 +3637,7 @@
         ],
         "setup": true,
         "ability": "On night X, all Townsfolk are poisoned until dusk. [X Outsiders]",
-        "image": "/build/img/icons/minion/xaan.webp"
+        "image": "/build/img/roles/xaan_e.webp"
     },
     {
         "id": "xingjiaoshang",
@@ -3608,7 +3730,7 @@
         ],
         "setup": false,
         "ability": "You start knowing a secret phrase. For each time you said it publicly today, a player might die.",
-        "image": "/build/img/icons/demon/yaggababble.webp"
+        "image": "/build/img/roles/yaggababble_e.webp"
     },
     {
         "id": "yangguren",
@@ -3733,7 +3855,23 @@
         "reminders": [],
         "setup": false,
         "ability": "If there are 5 or more players alive, you must vote for every nomination.",
-        "image": "/build/img/icons/outsider/zealot.webp"
+        "image": "/build/img/roles/zealot_g.webp"
+    },
+    {
+        "id": "zenomancer",
+        "name": "Zenomancer",
+        "edition": "",
+        "team": "loric",
+        "firstNightReminder": "",
+        "otherNightReminder": "",
+        "reminders": [
+            "Goal",
+            "Goal",
+            "Goal"
+        ],
+        "setup": false,
+        "ability": "One or more players each have a goal. When achieved, that player learns a piece of true info.",
+        "image": "/build/img/roles/zenomancer.webp"
     },
     {
         "id": "zhen",
@@ -3784,6 +3922,6 @@
         ],
         "setup": false,
         "ability": "Each night*, if no-one died today, choose a player: they die. The 1st time you die, you live but register as dead.",
-        "image": "/build/img/icons/demon/zombuul.webp"
+        "image": "/build/img/roles/zombuul_e.webp"
     }
 ]

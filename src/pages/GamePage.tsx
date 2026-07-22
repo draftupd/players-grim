@@ -2,11 +2,15 @@ import {
   ArrowLeft,
   CheckCircle2,
   Flag,
+  Hand,
+  Lock,
+  LockOpen,
   MoonStar,
   Play,
   RotateCcw,
   Save,
   Settings,
+  Settings2,
   Skull,
   SunMedium,
   Trash2,
@@ -370,6 +374,7 @@ export default function GamePage() {
   const [playerFormSaving, setPlayerFormSaving] = useState(false);
   const [travellerMechanicsOpen, setTravellerMechanicsOpen] = useState(false);
   const [travellerMechanicsSaving, setTravellerMechanicsSaving] = useState(false);
+  const [grimoireSettingsOpen, setGrimoireSettingsOpen] = useState(false);
   const [travellerMechanicsForm, setTravellerMechanicsForm] = useState<TravellerMechanicsForm>({
     beggarPlayerId: "",
     beggarDonorId: "",
@@ -767,7 +772,7 @@ export default function GamePage() {
               return false;
             }
 
-            if (hasActiveVoudon && !player.alive) {
+            if (!player.alive) {
               return false;
             }
 
@@ -782,7 +787,7 @@ export default function GamePage() {
           })
           .map((player) => player.id),
       ),
-    [executionNominatorCountById, hasActiveBishop, hasActiveVoudon, players, selectedPhaseExecutionVoteRecords],
+    [executionNominatorCountById, hasActiveBishop, players, selectedPhaseExecutionVoteRecords],
   );
   const selectableTravellerExileNominatorIds = useMemo(
     () => new Set(players.map((player) => player.id)),
@@ -1005,8 +1010,16 @@ export default function GamePage() {
     [notes],
   );
   const deadVoteSpentPlayerIds = useMemo(
-    () => new Set(voteRecords.flatMap((voteRecord) => voteRecord.deadVoterPlayerIds)),
-    [voteRecords],
+    () => {
+      const spentPlayerIds = new Set(voteRecords.flatMap((voteRecord) => voteRecord.deadVoterPlayerIds));
+
+      (travellerMechanics.beggarDonations ?? []).forEach((donation) => {
+        spentPlayerIds.add(donation.donorPlayerId);
+      });
+
+      return spentPlayerIds;
+    },
+    [travellerMechanics.beggarDonations, voteRecords],
   );
   const voteAvailabilityByPlayerId = useMemo(
     (): ReadonlyMap<string, PlayerVoteAvailability> =>
@@ -1029,11 +1042,7 @@ export default function GamePage() {
 
           return [
             player.id,
-            player.alive
-              ? "alive"
-              : (player.deadVoteAvailable ?? !deadVoteSpentPlayerIds.has(player.id))
-                ? "dead_available"
-                : "dead_spent",
+            player.alive ? "alive" : deadVoteSpentPlayerIds.has(player.id) ? "dead_spent" : "dead_available",
           ];
         }),
       ),
@@ -1404,7 +1413,7 @@ export default function GamePage() {
 
             return db.players.update(player.id, {
               alive: isSelected ? false : originalState?.alive ?? true,
-              deadVoteAvailable: isSelected ? false : originalState?.deadVoteAvailable ?? true,
+              deadVoteAvailable: isSelected ? true : originalState?.deadVoteAvailable ?? true,
               updatedAt: now,
             });
           }),
@@ -1509,7 +1518,7 @@ export default function GamePage() {
           ...affectedPlayers.map((player) =>
             db.players.update(player.id, {
               alive: false,
-              deadVoteAvailable: false,
+              deadVoteAvailable: true,
               updatedAt: now,
             }),
           ),
@@ -2216,7 +2225,7 @@ export default function GamePage() {
       targetPlayerIds.map((playerId) =>
         db.players.update(playerId, {
           alive: false,
-          deadVoteAvailable: false,
+          deadVoteAvailable: true,
           updatedAt: now,
         }),
       ),
@@ -2247,7 +2256,7 @@ export default function GamePage() {
       return;
     }
 
-    if (donor.deadVoteAvailable === false) {
+    if (deadVoteSpentPlayerIds.has(donor.id)) {
       setPageError("У этого мёртвого игрока уже нет vote token для передачи Beggar.");
       return;
     }
@@ -2930,7 +2939,20 @@ export default function GamePage() {
 
   const savePlayer = async (
     playerId: string,
-    values: Pick<Player, "name" | "alive" | "deadVoteAvailable" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
+    values: Pick<
+      Player,
+      | "name"
+      | "alive"
+      | "deadVoteAvailable"
+      | "mainRole"
+      | "additionalRoles"
+      | "isTraveller"
+      | "travellerRole"
+      | "travellerTeam"
+      | "joinedPhaseId"
+      | "leftPhaseId"
+      | "tokenTint"
+    >,
     isMyToken: boolean,
     myTeam: Game["myTeam"],
   ) => {
@@ -2938,8 +2960,8 @@ export default function GamePage() {
     const currentPlayer = players.find((player) => player.id === playerId);
     const nextMyPlayerId = isMyToken ? playerId : effectiveMyPlayerId === playerId ? undefined : effectiveMyPlayerId;
     const nextMyRoleId = isMyToken
-      ? (currentPlayer?.isTraveller
-          ? currentPlayer.travellerRole ?? values.mainRole
+      ? (values.isTraveller
+          ? values.travellerRole ?? values.mainRole
           : values.mainRole)?.trim() || undefined
       : effectiveMyPlayerId === playerId
         ? undefined
@@ -3312,7 +3334,7 @@ export default function GamePage() {
         ) {
           await db.players.update(nextExecutedPlayerId, {
             alive: false,
-            deadVoteAvailable: isTravellerExile ? true : false,
+            deadVoteAvailable: true,
             leftPhaseId: isTravellerExile ? selectedPhase.id : undefined,
             updatedAt: now,
           });
@@ -3514,7 +3536,7 @@ export default function GamePage() {
 
         await db.players.update(executionPlayerId, {
           alive: false,
-          deadVoteAvailable: false,
+          deadVoteAvailable: true,
           updatedAt: now,
         });
 
@@ -3590,6 +3612,11 @@ export default function GamePage() {
 
       if (nominator && hasActiveBishop) {
         setPageError("При Bishop номинировать может только ведущий.");
+        return;
+      }
+
+      if (nominator && !nominator.alive) {
+        setPageError("Мёртвый игрок может номинировать только Traveller на изгнание.");
         return;
       }
 
@@ -3830,6 +3857,22 @@ export default function GamePage() {
     const alivePlayerCount = players.filter((player) => player.alive).length;
     const participantCount = players.length;
     const voteType = resolveVoteType(voteRecord);
+
+    if (voteType === "execution" && !nominator.alive) {
+      setPageError("Мёртвый игрок может номинировать только Traveller на изгнание.");
+      return;
+    }
+
+    if (voteType === "execution" && nominee?.isTraveller) {
+      setPageError("Traveller нельзя номинировать на казнь. Используйте изгнание.");
+      return;
+    }
+
+    if (voteType === "traveller_exile" && !nominee?.isTraveller) {
+      setPageError("На изгнание можно номинировать только Traveller.");
+      return;
+    }
+
     const threshold =
       voteType === "traveller_exile"
         ? getTravellerExileThreshold(participantCount)
@@ -4102,6 +4145,12 @@ export default function GamePage() {
       : "mt-3 w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-t-3xl border border-ember-200/15 bg-ink-850 p-4 shadow-2xl sm:mx-auto sm:mt-0 sm:max-h-[92vh] sm:max-w-6xl sm:rounded-3xl sm:p-6";
   const grimoireActionButtonClass = (active: boolean) =>
     `grimoire-action-button h-8 min-h-0 w-8 shrink-0 gap-0 px-0 py-0 sm:h-9 sm:w-9 ${active ? "grimoire-action-button-active" : ""}`;
+  const currentGrimoireStyle = game.grimoireStyle ?? {
+    tokenScale: 1,
+    extraTokenScale: 1,
+    nameScale: 1,
+  };
+  const grimoireTokensLocked = Boolean(currentGrimoireStyle.lockTokens);
   const stripLeadingSummaryRoleLabel = (text: string, roleId?: string) => {
     if (!roleId) {
       return text;
@@ -4365,11 +4414,13 @@ export default function GamePage() {
                   className="field"
                 >
                   <option value="">Кто номинировал?</option>
-                  {players.map((player) => (
-                    <option key={player.id} value={player.id}>
-                      {player.name}
-                    </option>
-                  ))}
+                  {players
+                    .filter((player) => resolveVoteType(voteRecord) === "traveller_exile" || player.alive)
+                    .map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {player.name}
+                      </option>
+                    ))}
                 </select>
                 <select
                   value={editingVoteDraft.nomineePlayerId ?? ""}
@@ -4381,11 +4432,15 @@ export default function GamePage() {
                   className="field"
                 >
                   <option value="">Кого номинировали?</option>
-                  {players.map((player) => (
-                    <option key={player.id} value={player.id}>
-                      {player.name}
-                    </option>
-                  ))}
+                  {players
+                    .filter((player) =>
+                      resolveVoteType(voteRecord) === "traveller_exile" ? player.isTraveller : !player.isTraveller,
+                    )
+                    .map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {player.name}
+                      </option>
+                    ))}
                   {resolveVoteType(voteRecord) === "execution" ? (
                     <option value={STORYTELLER_EXECUTION_TARGET_ID}>{STORYTELLER_EXECUTION_TARGET_NAME}</option>
                   ) : null}
@@ -4771,6 +4826,33 @@ export default function GamePage() {
                     <img src="/button-icons/interaction.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
                   </span>
                   </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void updateGrimoireStyle({
+                      ...currentGrimoireStyle,
+                      lockTokens: !grimoireTokensLocked,
+                    })
+                  }
+                  className={
+                    grimoireTokensLocked
+                      ? "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"
+                      : "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"
+                  }
+                  aria-label={grimoireTokensLocked ? "Жетоны залокированы" : "Жетоны разблокированы"}
+                  title={grimoireTokensLocked ? "Жетоны залокированы" : "Жетоны разблокированы"}
+                >
+                  {grimoireTokensLocked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGrimoireSettingsOpen((current) => !current)}
+                  className={grimoireSettingsOpen ? "primary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0" : "secondary-button h-9 min-h-0 w-9 shrink-0 gap-0 px-0 py-0"}
+                  aria-label={grimoireSettingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
+                  title={grimoireSettingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
+                >
+                  <Settings2 className="h-4 w-4" />
+                </button>
                 </div>
             </section>
             <PlayerCircle
@@ -4802,36 +4884,6 @@ export default function GamePage() {
                         aria-label="Механики Traveller"
                       >
                         <UserRound className="h-5 w-5" />
-                      </button>
-                    ) : null}
-                    {selectedPhase?.type === "day" ? (
-                      <button
-                        type="button"
-                        onClick={() => beginVoteDraft("execution")}
-                        className={grimoireActionButtonClass(voteDraft?.voteType === "execution")}
-                        title="Номинация"
-                        aria-label="Номинация"
-                      >
-                        <span className="inline-flex h-5 w-5 items-center justify-center">
-                          <img src="/button-icons/hand.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
-                        </span>
-                      </button>
-                    ) : null}
-                    {selectedPhase?.type === "day" && players.some((player) => player.isTraveller) ? (
-                      <button
-                        type="button"
-                        onClick={() => beginVoteDraft("traveller_exile")}
-                        className={
-                          voteDraft?.voteType === "traveller_exile"
-                            ? "primary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                            : "secondary-button h-10 min-h-0 w-10 shrink-0 gap-0 px-0 py-0"
-                        }
-                        title="Изгнание Traveller"
-                        aria-label="Изгнание Traveller"
-                      >
-                        <span className="inline-flex h-5 w-5 items-center justify-center">
-                          <img src="/button-icons/door-open.svg" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
-                        </span>
                       </button>
                     ) : null}
                     {selectedPhase?.type === "day" ? (
@@ -4876,6 +4928,8 @@ export default function GamePage() {
               showVoteMarkers={voteDraft?.stage === "select_voters"}
               voteAvailabilityByPlayerId={voteAvailabilityByPlayerId}
               voteRequirementSummary={voteRequirementSummary}
+              grimoireSettingsOpen={grimoireSettingsOpen}
+              onGrimoireSettingsOpenChange={setGrimoireSettingsOpen}
               centerAction={
                 gameHasStarted && selectedPhase?.type === "night" ? (
                   <button
@@ -4889,6 +4943,35 @@ export default function GamePage() {
                     <span className="sm:hidden">В день</span>
                     <span className="hidden sm:inline">Перейти в день</span>
                   </button>
+                ) : gameHasStarted && selectedPhase?.type === "day" ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => beginVoteDraft("execution")}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-amber-50 bg-amber-300 text-stone-950 shadow-[0_0_0_2px_rgba(251,191,36,0.34),0_0_18px_rgba(251,191,36,0.58),0_10px_22px_rgba(120,53,15,0.22)] transition hover:bg-amber-200 sm:h-11 sm:w-11 sm:rounded-2xl"
+                      aria-label="Номинация"
+                      title="Номинация"
+                    >
+                      <Hand className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={3} />
+                    </button>
+                    {players.some((player) => player.isTraveller) ? (
+                      <button
+                        type="button"
+                        onClick={() => beginVoteDraft("traveller_exile")}
+                        className={
+                          voteDraft?.voteType === "traveller_exile"
+                            ? "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sky-100 bg-sky-300 text-sky-950 shadow-[0_0_0_2px_rgba(125,211,252,0.32),0_0_18px_rgba(125,211,252,0.52),0_10px_22px_rgba(12,74,110,0.2)] transition hover:bg-sky-200 sm:h-11 sm:w-11 sm:rounded-2xl"
+                            : "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sky-100/80 bg-sky-200/85 text-sky-950 shadow-[0_0_0_2px_rgba(125,211,252,0.2),0_0_14px_rgba(125,211,252,0.32),0_10px_18px_rgba(12,74,110,0.16)] transition hover:bg-sky-200 sm:h-11 sm:w-11 sm:rounded-2xl"
+                        }
+                        title="Изгнание Traveller"
+                        aria-label="Изгнание Traveller"
+                      >
+                        <span className="inline-flex h-5 w-5 items-center justify-center sm:h-6 sm:w-6">
+                          <img src="/button-icons/door-open.svg" alt="" aria-hidden="true" className="h-full w-full object-contain" />
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null
               }
               currentBlockPlayerId={currentBlockPlayerId}

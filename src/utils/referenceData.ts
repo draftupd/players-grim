@@ -171,6 +171,7 @@ export const mergeReferenceRoles = (
       id: reference?.id ?? role.id,
       name: role.name || reference?.name || role.id,
       type: role.type === "unknown" && reference ? reference.type : role.type,
+      image: role.image || reference?.image,
     });
   });
 
@@ -183,6 +184,7 @@ export const mergeReferenceRoles = (
         id: reference.id,
         name: reference.name,
         type: reference.type,
+        image: reference.image,
       });
     }
   });

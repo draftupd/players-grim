@@ -5,6 +5,7 @@ type ScriptItem = {
   name?: unknown;
   author?: unknown;
   version?: unknown;
+  image?: unknown;
   team?: unknown;
   type?: unknown;
 };
@@ -93,6 +94,46 @@ const roleTypes: Record<RoleType, string[]> = {
     "shugenja",
     "steward",
     "villageidiot",
+    "alsaahir",
+    "atheist",
+    "banxian",
+    "bianlianshi",
+    "bingbi",
+    "chongfei",
+    "dagengren",
+    "daoke",
+    "daoshi",
+    "dianxiaoer",
+    "fangshi",
+    "fengshuishi",
+    "geling",
+    "heshang",
+    "jinyiwei",
+    "langzhong",
+    "lankeren",
+    "limao",
+    "nightwatchman",
+    "poppygrower",
+    "princess",
+    "qianke",
+    "qintianjian",
+    "ranfangfangzhu",
+    "shiguan",
+    "tixingguan",
+    "wudaozhe",
+    "wushiren",
+    "xingjiaoshang",
+    "xionghaizi",
+    "xizi",
+    "xizinew",
+    "xuncha",
+    "yanshi",
+    "yinluren",
+    "yinyangshi",
+    "yishi",
+    "yongjiang",
+    "zhen",
+    "zhifu",
   ],
   outsider: [
     "drunk",
@@ -115,6 +156,16 @@ const roleTypes: Record<RoleType, string[]> = {
     "heretic",
     "plaguedoctor",
     "zealot",
+    "hatter",
+    "hermit",
+    "jiubao",
+    "nichen",
+    "ogre",
+    "rulianshi",
+    "shaxing",
+    "shijie",
+    "shusheng",
+    "shutong",
   ],
   minion: [
     "poisoner",
@@ -146,6 +197,19 @@ const roleTypes: Record<RoleType, string[]> = {
     "vizier",
     "wizard",
     "xaan",
+    "boffin",
+    "chimei",
+    "ganshiren",
+    "gudiao",
+    "huapi",
+    "humeiniang",
+    "jinweijun",
+    "jinweijun2",
+    "mengpo",
+    "niangjiushi",
+    "panguan",
+    "wraith",
+    "yangguren",
   ],
   demon: [
     "imp",
@@ -167,6 +231,17 @@ const roleTypes: Record<RoleType, string[]> = {
     "ojo",
     "riot",
     "yaggababble",
+    "baojun",
+    "dianyuzhang",
+    "guhuoniao",
+    "hundun",
+    "jianning",
+    "leviathan",
+    "qiongqi",
+    "shimengmo",
+    "taotie",
+    "taowu",
+    "yanluo",
   ],
   traveller: [
     "apprentice",
@@ -178,6 +253,7 @@ const roleTypes: Record<RoleType, string[]> = {
     "butcher",
     "cacklejack",
     "deviant",
+    "diaomin",
     "gangster",
     "gnome",
     "gunslinger",
@@ -238,6 +314,7 @@ const roleNameOverrides: Record<string, string> = {
   alhadikhia: "Al-Hadikhia",
   spiritofivory: "Spirit of Ivory",
   deusexfiasco: "Deus ex Fiasco",
+  dmagician: "Magician",
   bigwig: "Big Wig",
   godofug: "God of Ug",
   hellslibrarian: "Hell's Librarian",
@@ -344,8 +421,9 @@ export const parseScriptJson = (json: unknown): ParsedScript => {
 
       return {
         id,
-        name: prettifyRoleName(id),
+        name: typeof item === "string" ? prettifyRoleName(id) : getOptionalTrimmedString(item.name) ?? prettifyRoleName(id),
         type: importedType === "unknown" ? getRoleType(id) : importedType,
+        image: typeof item === "string" ? undefined : getOptionalTrimmedString(item.image),
       };
     });
 
@@ -362,13 +440,18 @@ export const parseScriptJson = (json: unknown): ParsedScript => {
 };
 
 export const getRoleLabel = (roleId: string | undefined, roles: ScriptRole[] = []) => {
-  void roles;
-
   if (!roleId) {
     return "";
   }
 
-  return prettifyRoleName(roleId);
+  const matchingRole = roles.find((role) => normalizeRoleId(role.id) === normalizeRoleId(roleId));
+  const prettifiedRoleName = prettifyRoleName(roleId);
+
+  if (!matchingRole?.name || normalizeRoleId(matchingRole.name) === normalizeRoleId(roleId)) {
+    return prettifiedRoleName;
+  }
+
+  return matchingRole.name;
 };
 
 export const getRoleTypeFromRoles = (roleId: string | undefined, roles: ScriptRole[] = []) => {
@@ -410,7 +493,7 @@ export const groupRolesByType = (roles: ScriptRole[]) =>
       label: roleTypeLabels[type],
       roles: roles
         .filter((role) => resolveStoredRoleType(role) === type)
-        .sort((a, b) => prettifyRoleName(a.id).localeCompare(prettifyRoleName(b.id), "en")),
+        .sort((a, b) => getRoleLabel(a.id, roles).localeCompare(getRoleLabel(b.id, roles), "en")),
     }))
     .filter((group) => group.roles.length > 0);
 

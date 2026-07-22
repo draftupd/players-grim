@@ -1,11 +1,19 @@
-import { Edit3, Save, Trash2, UserRound, X } from "lucide-react";
+import { Edit3, Save, Shuffle, Trash2, UserRound, X } from "lucide-react";
 import clsx from "clsx";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import type { Note, PersonalTeam, Phase, Player, RoleType, ScriptRole, TokenTint } from "../types";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import type { Note, PersonalTeam, Phase, Player, ScriptRole, TokenTint } from "../types";
 import { sortPhases } from "../utils/dates";
 import { mergeManualAndMentionLinks, uniqueIds } from "../utils/mentions";
 import { mergeReferenceRoles, useReferenceData } from "../utils/referenceData";
-import { getRoleLabel, getRoleTypeFromRoles, groupRolesByType, normalizeRoleId, prettifyRoleName } from "../utils/scripts";
+import {
+  defaultTravellerRoles,
+  getRoleLabel,
+  getRoleTypeFromRoles,
+  groupRolesByType,
+  mergeScriptRoles,
+  normalizeRoleId,
+  prettifyRoleName,
+} from "../utils/scripts";
 import RoleIntelPanel from "./RoleIntelPanel";
 import RoleIconGrid from "./RoleIconGrid";
 import RoleTokenImage from "./RoleTokenImage";
@@ -23,7 +31,20 @@ type PlayerDetailModalProps = {
   onClose: () => void;
   onSave: (
     playerId: string,
-    values: Pick<Player, "name" | "alive" | "deadVoteAvailable" | "mainRole" | "additionalRoles" | "travellerTeam" | "tokenTint">,
+    values: Pick<
+      Player,
+      | "name"
+      | "alive"
+      | "deadVoteAvailable"
+      | "mainRole"
+      | "additionalRoles"
+      | "isTraveller"
+      | "travellerRole"
+      | "travellerTeam"
+      | "joinedPhaseId"
+      | "leftPhaseId"
+      | "tokenTint"
+    >,
     isMyToken: boolean,
     myTeam: PersonalTeam | undefined,
   ) => Promise<void>;
@@ -39,6 +60,7 @@ type PlayerDetailModalProps = {
 };
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const ROLE_SELECTION_ARM_DELAY_MS = 450;
 
 export default function PlayerDetailModal({
   player,
@@ -108,7 +130,9 @@ function PlayerDetailForm({
   const [alive, setAlive] = useState(player.alive);
   const [deadVoteAvailable, setDeadVoteAvailable] = useState(player.deadVoteAvailable ?? true);
   const [tokenTint, setTokenTint] = useState<TokenTint>(player.tokenTint ?? "default");
+  const [isTravellerToken, setIsTravellerToken] = useState(Boolean(player.isTraveller));
   const [mainRole, setMainRole] = useState(player.mainRole ?? "");
+  const [selectedTravellerRole, setSelectedTravellerRole] = useState(player.travellerRole ?? player.mainRole ?? "");
   const [markedAsMine, setMarkedAsMine] = useState(isMyToken);
   const [additionalRoles, setAdditionalRoles] = useState([
     player.additionalRoles[0] ?? "",
@@ -122,6 +146,8 @@ function PlayerDetailForm({
   const [editingText, setEditingText] = useState("");
   const [activeRoleSlot, setActiveRoleSlot] = useState<"main" | 0 | 1 | 2 | null>("main");
   const [saving, setSaving] = useState(false);
+  const roleSelectionEnabledAtRef = useRef(0);
+  const previousRegularMainRoleRef = useRef(player.isTraveller ? "" : player.mainRole ?? "");
   const sortedPhases = sortPhases(phases);
   const isNightPhase = currentPhase?.type === "night";
   const myTokenButtonLocked = myTokenLocked && !markedAsMine;
@@ -146,6 +172,7 @@ function PlayerDetailForm({
 
   useEffect(() => {
     setActiveRoleSlot("main");
+    roleSelectionEnabledAtRef.current = Date.now() + ROLE_SELECTION_ARM_DELAY_MS;
   }, [player.id]);
   const linkedPlayerNotes = useMemo(
     () =>
@@ -221,7 +248,11 @@ function PlayerDetailForm({
   );
   const roleOptions = useMemo(
     () =>
-      mergedScriptRoles.filter((role) => role.type !== "fabled" && role.type !== "loric"),
+      mergedScriptRoles.filter((role) => role.type !== "fabled" && role.type !== "loric" && role.type !== "traveller"),
+    [mergedScriptRoles],
+  );
+  const travellerRoleOptions = useMemo(
+    () => mergeScriptRoles(defaultTravellerRoles, mergedScriptRoles.filter((role) => role.type === "traveller")),
     [mergedScriptRoles],
   );
   const roleGroups = groupRolesByType(roleOptions);
@@ -238,14 +269,13 @@ function PlayerDetailForm({
   const outsiderRoleGroup = roleIconGroupsByKey.get("outsider");
   const minionRoleGroup = roleIconGroupsByKey.get("minion");
   const demonRoleGroup = roleIconGroupsByKey.get("demon");
-  const travellerRoleGroup = roleIconGroupsByKey.get("traveller");
-  const currentVisibleRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
+  const currentVisibleRoleId = isTravellerToken ? selectedTravellerRole || mainRole : mainRole;
   const mainRoleReference = currentVisibleRoleId
     ? referenceData?.roleMap.get(normalizeRoleId(currentVisibleRoleId)) ?? null
     : null;
   const mainRoleAbilityText = mainRoleReference?.ability?.trim() ?? "";
   const inferredPersonalTeam = useMemo<PersonalTeam>(() => {
-    const roleType = player.isTraveller ? "traveller" : getRoleTypeFromRoles(currentVisibleRoleId, mergedScriptRoles);
+    const roleType = isTravellerToken ? "traveller" : getRoleTypeFromRoles(currentVisibleRoleId, mergedScriptRoles);
 
     if (roleType === "traveller") {
       return "traveller";
@@ -260,7 +290,7 @@ function PlayerDetailForm({
     }
 
     return "unknown";
-  }, [currentVisibleRoleId, mergedScriptRoles, player.isTraveller]);
+  }, [currentVisibleRoleId, isTravellerToken, mergedScriptRoles]);
   const effectivePersonalTeam = useMemo<PersonalTeam>(() => {
     if (tokenTint === "good") {
       return "good";
@@ -273,7 +303,7 @@ function PlayerDetailForm({
     return inferredPersonalTeam;
   }, [inferredPersonalTeam, tokenTint]);
   const linkedNoteCount = linkedPlayerNotes.length;
-  const mainRoleNoteRoleId = player.isTraveller ? player.travellerRole ?? mainRole : mainRole;
+  const mainRoleNoteRoleId = isTravellerToken ? selectedTravellerRole || mainRole : mainRole;
 
   const getNextRoleSlot = (roleSlot: "main" | 0 | 1 | 2): "main" | 0 | 1 | 2 => {
     if (roleSlot === "main") {
@@ -292,6 +322,10 @@ function PlayerDetailForm({
   };
 
   const assignRoleToSlot = (roleId: string) => {
+    if (Date.now() < roleSelectionEnabledAtRef.current) {
+      return;
+    }
+
     const targetRoleSlot = activeRoleSlot ?? "main";
 
     if (targetRoleSlot === "main") {
@@ -304,6 +338,15 @@ function PlayerDetailForm({
       current.map((role, index) => (index === targetRoleSlot ? roleId : role)),
     );
     setActiveRoleSlot(getNextRoleSlot(targetRoleSlot));
+  };
+
+  const clearRoleSlot = (roleSlot: "main" | 0 | 1 | 2) => {
+    if (roleSlot === "main") {
+      setMainRole("");
+      return;
+    }
+
+    updateAdditionalRole(roleSlot, "");
   };
 
   const startEditingNote = (note: Note) => {
@@ -453,8 +496,30 @@ function PlayerDetailForm({
     setMarkedAsMine((current) => !current);
   };
 
+  const handleToggleTravellerToken = () => {
+    if (isTravellerToken) {
+      setIsTravellerToken(false);
+      setMainRole(previousRegularMainRoleRef.current);
+      return;
+    }
+
+    previousRegularMainRoleRef.current = mainRole;
+    const nextTravellerRole =
+      getRoleTypeFromRoles(mainRole, travellerRoleOptions) === "traveller"
+        ? mainRole
+        : selectedTravellerRole || travellerRoleOptions[0]?.id || "traveller";
+
+    setSelectedTravellerRole(nextTravellerRole);
+    setMainRole(nextTravellerRole);
+    setAdditionalRoles(["", "", ""]);
+    setIsTravellerToken(true);
+  };
+
   const handleSave = async () => {
     const trimmedName = name.trim();
+    const nextTravellerRole = isTravellerToken
+      ? selectedTravellerRole || travellerRoleOptions[0]?.id || "traveller"
+      : undefined;
 
     if (!trimmedName) {
       setError("Имя игрока не может быть пустым.");
@@ -470,9 +535,13 @@ function PlayerDetailForm({
         alive,
         deadVoteAvailable,
         tokenTint,
-        mainRole: mainRole.trim() || undefined,
-        additionalRoles: additionalRoles.map((role) => role.trim()).slice(0, 3),
-        travellerTeam: player.travellerTeam,
+        mainRole: isTravellerToken ? nextTravellerRole : mainRole.trim() || undefined,
+        additionalRoles: isTravellerToken ? ["", "", ""] : additionalRoles.map((role) => role.trim()).slice(0, 3),
+        isTraveller: isTravellerToken,
+        travellerRole: nextTravellerRole,
+        travellerTeam: isTravellerToken ? player.travellerTeam : undefined,
+        joinedPhaseId: isTravellerToken ? player.joinedPhaseId ?? currentPhase?.id : undefined,
+        leftPhaseId: isTravellerToken ? player.leftPhaseId : undefined,
       }, Boolean(markedAsMine), markedAsMine ? effectivePersonalTeam : undefined);
       onClose();
     } catch {
@@ -516,20 +585,6 @@ function PlayerDetailForm({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="player-detail-header flex items-start gap-3 border-b border-ember-200/10 bg-ink-850/95 px-4 py-2.5 backdrop-blur sm:px-5 sm:py-3">
-          <div className="flex min-h-10 w-12 shrink-0 items-start">
-            {onDeletePlayer ? (
-              <button
-                type="button"
-                onClick={() => void handleDeletePlayer()}
-                disabled={saving}
-                aria-label={player.isTraveller ? "Удалить Traveller" : "Удалить жетон"}
-                title={player.isTraveller ? "Удалить Traveller" : "Удалить жетон"}
-                className="danger-button min-h-10 px-3"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs text-stone-400">Карточка игрока</p>
             <h2 className="text-xl font-bold leading-tight text-stone-50">{player.name}</h2>
@@ -609,21 +664,29 @@ function PlayerDetailForm({
 
             <div className="player-detail-role-panel space-y-2 rounded-2xl border border-ember-100/35 bg-ember-200/10 p-2.5 shadow-[0_0_20px_rgba(242,204,116,0.08)]">
               <div className="grid grid-cols-[minmax(0,1fr)_9.25rem] items-start gap-2">
-                <label className="block space-y-2">
+                <div className="block space-y-2">
                   <span className="text-xs font-black uppercase tracking-wide text-ember-100">Основная роль</span>
-                  {player.isTraveller ? (
-                    <input
-                      value={getRoleLabel(player.travellerRole ?? player.mainRole, scriptRoles)}
+                  {isTravellerToken ? (
+                    <select
+                      value={selectedTravellerRole || travellerRoleOptions[0]?.id || ""}
+                      onChange={(event) => {
+                        setSelectedTravellerRole(event.target.value);
+                        setMainRole(event.target.value);
+                      }}
                       className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
-                      disabled
-                    />
+                    >
+                      {travellerRoleOptions.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {getRoleLabel(role.id, travellerRoleOptions)}
+                        </option>
+                      ))}
+                    </select>
                   ) : roleOptions.length > 0 ? (
-                    <>
+                    <div className="relative">
                       <button
                         type="button"
-                        autoFocus
                         onClick={() => setActiveRoleSlot("main")}
-                        className={`flex min-h-11 w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
+                        className={`flex min-h-11 w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${mainRole ? "pr-9" : ""} ${
                           activeRoleSlot === "main"
                             ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
                             : "border-ember-100/35 bg-black/25"
@@ -643,15 +706,42 @@ function PlayerDetailForm({
                           {mainRole ? getRoleLabel(mainRole, roleOptions) : "Основная роль"}
                         </span>
                       </button>
-                    </>
+                      {mainRole ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            clearRoleSlot("main");
+                          }}
+                          className="secondary-button absolute right-1.5 top-1/2 h-7 min-h-0 w-7 -translate-y-1/2 rounded-lg px-0 py-0"
+                          aria-label="Очистить основную роль"
+                          title="Очистить основную роль"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
                   ) : (
                     <div className="w-full space-y-2">
-                      <input
-                        value={mainRole}
-                        onChange={(event) => setMainRole(event.target.value)}
-                        className="field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50"
-                        placeholder="Например, Clockmaker"
-                      />
+                      <div className="relative">
+                        <input
+                          value={mainRole}
+                          onChange={(event) => setMainRole(event.target.value)}
+                          className={`field border-ember-100/35 bg-black/35 text-lg font-bold text-stone-50 ${mainRole ? "pr-11" : ""}`}
+                          placeholder="Например, Clockmaker"
+                        />
+                        {mainRole ? (
+                          <button
+                            type="button"
+                            onClick={() => clearRoleSlot("main")}
+                            className="secondary-button absolute right-2 top-1/2 h-8 min-h-0 w-8 -translate-y-1/2 rounded-lg px-0 py-0"
+                            aria-label="Очистить основную роль"
+                            title="Очистить основную роль"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
                       <p className="text-xs leading-4 text-stone-400">
                         Загрузите JSON сценария в Setup, чтобы роли выбирались из выпадающего списка автоматически.
                       </p>
@@ -662,35 +752,52 @@ function PlayerDetailForm({
                       {mainRoleAbilityText}
                     </p>
                   ) : null}
-                </label>
+                </div>
 
                 <div className="player-detail-extra-roles space-y-2 rounded-2xl border border-stone-200/10 bg-black/10 p-2">
                   <p className="text-xs font-medium text-stone-500">Доп.роли</p>
                   <div className="grid grid-cols-3 gap-1.5">
                   {[0, 1, 2].map((index) => (
                     roleOptions.length > 0 ? (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setActiveRoleSlot(index as 0 | 1 | 2)}
-                        className={`flex min-h-11 items-center justify-center rounded-xl border px-1.5 py-1.5 transition ${
-                          activeRoleSlot === index
-                            ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
-                            : "border-stone-200/10 bg-black/20"
-                        }`}
-                        title={additionalRoles[index] ? getRoleLabel(additionalRoles[index], roleOptions) : `Роль ${index + 1}`}
-                      >
+                      <div key={index} className="flex min-w-0 flex-col items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setActiveRoleSlot(index as 0 | 1 | 2)}
+                          className={`flex min-h-11 w-full items-center justify-center rounded-xl border px-1.5 py-1.5 transition ${
+                            activeRoleSlot === index
+                              ? "border-amber-200/60 bg-black/30 shadow-[0_0_0_2px_rgba(242,204,116,0.12)]"
+                              : "border-stone-200/10 bg-black/20"
+                          }`}
+                          title={additionalRoles[index] ? getRoleLabel(additionalRoles[index], roleOptions) : `Роль ${index + 1}`}
+                        >
+                          {additionalRoles[index] ? (
+                            <RoleTokenImage
+                              roleId={additionalRoles[index]}
+                              roles={roleOptions}
+                              className="h-6 w-6 overflow-hidden rounded-full border-0 bg-transparent"
+                              imageClassName="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="h-6 w-6 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+                          )}
+                        </button>
                         {additionalRoles[index] ? (
-                          <RoleTokenImage
-                            roleId={additionalRoles[index]}
-                            roles={roleOptions}
-                            className="h-6 w-6 overflow-hidden rounded-full border-0 bg-transparent"
-                            imageClassName="h-full w-full object-cover"
-                          />
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              clearRoleSlot(index as 0 | 1 | 2);
+                            }}
+                            className="secondary-button h-5 min-h-0 w-8 rounded-md px-0 py-0"
+                            aria-label={`Очистить доп. роль ${index + 1}`}
+                            title={`Очистить доп. роль ${index + 1}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         ) : (
-                          <span className="h-6 w-6 rounded-full border border-dashed border-ember-200/20 bg-black/10" />
+                          <span className="h-5" aria-hidden="true" />
                         )}
-                      </button>
+                      </div>
                     ) : (
                     <div key={index} className="flex items-center gap-2">
                       <RoleTokenImage
@@ -699,12 +806,25 @@ function PlayerDetailForm({
                         className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-stone-200/15 bg-black/20"
                         imageClassName="h-full w-full object-cover opacity-85"
                       />
-                      <input
-                        value={additionalRoles[index]}
-                        onChange={(event) => updateAdditionalRole(index, event.target.value)}
-                        className="field min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400"
-                        placeholder={`Роль ${index + 1}`}
-                      />
+                      <div className="relative min-w-0 flex-1">
+                        <input
+                          value={additionalRoles[index]}
+                          onChange={(event) => updateAdditionalRole(index, event.target.value)}
+                          className={`field min-h-11 border-stone-200/10 bg-black/20 text-sm text-stone-400 ${additionalRoles[index] ? "pr-10" : ""}`}
+                          placeholder={`Роль ${index + 1}`}
+                        />
+                        {additionalRoles[index] ? (
+                          <button
+                            type="button"
+                            onClick={() => clearRoleSlot(index as 0 | 1 | 2)}
+                            className="secondary-button absolute right-1.5 top-1/2 h-7 min-h-0 w-7 -translate-y-1/2 rounded-lg px-0 py-0"
+                            aria-label={`Очистить доп. роль ${index + 1}`}
+                            title={`Очистить доп. роль ${index + 1}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     )
                   ))}
@@ -717,7 +837,7 @@ function PlayerDetailForm({
                 </div>
               </div>
 
-              {roleOptions.length > 0 && !player.isTraveller ? (
+              {roleOptions.length > 0 && !isTravellerToken ? (
                 <div className="space-y-0.5">
                   <div className="grid grid-cols-2 gap-1">
                     {townsfolkRoleGroup ? (
@@ -805,22 +925,6 @@ function PlayerDetailForm({
                     </div>
                   ) : null}
 
-                  {travellerRoleGroup ? (
-                    <RoleIconGrid
-                      groups={[travellerRoleGroup]}
-                      roles={roleOptions}
-                      selectedRoleId={activeRoleSlot === null ? "" : activeRoleSlot === "main" ? mainRole : additionalRoles[activeRoleSlot] ?? ""}
-                      onSelect={assignRoleToSlot}
-                      groupClassName="rounded-2xl border border-ember-200/10 p-0.5 sm:p-1"
-                        wrap
-                      buttonClassName="relative min-h-[3.9rem] shrink-0 overflow-visible rounded-xl py-1 sm:!min-h-[4.2rem] sm:py-1"
-                      iconClassName="h-12 w-12 sm:h-[3.75rem] sm:w-[3.75rem]"
-                      roleLabelClassName="mt-[-0.42rem] max-w-[3.25rem] rounded bg-[rgba(255,248,237,0.94)] px-1 text-[8px] leading-[0.72rem] text-stone-700 sm:mt-[-0.5rem] sm:max-w-[3.75rem] sm:text-[9px] sm:leading-3"
-                      compact
-                      unframed
-                      showGroupLabel={false}
-                    />
-                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -959,6 +1063,32 @@ function PlayerDetailForm({
 
         <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[95] sm:bottom-5 sm:right-5">
           <div className="pointer-events-auto flex items-center gap-2">
+            {onDeletePlayer ? (
+              <button
+                type="button"
+                onClick={() => void handleDeletePlayer()}
+                disabled={saving}
+                aria-label={player.isTraveller ? "Удалить Traveller" : "Удалить жетон"}
+                title={player.isTraveller ? "Удалить Traveller" : "Удалить жетон"}
+                className="danger-button h-11 min-h-0 w-11 rounded-2xl px-0 py-0"
+              >
+                <Trash2 className="h-5 w-5" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleToggleTravellerToken}
+              disabled={saving}
+              aria-pressed={isTravellerToken}
+              aria-label={isTravellerToken ? "Сделать обычным игроком" : "Сделать Traveller"}
+              title={isTravellerToken ? "Сделать обычным игроком" : "Сделать Traveller"}
+              className={clsx(
+                "secondary-button h-11 min-h-0 w-11 rounded-2xl px-0 py-0",
+                isTravellerToken && "border-amber-300/60 bg-amber-300/18 text-amber-100",
+              )}
+            >
+              <Shuffle className="h-5 w-5" />
+            </button>
             <button
               type="button"
               onClick={handleToggleMyToken}

@@ -1,5 +1,5 @@
 import type { ScriptRole } from "../types";
-import { getRoleLabel } from "./scripts";
+import { getRoleLabel, normalizeRoleId } from "./scripts";
 
 const tokenImageExtensions = ["png", "webp", "jpg", "jpeg", "svg"];
 
@@ -27,6 +27,9 @@ export const getTokenImageUrls = (roleId: string | undefined, roles: ScriptRole[
   }
 
   const label = getRoleLabel(roleId, roles);
+  const matchingRole = roles.find((role) => normalizeRoleId(role.id) === normalizeRoleId(roleId));
+  const roleType = matchingRole?.type;
+  const customImage = matchingRole?.image;
   const bases = unique([
     roleId,
     label,
@@ -37,8 +40,16 @@ export const getTokenImageUrls = (roleId: string | undefined, roles: ScriptRole[
     compact(roleId),
     compact(label),
   ]);
+  const fallbackBases = unique([
+    roleType ?? "",
+    roleType === "loric" ? "Loric" : "",
+    roleType === "traveller" ? "traveller" : "",
+  ]);
 
-  return bases.flatMap((base) =>
-    tokenImageExtensions.map((extension) => `/token-images/${encodeURIComponent(base)}.${extension}`),
-  );
+  return [
+    ...(customImage ? [customImage] : []),
+    ...[...bases, ...fallbackBases].flatMap((base) =>
+      tokenImageExtensions.map((extension) => `/token-images/${encodeURIComponent(base)}.${extension}`),
+    ),
+  ];
 };

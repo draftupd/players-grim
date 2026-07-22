@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { ChevronDown, Hand, Lock, LockOpen, Plus, Save, Settings2, X } from "lucide-react";
+import { ChevronDown, Hand, Plus, Save, Settings2, X } from "lucide-react";
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type {
@@ -39,6 +39,8 @@ type PlayerCircleProps = {
     totalVotes: number;
   } | null;
   centerAction?: ReactNode;
+  grimoireSettingsOpen?: boolean;
+  onGrimoireSettingsOpenChange?: (open: boolean) => void;
   currentBlockPlayerId?: string | null;
   grimoireActions?: ReactNode;
   selectableNominatorIds?: ReadonlySet<string>;
@@ -174,6 +176,8 @@ export default function PlayerCircle({
   voteAvailabilityByPlayerId,
   voteRequirementSummary = null,
   centerAction,
+  grimoireSettingsOpen,
+  onGrimoireSettingsOpenChange,
   currentBlockPlayerId = null,
   grimoireActions,
   selectableNominatorIds,
@@ -291,7 +295,17 @@ export default function PlayerCircle({
   const [travellerJoinedPhaseId, setTravellerJoinedPhaseId] = useState("");
   const [specialFormOpenInternal, setSpecialFormOpen] = useState(false);
   const [selectedSpecialRoleId, setSelectedSpecialRoleId] = useState("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
+  const settingsOpen = grimoireSettingsOpen ?? internalSettingsOpen;
+  const setSettingsOpen = (nextOpen: boolean | ((current: boolean) => boolean)) => {
+    const resolvedOpen = typeof nextOpen === "function" ? nextOpen(settingsOpen) : nextOpen;
+
+    if (onGrimoireSettingsOpenChange) {
+      onGrimoireSettingsOpenChange(resolvedOpen);
+    } else {
+      setInternalSettingsOpen(resolvedOpen);
+    }
+  };
   const [travellerPreviewRoleId, setTravellerPreviewRoleId] = useState("");
   const [specialPreviewRoleId, setSpecialPreviewRoleId] = useState("");
   const [phaseSelectionOpen, setPhaseSelectionOpen] = useState(false);
@@ -388,7 +402,7 @@ export default function PlayerCircle({
             : 5 / 8
         : 1;
   const hasTravellerSummaryRow = travellerCount > 0;
-  const hasExpandedCenter = hasTravellerSummaryRow || Boolean(centerAction);
+  const hasExpandedCenter = hasTravellerSummaryRow || Boolean(currentPhase) || Boolean(centerAction);
   const layout = {
     maxWidth: playerTotal >= 14
       ? "max-w-[360px] sm:max-w-[520px] lg:max-w-[620px]"
@@ -761,43 +775,6 @@ export default function PlayerCircle({
         className={`relative mx-auto w-full overflow-visible bg-black/15 ${layout.maxWidth}`}
         style={{ aspectRatio: layout.aspectRatio / currentStyle.grimoireHeightScale }}
       >
-        <div className="absolute right-1.5 top-1.5 z-30 flex flex-wrap gap-1.5 sm:right-2.5 sm:top-2.5 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => updateStyle({ lockTokens: !currentStyle.lockTokens })}
-            className={clsx(
-              "inline-flex min-h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 transition sm:min-h-9 sm:w-9",
-              currentStyle.lockTokens
-                ? "border-red-200 bg-red-500/35 text-red-50 shadow-[0_0_18px_rgba(248,113,113,0.35)]"
-                : "border-emerald-200 bg-emerald-500/35 text-emerald-50 shadow-[0_0_18px_rgba(52,211,153,0.3)]",
-            )}
-            aria-label={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
-            title={currentStyle.lockTokens ? "Жетоны залокированы" : "Жетоны разблокированы"}
-          >
-            {currentStyle.lockTokens ? <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <LockOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setSettingsOpen((current) => !current)}
-            className={clsx(
-              "secondary-button min-h-8 w-8 shrink-0 rounded-lg px-0 sm:min-h-9 sm:w-9",
-              settingsOpen && "border-ember-200/45 bg-ember-200/10 text-ember-100",
-            )}
-            aria-label={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
-            title={settingsOpen ? "Скрыть настройки жетонов" : "Показать настройки жетонов"}
-          >
-            <Settings2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-          </button>
-        </div>
-
-        {currentPhase ? (
-          <div className="absolute left-1.5 top-1.5 z-20 sm:left-2.5 sm:top-2.5">
-            <span className="inline-flex rounded-full border border-ember-100/45 bg-ink-900/90 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-white/90 shadow-[0_0_10px_rgba(242,204,116,0.24),0_8px_18px_rgba(0,0,0,0.24)] sm:px-4 sm:py-2 sm:text-sm">
-              {currentPhase.title || phaseTitle(currentPhase.number, currentPhase.type)}
-            </span>
-          </div>
-        ) : null}
-
         {votingStage ? (
           <div
             className="absolute top-1/2 z-20 flex w-[112px] max-w-[62%] -translate-x-1/2 -translate-y-[44%] flex-col items-center gap-1 rounded-[20px] border border-ember-100/30 px-2 py-2 text-center shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-sm sm:w-[154px] sm:max-w-[56%] sm:gap-1.5 sm:px-2.5 sm:py-2.5"
@@ -858,10 +835,18 @@ export default function PlayerCircle({
           </div>
         ) : (
           <div
-            className={`absolute top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-veil-500/30 bg-ink-900/92 text-center shadow-inner ${layout.center}`}
+            className={`absolute top-1/2 grid -translate-x-1/2 -translate-y-1/2 place-items-center text-center ${layout.center}`}
             style={{ left: `${boardCenterX}%` }}
           >
             <div className="w-full max-w-[84%] space-y-1.5 sm:max-w-[80%] sm:space-y-2">
+              {currentPhase ? (
+                <div className="flex justify-center">
+                  <span className="inline-flex max-w-full rounded-full border border-ember-100/45 bg-ink-900/90 px-2 py-1 text-[7px] font-black uppercase leading-none tracking-[0.14em] text-white/95 shadow-[0_0_10px_rgba(242,204,116,0.24),0_8px_18px_rgba(0,0,0,0.24)] sm:px-3 sm:py-1.5 sm:text-[11px]">
+                    {currentPhase.title || phaseTitle(currentPhase.number, currentPhase.type)}
+                  </span>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 border-b border-veil-500/20 pb-1 text-[8px] font-semibold leading-tight sm:gap-x-2.5 sm:pb-1.5 sm:text-[12px]">
                 <span className="text-left text-emerald-200">Живые</span>
                 <strong className="text-emerald-200">{alivePlayerCount}</strong>
